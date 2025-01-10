@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/neon/Documents/projects/DoDevEditor/build/_deps/wxwidgets-src/include",
+                //"/path/to/wxWidgets/build",
+                //"/path/to/wxWidgets/build/lib",
+                //"/path/to/other/dependencies"
+            ],
+            "defines": [
+                "_DEBUG",
+                "__WXGTK__",   // For Linux (use __WXMSW__ on Windows or __WXOSX__ on macOS)
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
