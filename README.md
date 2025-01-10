@@ -6,10 +6,7 @@ I did just only for my own usage, I/m just want to share.
 
 # License. 
 
-Im hold of my copywrite if I can say but if you have access to this code potentially
-you can learn of it or fork it, and do whatever stuff you want with it. I hope to receive
-feedback of my typos and so on. 
-
+https://www.gnu.org/licenses/lgpl-3.0.html#license-text
 
 # what is the DoD ?
 
