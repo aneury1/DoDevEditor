@@ -17,16 +17,17 @@ well and editor with basic feature. with some kind of plugin system. at least I 
 these:
 
 - Edit Code
-- Open folder
-- Syntax Highlight
-- Menu for Editing
-- For Search
+- Open folder and show its structure.
+- Syntax Highlight(at least for C++)
+- Menu for Editing text in a simple way.
+- For Search in open and other files in a folder structure
 
 # Plugin System 
 
-Well I Would like to allow plugin developers, to add other menus in main menu. 
+Well I Would like to allow plugin's developers, to add other menus in main menu. 
 the layout would be similar to other editors side panel for project navigation and other stuff,
-bottom container, toolbar with editor inside(this could be customizable to add differents of kind of editor).
+bottom container, toolbar with editor inside(this could be customizable to add differents of kind of editor), 
+probably more than that but let leave as is now.
 
 # Dependecies
 
