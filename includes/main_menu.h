@@ -12,7 +12,8 @@ struct menu_entry{
     int id;
 };
 
+wxMenu* create_file_menu_entries();
 wxMenu* create_edit_menu_entries();
-wxMenu *create_view_menu_entries();
+wxMenu* create_view_menu_entries();
 
 #endif

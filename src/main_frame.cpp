@@ -38,23 +38,18 @@ void do_editor::setup_main_settings()
    {
       menubar = new wxMenuBar();
    }
-   wxMenu *fileMenu = new wxMenu();
-   fileMenu->Append(wxID_NEW, "&New File\tCtrl-N", "Create a new document");
-   fileMenu->Append(wxID_OPEN, "&Open File\tCtrl-O", "Open a File");
-   fileMenu->Append(OpenFolder, "&Open Folder\tCtrl-O", "Open a Folder");
-   fileMenu->Append(CloseFolder, "&Close Opened Folder\tCtrl-Q", "Close a Folder");
-   fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current document");
-   fileMenu->AppendSeparator();
-   fileMenu->Append(wxID_SAVE, "&Print File\tCtrl-P", "Print current file");
-   fileMenu->AppendSeparator();
-   fileMenu->Append(wxID_EXIT, "E&xit\tCtrl-Q", "Exit the application");
-   menubar->Append(fileMenu, "&File");
-   auto edit_menu = create_edit_menu_entries();
-   menubar->Append(edit_menu, "&Edit");
-   auto view_menu = create_view_menu_entries();
-   menubar->Append(view_menu, "&View");
 
-   SetMenuBar(menubar);
+   if(menubar)
+   {
+      auto fileMenu =create_file_menu_entries();
+      menubar->Append(fileMenu, "&File");
+      auto edit_menu = create_edit_menu_entries();
+      menubar->Append(edit_menu, "&Edit");
+      auto view_menu = create_view_menu_entries();
+      menubar->Append(view_menu, "&View");
+      SetMenuBar(menubar);
+   }
+
 
    explorerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(300, 800));
    wxBoxSizer *explorerSizer = new wxBoxSizer(wxVERTICAL);
@@ -219,7 +214,20 @@ void do_editor::on_save_file(wxCommandEvent &event)
       std::cout << __LINE__ << "\n";
       file = current->get_path();
    }
-   else
+   else if(current->has_changed() && current->is_untitle())
+   {
+      std::cout << __LINE__ << "Untitled \n";
+      if (saveFileDialog.ShowModal() == wxID_CANCEL)
+      {
+         return;
+      }
+      else
+      {
+         std::cout << __LINE__ << "\n";
+         file = saveFileDialog.GetPath();
+      }
+   }
+   else 
    {
       std::cout << __LINE__ << "\n";
       if (saveFileDialog.ShowModal() == wxID_CANCEL)
