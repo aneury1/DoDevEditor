@@ -19,8 +19,17 @@ struct main_window_frame_settings{
 
 
 class main_window_frame : public wxFrame {
-   public:
+   
    main_window_frame();
+   
+   public:
+  
+   static main_window_frame* get(){
+      static  main_window_frame* m;
+      if(!m)
+        m = new main_window_frame();
+      return m;
+   }
    
    ~main_window_frame();
    
@@ -36,6 +45,7 @@ class main_window_frame : public wxFrame {
   
    void populate_folder_tree(const wxString &path, wxTreeItemId parent);
    void on_open_folder(wxCommandEvent& event);
+   void on_close_folder(wxCommandEvent& event);
    void on_open_new_file(wxCommandEvent& event);
    void on_open_existing_file(wxCommandEvent &event);
    void on_save_file(wxCommandEvent &event);
@@ -45,9 +55,13 @@ class main_window_frame : public wxFrame {
    void on_ctrl_l(wxCommandEvent &event);
 
 
+   void insert_menu(wxMenu *menu, wxString title);
+
+   private:
    wxMenuBar *menubar;
    wxAuiManager auiManager;
    wxPanel* explorerPanel;
+   wxStaticText *explorerLabel;
    wxTreeCtrl* folderTree;
    wxAuiNotebook* editorTabs;
    wxString folderPath;

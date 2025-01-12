@@ -4,7 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/neon/Documents/projects/DoDevEditor/build/_deps/wxwidgets-src/include",
+                "/home/neon/Documents/projects/DoDevEditor/build/_deps/wxwidgets-src/include"
                 //"/path/to/wxWidgets/build",
                 //"/path/to/wxWidgets/build/lib",
                 //"/path/to/other/dependencies"

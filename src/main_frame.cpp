@@ -1,6 +1,7 @@
 #include "id_handler.h"
 #include "main_frame.h"
 #include "text_editor.h"
+#include "main_menu.h"
 #include <wx/wfstream.h>
 #include <iostream>
 
@@ -41,19 +42,21 @@ void main_window_frame::setup_main_settings()
       fileMenu->Append(wxID_NEW, "&New File\tCtrl-N", "Create a new document");
       fileMenu->Append(wxID_OPEN, "&Open File\tCtrl-O", "Open a File");
       fileMenu->Append(OpenFolder, "&Open Folder\tCtrl-O", "Open a Folder");
+      fileMenu->Append(CloseFolder, "&Close Opened Folder\tCtrl-Q", "Close a Folder");
       fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current document");
       fileMenu->AppendSeparator();
       fileMenu->Append(wxID_SAVE, "&Print File\tCtrl-P", "Print current file");
       fileMenu->AppendSeparator();
       fileMenu->Append(wxID_EXIT, "E&xit\tCtrl-Q", "Exit the application");
       menubar->Append(fileMenu, "&File");
-
+      auto edit_menu = create_edit_menu_entries();
+      menubar->Append(edit_menu, "&Edit");
       SetMenuBar(menubar);
    }
 
    explorerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(300, 800));
    wxBoxSizer *explorerSizer = new wxBoxSizer(wxVERTICAL);
-   wxStaticText *explorerLabel = new wxStaticText(explorerPanel, wxID_ANY, "File Explorer");
+   explorerLabel = new wxStaticText(explorerPanel, wxID_ANY, "File Explorer");
    folderTree = new wxTreeCtrl(explorerPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT);
    explorerSizer->Add(explorerLabel, 0, wxEXPAND | wxALL, 5);
    explorerSizer->Add(folderTree, 1, wxEXPAND);
@@ -65,15 +68,19 @@ void main_window_frame::setup_main_settings()
 
    auiManager.AddPane(explorerPanel, wxAuiPaneInfo().Left().Caption("Explorer").BestSize(300, 800).MinSize(200, 600));
    auiManager.AddPane(editorTabs, wxAuiPaneInfo().CenterPane());
+   
+    
+
+
    auiManager.Update();
    Bind(wxEVT_MENU, &main_window_frame::on_open_new_file, this, wxID_NEW);
    Bind(wxEVT_MENU, & main_window_frame::on_open_existing_file, this, wxID_OPEN);
    Bind(wxEVT_MENU, &main_window_frame::on_save_file, this, wxID_SAVE);
    Bind(wxEVT_MENU, &main_window_frame::on_open_folder, this, OpenFolder);
+   Bind(wxEVT_MENU, &main_window_frame::on_close_folder, this, CloseFolder);
    Bind(wxEVT_MENU, &main_window_frame::on_exit, this, wxID_EXIT);
    Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, &main_window_frame::on_close_tab, this);
    Bind(wxEVT_TREE_ITEM_ACTIVATED, &main_window_frame::on_tree_item_activated, this);
-
    {
       wxAcceleratorEntry entries[1];
       int keyp = get_accelerator_next_id();
@@ -150,18 +157,13 @@ void main_window_frame::on_open_new_file(wxCommandEvent &event)
 }
 void main_window_frame::on_open_existing_file(wxCommandEvent &event)
 {
-  
-
    wxFileDialog openFileDialog(this, _("Select file to open"), "", "",
                                "*.*",
                                //"files (*.hxx)|(*.hh)|(*.h)|(*.cpp)|(*.cc)|(*.cxx)|(*.js)|"
                                //"(*.json)|(*.txt)|(*.java)|(*.asm)|(*.s)|(*.cob)|(*Makefile)",
                                wxFD_OPEN | wxFD_FILE_MUST_EXIST );
-
-
    if(openFileDialog.ShowModal()== wxID_CANCEL)
       return ;
-
    wxString filet = openFileDialog.GetPath();
    if (filet.IsEmpty())
    {
@@ -190,13 +192,22 @@ void main_window_frame::on_open_folder(wxCommandEvent &event)
    wxTreeItemId root = folderTree->AddRoot("Root");
    populate_folder_tree(folderPath, root);
    rootPath = folderPath;
+   //this->explorerLabel->SetText(rootPath);
    SetStatusText("Opened folder: " + folderPath);
 }
+
+void main_window_frame::on_close_folder(wxCommandEvent& event){
+   folderTree->DeleteAllItems();
+   rootPath = "";
+   //this->explorerLabel->SetText(" - - - ");
+}
+
+
 void main_window_frame::on_save_file(wxCommandEvent &event)
 {
    auto current = get_current_text_editor();
 
-   wxFileDialog saveFileDialog(this, _("Select file to save"), "", "",
+   wxFileDialog saveFileDialog(this, _("Select file to save"), rootPath, "",
                                "files (*.*)",
                                //"files (*.hxx)|(*.hh)|(*.h)|(*.cpp)|(*.cc)|(*.cxx)|(*.js)|"
                                //"(*.json)|(*.txt)|(*.java)|(*.asm)|(*.s)|(*.cob)|(*Makefile)",
@@ -243,11 +254,14 @@ void main_window_frame::on_save_file(wxCommandEvent &event)
    output_stream.Write(content.c_str(), content.size());
    SetStatusText("Save file folder: " + folderPath);
 }
+
+
 void main_window_frame::on_ctrl_i(wxCommandEvent &event)
 {
    auto current = get_current_text_editor();
    current->increase_font_size_by_one();
 }
+
 void main_window_frame::on_ctrl_l(wxCommandEvent &event)
 {
    auto current = get_current_text_editor();
@@ -316,4 +330,9 @@ void main_window_frame::on_close_tab(wxAuiNotebookEvent &event)
    }
    event.Skip();
    return;
+}
+
+
+void main_window_frame::insert_menu(wxMenu *menu, wxString title){
+   menubar->Append(menu, title );
 }
