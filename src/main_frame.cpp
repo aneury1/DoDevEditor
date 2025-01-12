@@ -37,29 +37,24 @@ void do_editor::setup_main_settings()
    if (!menubar)
    {
       menubar = new wxMenuBar();
+   }
+   wxMenu *fileMenu = new wxMenu();
+   fileMenu->Append(wxID_NEW, "&New File\tCtrl-N", "Create a new document");
+   fileMenu->Append(wxID_OPEN, "&Open File\tCtrl-O", "Open a File");
+   fileMenu->Append(OpenFolder, "&Open Folder\tCtrl-O", "Open a Folder");
+   fileMenu->Append(CloseFolder, "&Close Opened Folder\tCtrl-Q", "Close a Folder");
+   fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current document");
+   fileMenu->AppendSeparator();
+   fileMenu->Append(wxID_SAVE, "&Print File\tCtrl-P", "Print current file");
+   fileMenu->AppendSeparator();
+   fileMenu->Append(wxID_EXIT, "E&xit\tCtrl-Q", "Exit the application");
+   menubar->Append(fileMenu, "&File");
+   auto edit_menu = create_edit_menu_entries();
+   menubar->Append(edit_menu, "&Edit");
+   auto view_menu = create_view_menu_entries();
+   menubar->Append(view_menu, "&View");
 
-      wxMenu *fileMenu = new wxMenu();
-      fileMenu->Append(wxID_NEW, "&New File\tCtrl-N", "Create a new document");
-      fileMenu->Append(wxID_OPEN, "&Open File\tCtrl-O", "Open a File");
-      fileMenu->Append(OpenFolder, "&Open Folder\tCtrl-O", "Open a Folder");
-      fileMenu->Append(CloseFolder, "&Close Opened Folder\tCtrl-Q", "Close a Folder");
-      fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current document");
-      fileMenu->AppendSeparator();
-      fileMenu->Append(wxID_SAVE, "&Print File\tCtrl-P", "Print current file");
-      fileMenu->AppendSeparator();
-      fileMenu->Append(wxID_EXIT, "E&xit\tCtrl-Q", "Exit the application");
-      menubar->Append(fileMenu, "&File");
-      auto edit_menu = create_edit_menu_entries();
-      menubar->Append(edit_menu, "&Edit");
-      auto view_menu = create_view_menu_entries();
-      menubar->Append(view_menu, "&View");
- 
-      SetMenuBar(menubar);
-   }
-   else
-   {
-      
-   }
+   SetMenuBar(menubar);
 
    explorerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(300, 800));
    wxBoxSizer *explorerSizer = new wxBoxSizer(wxVERTICAL);
@@ -75,13 +70,10 @@ void do_editor::setup_main_settings()
 
    auiManager.AddPane(explorerPanel, wxAuiPaneInfo().Left().Caption("Explorer").BestSize(300, 800).MinSize(200, 600));
    auiManager.AddPane(editorTabs, wxAuiPaneInfo().CenterPane());
-   
-    
-
 
    auiManager.Update();
    Bind(wxEVT_MENU, &do_editor::on_open_new_file, this, wxID_NEW);
-   Bind(wxEVT_MENU, & do_editor::on_open_existing_file, this, wxID_OPEN);
+   Bind(wxEVT_MENU, &do_editor::on_open_existing_file, this, wxID_OPEN);
    Bind(wxEVT_MENU, &do_editor::on_save_file, this, wxID_SAVE);
    Bind(wxEVT_MENU, &do_editor::on_open_folder, this, OpenFolder);
    Bind(wxEVT_MENU, &do_editor::on_close_folder, this, CloseFolder);
@@ -168,18 +160,18 @@ void do_editor::on_open_existing_file(wxCommandEvent &event)
                                "*.*",
                                //"files (*.hxx)|(*.hh)|(*.h)|(*.cpp)|(*.cc)|(*.cxx)|(*.js)|"
                                //"(*.json)|(*.txt)|(*.java)|(*.asm)|(*.s)|(*.cob)|(*Makefile)",
-                               wxFD_OPEN | wxFD_FILE_MUST_EXIST );
-   if(openFileDialog.ShowModal()== wxID_CANCEL)
-      return ;
+                               wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+   if (openFileDialog.ShowModal() == wxID_CANCEL)
+      return;
    wxString filet = openFileDialog.GetPath();
    if (filet.IsEmpty())
    {
       SetStatusText("No folder selected.");
       return;
    }
-    this->add_new_page("Untitled");
-    auto current = get_current_text_editor();
-    current->load_text_file(filet);
+   this->add_new_page("Untitled");
+   auto current = get_current_text_editor();
+   current->load_text_file(filet);
 }
 
 void do_editor::on_open_folder(wxCommandEvent &event)
@@ -199,16 +191,16 @@ void do_editor::on_open_folder(wxCommandEvent &event)
    wxTreeItemId root = folderTree->AddRoot("Root");
    populate_folder_tree(folderPath, root);
    rootPath = folderPath;
-   //this->explorerLabel->SetText(rootPath);
+   // this->explorerLabel->SetText(rootPath);
    SetStatusText("Opened folder: " + folderPath);
 }
 
-void do_editor::on_close_folder(wxCommandEvent& event){
+void do_editor::on_close_folder(wxCommandEvent &event)
+{
    folderTree->DeleteAllItems();
    rootPath = "";
-   //this->explorerLabel->SetText(" - - - ");
+   // this->explorerLabel->SetText(" - - - ");
 }
-
 
 void do_editor::on_save_file(wxCommandEvent &event)
 {
@@ -261,7 +253,6 @@ void do_editor::on_save_file(wxCommandEvent &event)
    output_stream.Write(content.c_str(), content.size());
    SetStatusText("Save file folder: " + folderPath);
 }
-
 
 void do_editor::on_ctrl_i(wxCommandEvent &event)
 {
@@ -339,7 +330,7 @@ void do_editor::on_close_tab(wxAuiNotebookEvent &event)
    return;
 }
 
-
-void do_editor::insert_menu(wxMenu *menu, wxString title){
-   menubar->Append(menu, title );
+void do_editor::insert_menu(wxMenu *menu, wxString title)
+{
+   menubar->Append(menu, title);
 }

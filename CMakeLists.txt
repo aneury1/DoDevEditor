@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28.0)
+cmake_minimum_required(VERSION 3.25.0)
 
 set(PROJECT_NAME DoDevEditor)
 project(${PROJECT_NAME} LANGUAGES CXX)
@@ -6,9 +6,9 @@ set(CMAKE_BUILD_TYPE Debug)
 
 option(ENABLE_CLANG_TIDY "Enable clang-tidy" FALSE)
 option(ENABLE_COVERAGE "Enable code coverage" FALSE)
-option(ENABLE_TESTING "Enable code Testing" TRUE)
+option(ENABLE_TESTING "Enable code Testing" FALSE)
 option(ENABLE_THIRDPARTY "Allow Insta" FALSE)
-option(FETCH_WXWIDGET "Allow Insta" TRUE)
+option(FETCH_WXWIDGET "Allow Insta" FALSE)
 
 set (CMAKE_CXX_STANDARD 17)
 
