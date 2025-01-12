@@ -11,30 +11,30 @@ void print(T msg)
    std::cout << msg << "\n";
 }
 
-main_window_frame::main_window_frame() : wxFrame(nullptr, wxID_ANY, "DoDevEditor : Text Editor", wxDefaultPosition, wxSize(800, 600))
+do_editor::do_editor() : wxFrame(nullptr, wxID_ANY, "DoDevEditor : Text Editor", wxDefaultPosition, wxSize(800, 600))
 
 {
    setup_main_settings();
    Maximize();
-   Bind(wxEVT_MENU, &main_window_frame::on_exit, this, wxID_EXIT);
+   Bind(wxEVT_MENU, &do_editor::on_exit, this, wxID_EXIT);
 }
 
-main_window_frame::~main_window_frame()
+do_editor::~do_editor()
 {
 }
 
-void main_window_frame::on_exit(wxCommandEvent &event)
+void do_editor::on_exit(wxCommandEvent &event)
 {
    auiManager.UnInit();
    Close();
 }
 
-void main_window_frame::setup_main_settings()
+void do_editor::setup_main_settings()
 {
 
    auiManager.SetManagedWindow(this);
 
-   if (menubar)
+   if (!menubar)
    {
       menubar = new wxMenuBar();
 
@@ -51,7 +51,14 @@ void main_window_frame::setup_main_settings()
       menubar->Append(fileMenu, "&File");
       auto edit_menu = create_edit_menu_entries();
       menubar->Append(edit_menu, "&Edit");
+      auto view_menu = create_view_menu_entries();
+      menubar->Append(view_menu, "&View");
+ 
       SetMenuBar(menubar);
+   }
+   else
+   {
+      
    }
 
    explorerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(300, 800));
@@ -73,21 +80,21 @@ void main_window_frame::setup_main_settings()
 
 
    auiManager.Update();
-   Bind(wxEVT_MENU, &main_window_frame::on_open_new_file, this, wxID_NEW);
-   Bind(wxEVT_MENU, & main_window_frame::on_open_existing_file, this, wxID_OPEN);
-   Bind(wxEVT_MENU, &main_window_frame::on_save_file, this, wxID_SAVE);
-   Bind(wxEVT_MENU, &main_window_frame::on_open_folder, this, OpenFolder);
-   Bind(wxEVT_MENU, &main_window_frame::on_close_folder, this, CloseFolder);
-   Bind(wxEVT_MENU, &main_window_frame::on_exit, this, wxID_EXIT);
-   Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, &main_window_frame::on_close_tab, this);
-   Bind(wxEVT_TREE_ITEM_ACTIVATED, &main_window_frame::on_tree_item_activated, this);
+   Bind(wxEVT_MENU, &do_editor::on_open_new_file, this, wxID_NEW);
+   Bind(wxEVT_MENU, & do_editor::on_open_existing_file, this, wxID_OPEN);
+   Bind(wxEVT_MENU, &do_editor::on_save_file, this, wxID_SAVE);
+   Bind(wxEVT_MENU, &do_editor::on_open_folder, this, OpenFolder);
+   Bind(wxEVT_MENU, &do_editor::on_close_folder, this, CloseFolder);
+   Bind(wxEVT_MENU, &do_editor::on_exit, this, wxID_EXIT);
+   Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, &do_editor::on_close_tab, this);
+   Bind(wxEVT_TREE_ITEM_ACTIVATED, &do_editor::on_tree_item_activated, this);
    {
       wxAcceleratorEntry entries[1];
       int keyp = get_accelerator_next_id();
       entries[0].Set(wxACCEL_CTRL, '+', keyp);
       wxAcceleratorTable accel(1, entries);
       SetAcceleratorTable(accel);
-      Bind(wxEVT_MENU, &main_window_frame::on_ctrl_i, this, keyp);
+      Bind(wxEVT_MENU, &do_editor::on_ctrl_i, this, keyp);
    }
    {
       wxAcceleratorEntry entries[1];
@@ -95,7 +102,7 @@ void main_window_frame::setup_main_settings()
       entries[0].Set(wxACCEL_CTRL, '-', keyp);
       wxAcceleratorTable accel(1, entries);
       SetAcceleratorTable(accel);
-      Bind(wxEVT_MENU, &main_window_frame::on_ctrl_l, this, keyp);
+      Bind(wxEVT_MENU, &do_editor::on_ctrl_l, this, keyp);
    }
    // Define the Ctrl+I shortcut
 
@@ -106,7 +113,7 @@ void main_window_frame::setup_main_settings()
    Centre();
 }
 
-text_editor *main_window_frame::add_new_page(const wxString &title)
+text_editor *do_editor::add_new_page(const wxString &title)
 {
 
    text_editor *newPage = new text_editor(editorTabs);
@@ -116,7 +123,7 @@ text_editor *main_window_frame::add_new_page(const wxString &title)
    return newPage;
 }
 
-text_editor *main_window_frame::get_current_text_editor()
+text_editor *do_editor::get_current_text_editor()
 {
    int currentTabIndex = editorTabs->GetSelection();
    if (currentTabIndex == wxNOT_FOUND)
@@ -128,7 +135,7 @@ text_editor *main_window_frame::get_current_text_editor()
    /// return dynamic_cast<wxStyledTextCtrl *>(currentPanel->GetChildren().Item(0)->GetData());
 }
 
-void main_window_frame::populate_folder_tree(const wxString &path, wxTreeItemId parent)
+void do_editor::populate_folder_tree(const wxString &path, wxTreeItemId parent)
 {
    wxDir dir(path);
    if (!dir.IsOpened())
@@ -151,11 +158,11 @@ void main_window_frame::populate_folder_tree(const wxString &path, wxTreeItemId 
       hasFiles = dir.GetNext(&filename);
    }
 }
-void main_window_frame::on_open_new_file(wxCommandEvent &event)
+void do_editor::on_open_new_file(wxCommandEvent &event)
 {
    this->add_new_page("Untitled");
 }
-void main_window_frame::on_open_existing_file(wxCommandEvent &event)
+void do_editor::on_open_existing_file(wxCommandEvent &event)
 {
    wxFileDialog openFileDialog(this, _("Select file to open"), "", "",
                                "*.*",
@@ -175,7 +182,7 @@ void main_window_frame::on_open_existing_file(wxCommandEvent &event)
     current->load_text_file(filet);
 }
 
-void main_window_frame::on_open_folder(wxCommandEvent &event)
+void do_editor::on_open_folder(wxCommandEvent &event)
 {
    wxDirDialog openFolderDialog(this, "Select a Folder to Open", "", wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
    if (openFolderDialog.ShowModal() == wxID_CANCEL)
@@ -196,14 +203,14 @@ void main_window_frame::on_open_folder(wxCommandEvent &event)
    SetStatusText("Opened folder: " + folderPath);
 }
 
-void main_window_frame::on_close_folder(wxCommandEvent& event){
+void do_editor::on_close_folder(wxCommandEvent& event){
    folderTree->DeleteAllItems();
    rootPath = "";
    //this->explorerLabel->SetText(" - - - ");
 }
 
 
-void main_window_frame::on_save_file(wxCommandEvent &event)
+void do_editor::on_save_file(wxCommandEvent &event)
 {
    auto current = get_current_text_editor();
 
@@ -256,19 +263,19 @@ void main_window_frame::on_save_file(wxCommandEvent &event)
 }
 
 
-void main_window_frame::on_ctrl_i(wxCommandEvent &event)
+void do_editor::on_ctrl_i(wxCommandEvent &event)
 {
    auto current = get_current_text_editor();
    current->increase_font_size_by_one();
 }
 
-void main_window_frame::on_ctrl_l(wxCommandEvent &event)
+void do_editor::on_ctrl_l(wxCommandEvent &event)
 {
    auto current = get_current_text_editor();
    current->decrease_font_size_by_one();
 }
 
-void main_window_frame::on_tree_item_activated(wxTreeEvent &event)
+void do_editor::on_tree_item_activated(wxTreeEvent &event)
 {
    wxTreeItemId selected = event.GetItem();
    wxString selectedName = folderTree->GetItemText(selected);
@@ -309,7 +316,7 @@ void main_window_frame::on_tree_item_activated(wxTreeEvent &event)
    }
 }
 
-void main_window_frame::on_close_tab(wxAuiNotebookEvent &event)
+void do_editor::on_close_tab(wxAuiNotebookEvent &event)
 {
    int pageIndex = event.GetSelection();
    /// wxLogMessage("Trying closing this window %d", pageIndex);
@@ -333,6 +340,6 @@ void main_window_frame::on_close_tab(wxAuiNotebookEvent &event)
 }
 
 
-void main_window_frame::insert_menu(wxMenu *menu, wxString title){
+void do_editor::insert_menu(wxMenu *menu, wxString title){
    menubar->Append(menu, title );
 }

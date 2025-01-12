@@ -13,25 +13,25 @@
 #include "text_editor.h"
 
 
-struct main_window_frame_settings{
+struct do_editor_settings{
    bool exit_without_asking = true;
 };
 
 
-class main_window_frame : public wxFrame {
+class do_editor : public wxFrame {
    
-   main_window_frame();
+   do_editor();
    
    public:
   
-   static main_window_frame* get(){
-      static  main_window_frame* m;
+   static do_editor* get(){
+      static  do_editor* m;
       if(!m)
-        m = new main_window_frame();
+        m = new do_editor();
       return m;
    }
    
-   ~main_window_frame();
+   ~do_editor();
    
    private:
    

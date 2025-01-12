@@ -36,8 +36,9 @@ class text_editor : public wxPanel {
    }
 
    private:
-    void OnPaint(wxPaintEvent& event);
-    void OnCharAdded(wxStyledTextEvent& event);
+    void configure_cpp_style();
+    void on_paint(wxPaintEvent& event);
+    void on_char_added(wxStyledTextEvent& event);
     int internal_editor_id;
     wxStyledTextCtrl *textEditor;
     wxString filepath;

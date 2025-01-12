@@ -3,7 +3,7 @@
 class DoDevEditorApp : public wxApp {
 public:
     virtual bool OnInit() {
-        auto frame = main_window_frame::get(); ///new main_window_frame();
+        auto frame = do_editor::get(); ///new do_editor();
         frame->Show(true);
         return true;
     }
