@@ -49,14 +49,13 @@ void do_editor::setup_main_settings()
       menubar->Append(view_menu, "&View");
       SetMenuBar(menubar);
    }
-
-
-   explorerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(300, 800));
+   explorerPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(300, 400));
    wxBoxSizer *explorerSizer = new wxBoxSizer(wxVERTICAL);
    explorerLabel = new wxStaticText(explorerPanel, wxID_ANY, "File Explorer");
    folderTree = new wxTreeCtrl(explorerPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT);
    explorerSizer->Add(explorerLabel, 0, wxEXPAND | wxALL, 5);
    explorerSizer->Add(folderTree, 1, wxEXPAND);
+   //explorerSizer->Add(controlVersion, 1, wxEXPAND);
    explorerPanel->SetSizer(explorerSizer);
 
    // Create the main editor area
@@ -91,8 +90,6 @@ void do_editor::setup_main_settings()
       SetAcceleratorTable(accel);
       Bind(wxEVT_MENU, &do_editor::on_ctrl_l, this, keyp);
    }
-   // Define the Ctrl+I shortcut
-
    CreateStatusBar(1);
    SetStatusText("Ready");
 
@@ -119,7 +116,6 @@ text_editor *do_editor::get_current_text_editor()
    std::cout << "Page Text: " << editorTabs->GetPageText(currentTabIndex) << "\n";
    auto currentPanel = dynamic_cast<text_editor *>(editorTabs->GetPage(currentTabIndex));
    return currentPanel;
-   /// return dynamic_cast<wxStyledTextCtrl *>(currentPanel->GetChildren().Item(0)->GetData());
 }
 
 void do_editor::populate_folder_tree(const wxString &path, wxTreeItemId parent)
@@ -167,6 +163,7 @@ void do_editor::on_open_existing_file(wxCommandEvent &event)
    this->add_new_page("Untitled");
    auto current = get_current_text_editor();
    current->load_text_file(filet);
+   
 }
 
 void do_editor::on_open_folder(wxCommandEvent &event)
@@ -337,6 +334,11 @@ void do_editor::on_close_tab(wxAuiNotebookEvent &event)
    event.Skip();
    return;
 }
+
+void do_editor::create_main_menubar()
+ {
+
+ }
 
 void do_editor::insert_menu(wxMenu *menu, wxString title)
 {

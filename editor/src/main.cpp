@@ -1,8 +1,12 @@
+#include "sdk.h"
 #include "main_frame.h"
 
 class DoDevEditorApp : public wxApp {
 public:
     virtual bool OnInit() {
+        
+        LOG_I("HOLAAAAAA");
+        
         auto frame = do_editor::get(); ///new do_editor();
         frame->Show(true);
         return true;
@@ -122,5 +126,65 @@ void MyFrame::appendOutput(const std::string& line) {
     });
 }
 
+
+#endif
+
+ 
+#if 0
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <cstdio> // For popen and pclose
+/// echo '#include <iostream> int main() { std::cout<<"Hello, World!"<<std::endl;return 0; }' | clang-format-14
+
+std::string ApplyClangFormat(const std::string& code) {
+    // Command to invoke clang-format
+    const std::string clangFormatCommand = " echo \'#include <iostream> int main() { std::cout<<\"Hello, World!\"<<std::endl;return 0; }\' | clang-format-14";
+
+    // Open a process to write to clang-format's stdin and read its stdout
+    FILE* pipe = popen(clangFormatCommand.c_str(), "w+");
+    if (!pipe) {
+        throw std::runtime_error("Failed to open pipe to "+ clangFormatCommand);
+    }
+
+    // Write the input C++ code to clang-format's stdin
+    fwrite(code.c_str(), sizeof(char), code.size(), pipe);
+    fflush(pipe); // Ensure all input is sent to clang-format
+
+    // Read the formatted output from clang-format's stdout
+    std::ostringstream formattedCode;
+    char buffer[128];
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        formattedCode << buffer;
+    }
+
+    // Close the pipe
+    int exitCode = pclose(pipe);
+    if (exitCode != 0) {
+        throw std::runtime_error("clang-format failed with exit code: " + std::to_string(exitCode));
+    }
+
+    return formattedCode.str();
+}
+
+int main() {
+    // Example unformatted code
+    std::string unformattedCode = R"(
+#include <iostream>
+int main() { std::cout << "Hello, World!" << std::endl; return 0; }
+)";
+
+    try {
+        // Format the code using clang-format
+        std::string formattedCode = ApplyClangFormat(unformattedCode);
+
+        // Print the formatted code
+        std::cout << "Formatted Code:\n" << formattedCode << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+
+    return 0;
+}
 
 #endif

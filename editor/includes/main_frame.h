@@ -55,6 +55,7 @@ class do_editor : public wxFrame {
    void on_ctrl_l(wxCommandEvent &event);
 
 
+   void create_main_menubar();
    void insert_menu(wxMenu *menu, wxString title);
 
    private:

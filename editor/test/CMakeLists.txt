@@ -23,17 +23,23 @@ target_link_libraries(GTest::GTest INTERFACE gtest_main gmock_main)
 
 add_executable(${PROJECT_NAME}
     test_main.cpp
+    folder_manager_test.cpp
+    ../src/folder_manager.cpp
     #variant_test.cpp
     #string_utils_test.cpp
     #io_utils_test.cpp
     #../src/test_window.cpp
 )
 
-add_compile_definitions(SIMPLE_SERVER_TESTING)
-
+add_compile_definitions(DO_DEVEDITOR_TESTING)
+find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
+include(${wxWidgets_USE_FILE})
 target_link_libraries(${PROJECT_NAME} PRIVATE
     GTest::GTest
+    ${wxWidgets_LIBRARIES}
 )
+
+
 
 add_test(NAME testapp_gtest
     COMMAND ${PROJECT_NAME})
