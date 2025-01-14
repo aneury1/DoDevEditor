@@ -19,6 +19,9 @@ class text_editor : public wxPanel {
    text_editor(wxWindow *parent, int id = get_next_id());
    virtual ~text_editor();
 
+
+   
+
    void set_text(const wxString& str);
    wxString get_text();
    bool load_text_file(const wxString& path);
@@ -27,10 +30,14 @@ class text_editor : public wxPanel {
    
    const inline bool has_changed()const{return changed;}
    bool is_untitle(){
-       return filepath.empty();
+       return filepath.empty()|| filepath =="Untitled";
    }
 
 
+   inline void set_drop_target(wxDropTarget *dropTarget){
+      textEditor->SetDropTarget(dropTarget);
+   }
+ 
    wxString get_path(){
       return filepath;
    }

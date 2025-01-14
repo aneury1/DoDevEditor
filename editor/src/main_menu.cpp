@@ -36,7 +36,7 @@ wxMenu *create_edit_menu_entries()
 wxMenu *create_view_menu_entries()
 {
     wxMenu *menu = new wxMenu();
-    menu->Append(wxID_ANY, "File Explorer ", " ");
+    menu->Append(ViewFileExplorer, "File Explorer ", " ");
     menu->Append(wxID_ANY, "Bottom Options", " ");
     menu->AppendSeparator();
     menu->Append(wxID_ANY, "View Control Version(Not Implememted)", " ");

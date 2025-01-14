@@ -1,12 +1,9 @@
-#include "sdk.h"
+
 #include "main_frame.h"
 
 class DoDevEditorApp : public wxApp {
 public:
     virtual bool OnInit() {
-        
-        LOG_I("HOLAAAAAA");
-        
         auto frame = do_editor::get(); ///new do_editor();
         frame->Show(true);
         return true;

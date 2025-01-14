@@ -8,8 +8,12 @@ static std::unordered_map<int, std::function<void(wxCommandEvent &)>> callback_l
 
 enum FixedID{
    OpenFolder = wxID_LAST+1,
-   CloseFolder, 
-   LastFixedId
+   CloseFolder,
+   ViewFileExplorer,
+
+
+
+   LastFixedId,
 };
 
 

@@ -9,8 +9,8 @@ option(ENABLE_COVERAGE "Enable code coverage" FALSE)
 option(ENABLE_TESTING "Enable code Testing" FALSE)
 option(ENABLE_THIRDPARTY "Allow Insta" FALSE)
 option(FETCH_WXWIDGET "Allow Insta" TRUE)
-option(FETCH_JSON "Allow JSON" TRUE)
-option(USING_PLUGINS "Allow Insta" TRUE)
+option(FETCH_JSON "Allow JSON" FALSE)
+option(USING_PLUGINS "Allow Insta" FALSE)
 
 set (CMAKE_CXX_STANDARD 17)
 
@@ -47,7 +47,7 @@ if(FETCH_JSON)
     FetchContent_Declare(
         nlohmann
         GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG        v3.11.2  # Use the latest stable version
+        # GIT_TAG        v3.11.2  # Use the latest stable version
     )
 
     FetchContent_MakeAvailable(wxWidgets)
@@ -88,14 +88,11 @@ if(USING_PLUGINS)
     list(APPEND IncludesDirs PRIVATE ${CMAKE_SOURCE_DIR}/plugins-sdk)
 endif()
 
-
-
 target_include_directories(${PROJECT_NAME} BEFORE ${IncludesDirs})
 
+# set(PLUGIN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/plugins)
 
-# Set output directory for plugins
-set(PLUGIN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/plugins)
-file(MAKE_DIRECTORY ${PLUGIN_OUTPUT_DIR})
+# file(MAKE_DIRECTORY ${PLUGIN_OUTPUT_DIR})
 
 if(ENABLE_TESTING)
     message("Testing is enabled")
