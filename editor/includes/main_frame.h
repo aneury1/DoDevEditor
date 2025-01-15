@@ -61,6 +61,8 @@ class do_editor : public wxFrame {
    void setup_accelerator();
    void create_main_menubar();
    void insert_menu(wxMenu *menu, wxString title);
+   void bind_to_default_event();
+   void on_find(wxCommandEvent &event);
 
    bool contains_page_with_title(const wxString &title);
    bool check_if_this_file_is_opened(const wxString& title);

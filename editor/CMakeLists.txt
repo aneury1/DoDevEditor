@@ -65,7 +65,7 @@ add_executable(${PROJECT_NAME} ${SRCS})
 if(USING_PLUGINS)
     find_package(wxWidgets REQUIRED COMPONENTS core base stc aui DoDevEditorSDK) 
 else()
-    find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
+    find_package(wxWidgets REQUIRED COMPONENTS core base stc aui  ) 
 endif()
 
 include(${wxWidgets_USE_FILE})

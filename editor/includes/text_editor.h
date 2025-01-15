@@ -21,7 +21,7 @@ class text_editor : public wxPanel {
 
 
    
-
+   void set_selection(int start, int endpos);
    void set_text(const wxString& str);
    wxString get_text();
    bool load_text_file(const wxString& path);

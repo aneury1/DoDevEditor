@@ -44,6 +44,10 @@ wxString text_editor::get_text()
    return wxEmptyString;
 }
 
+void text_editor::set_selection(int start, int endpos){
+ textEditor->SetSelection(start, endpos);   
+}
+
 bool text_editor::load_text_file(const wxString &path)
 {
    wxFile file(path);
@@ -79,6 +83,7 @@ void text_editor::decrease_font_size_by_one()
       textEditor->SetFont(font);
    }
 }
+
 
 void text_editor::on_paint(wxPaintEvent &event)
 {

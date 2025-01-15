@@ -33,6 +33,30 @@ void do_editor::on_exit(wxCommandEvent &event)
    auiManager.UnInit();
    Close();
 }
+#include "default_dialog.h"
+void do_editor::on_find(wxCommandEvent &event)
+{
+   find_dialog_text findDialog(this);
+   auto editor = get_current_text_editor();
+   if (findDialog.ShowModal() == wxID_OK)
+   {
+      wxString searchText = findDialog.GetSearchText();
+
+      // Search for the text in the TextCtrl
+      wxString content = editor->get_text();
+      long pos = content.Find(searchText);
+
+      if (pos != wxNOT_FOUND)
+      {
+         wxMessageBox("Text found at position: " + wxString::Format("%ld", pos), "Find Result", wxICON_INFORMATION);
+         editor->set_selection(pos, pos + searchText.Length());
+      }
+      else
+      {
+         wxMessageBox("Text not found.", "Find Result", wxICON_INFORMATION);
+      }
+   }
+}
 
 void do_editor::setup_accelerator()
 {
@@ -60,6 +84,7 @@ void do_editor::setup_main_settings()
    auiManager.SetManagedWindow(this);
    create_main_menubar();
    create_main_instances();
+   bind_to_default_event();
    Bind(wxEVT_MENU, &do_editor::on_open_new_file, this, wxID_NEW);
    Bind(wxEVT_MENU, &do_editor::on_open_existing_file, this, wxID_OPEN);
    Bind(wxEVT_MENU, &do_editor::on_save_file, this, wxID_SAVE);
@@ -76,8 +101,6 @@ void do_editor::setup_main_settings()
 
    add_new_page(untitled);
 
-
-
    Centre();
 }
 
@@ -92,11 +115,11 @@ text_editor *do_editor::add_new_page(const wxString &title)
    text_editor *newPage = new text_editor(editorTabs);
 
    editorTabs->AddPage(newPage, title, true);
-  
+
    current_text_editor = newPage;
    // possible memory leak?
-   file_drop_target* dropTarget = new file_drop_target(current_text_editor);
-   
+   file_drop_target *dropTarget = new file_drop_target(current_text_editor);
+
    current_text_editor->set_drop_target(dropTarget);
 
    return newPage;
@@ -290,9 +313,10 @@ void do_editor::on_ctrl_l(wxCommandEvent &event)
 void do_editor::on_view_file_explorer(wxCommandEvent &event)
 {
    auto inf = find_Panel_by_name("FileExplorer");
-   if(inf!=nullptr){
+   if (inf != nullptr)
+   {
       inf->Show(true);
-       auiManager.Update();
+      auiManager.Update();
    }
 }
 
@@ -395,6 +419,22 @@ void do_editor::create_main_instances()
    auiManager.Update();
 }
 
+void do_editor::bind_to_default_event()
+{
+   Bind(wxEVT_MENU, &do_editor::on_open_new_file, this, wxID_NEW);
+   Bind(wxEVT_MENU, &do_editor::on_open_existing_file, this, wxID_OPEN);
+   Bind(wxEVT_MENU, &do_editor::on_save_file, this, wxID_SAVE);
+   Bind(wxEVT_MENU, &do_editor::on_open_folder, this, OpenFolder);
+   Bind(wxEVT_MENU, &do_editor::on_close_folder, this, CloseFolder);
+   Bind(wxEVT_MENU, &do_editor::on_view_file_explorer, this, ViewFileExplorer);
+
+   Bind(wxEVT_MENU, &do_editor::on_exit, this, wxID_EXIT);
+   Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, &do_editor::on_close_tab, this);
+   Bind(wxEVT_TREE_ITEM_ACTIVATED, &do_editor::on_tree_item_activated, this);
+
+   Bind(wxEVT_MENU, &do_editor::on_find, this, wxID_FIND);
+}
+
 void do_editor::create_main_menubar()
 {
    menubar = new wxMenuBar();
@@ -429,7 +469,7 @@ bool do_editor::contains_page_with_title(const wxString &title)
    return false;
 }
 
-wxAuiPaneInfo* do_editor::find_Panel_by_name(const wxString &name)
+wxAuiPaneInfo *do_editor::find_Panel_by_name(const wxString &name)
 {
    wxAuiPaneInfoArray &panes = auiManager.GetAllPanes();
    for (size_t i = 0; i < panes.GetCount(); ++i)
@@ -440,5 +480,5 @@ wxAuiPaneInfo* do_editor::find_Panel_by_name(const wxString &name)
          return &paneInfo;
       }
    }
-   return nullptr; 
+   return nullptr;
 }
