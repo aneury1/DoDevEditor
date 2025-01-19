@@ -1,8 +1,10 @@
-#ifndef TEXT_EDITOR_H_DEFINED
-#define TEXT_EDITOR_H_DEFINED
-#include "id_handler.h"
+#ifndef __TEXT_EDITOR_H_DEFINED
+#define __TEXT_EDITOR_H_DEFINED
 #include <wx/wx.h>
-#include <wx/txtstrm.h>  
+#include <wx/wx.h>
+#include <wx/wx.h>
+#include <wx/wx.h>
+#include <wx/txtstrm.h>
 #include <wx/file.h>
 #include <wx/stc/stc.h>
 #include <wx/filedlg.h>
@@ -10,42 +12,40 @@
 #include <wx/treectrl.h>
 #include <wx/dir.h>
 #include <wx/file.h>
+#include <vector>
 
+#include "id_handler.h"
 
-
-class text_editor : public wxPanel {
-   
-   public: 
-   text_editor(wxWindow *parent, int id = get_next_id());
-   virtual ~text_editor();
-
-   void set_text(const wxString& str);
+struct text_editor : public wxPanel
+{
+private:
+   int internal_id;
+   wxStyledTextCtrl *textEditor;
+   bool fromfile = false;
+   bool changed = false;
+   wxString path;
+   void on_char_added(wxStyledTextEvent &event);
+public:
+   text_editor(wxWindow *parent);
+   ~text_editor();
+   void set_filepath(const wxString &path);
+   void set_text(const wxString &text);
    wxString get_text();
-   bool load_text_file(const wxString& path);
-   void increase_font_size_by_one();
-   void decrease_font_size_by_one();
-   
-   const inline bool has_changed()const{return changed;}
-   bool is_untitle(){
-       return filepath.empty();
+
+   const bool get_changed(){
+      return changed;
+   }
+   const bool get_from_file(){
+      return fromfile;
    }
 
-
-   wxString get_path(){
-      return filepath;
+   const wxString get_path(){
+      return path;
    }
 
-   private:
-    void configure_cpp_style();
-    void on_paint(wxPaintEvent& event);
-    void on_char_added(wxStyledTextEvent& event);
-    int internal_editor_id;
-    wxStyledTextCtrl *textEditor;
-    wxString filepath;
-    bool changed;
-    int normal_font_size =16;
+   inline void debug(){
+      std::cout <<"Path" << path.ToStdString()<<" from file:"<< fromfile<<"\n";
+   }
 };
 
-
-
-#endif ///TEXT_EDITOR_H_DEFINED
+#endif // __TEXT_EDITOR_H_DEFINED

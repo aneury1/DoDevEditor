@@ -1,22 +1,25 @@
-#include "main_menu.h"
-
-
-wxMenu* create_file_menu_entries()
+#ifndef __MENUBAR_DEFINED_H
+#define __MENUBAR_DEFINED_H
+#include <wx/wx.h>
+#include "id_handler.h"
+static inline wxMenu* create_file_menu_entries()
 {
    wxMenu *fileMenu = new wxMenu();
    fileMenu->Append(wxID_NEW, "&New File\tCtrl-N", "Create a new document");
    fileMenu->Append(wxID_OPEN, "&Open File\tCtrl-O", "Open a File");
+   /// fileMenu->Append(OpenBinaryFileReadOnly, "&Open Binary File\tCtrl-O", "Open a File as Read Only");
    fileMenu->Append(OpenFolder, "&Open Folder\tCtrl-O", "Open a Folder");
    fileMenu->Append(CloseFolder, "&Close Opened Folder\tCtrl-Q", "Close a Folder");
    fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current document");
-   fileMenu->AppendSeparator();
-   fileMenu->Append(wxID_SAVE, "&Print File\tCtrl-P", "Print current file");
+   fileMenu->Append(SaveAs, "&Save as \tCtrl-S", "Save the current document");
+   //fileMenu->AppendSeparator();
+   //fileMenu->Append(wxID_SAVE, "&Print File\tCtrl-P", "Print current file");
    fileMenu->AppendSeparator();
    fileMenu->Append(wxID_EXIT, "E&xit\tCtrl-Q", "Exit the application");
    return fileMenu;
 }
 
-wxMenu *create_edit_menu_entries()
+static inline wxMenu *create_edit_menu_entries()
 {
     wxMenu *menu = new wxMenu();
     menu->Append(wxID_UNDO, "&Undo \tCtrl-Z", " ");
@@ -33,19 +36,33 @@ wxMenu *create_edit_menu_entries()
 }
 
 
-wxMenu *create_view_menu_entries()
+static inline wxMenu *create_view_menu_entries()
 {
     wxMenu *menu = new wxMenu();
-    menu->Append(wxID_ANY, "File Explorer ", " ");
+    menu->Append(ViewFileExplorer, "File Explorer ", " ");
     menu->Append(wxID_ANY, "Bottom Options", " ");
     menu->AppendSeparator();
     menu->Append(wxID_ANY, "View Control Version(Not Implememted)", " ");
     menu->Append(wxID_ANY, "View Symbols(Not Implemented)", " ");
-    //menu->Append(wxID_COPY, "&Copy\tCtrl-C", " ");
-    //menu->Append(wxID_PASTE, "&Paste\tCtrl-P", " ");
-    //menu->AppendSeparator();
-    //menu->Append(wxID_FIND, "&Find \tCtrl-F", " ");
-    //menu->Append(wxID_REPLACE, "&Replace\tCtrl-H", " ");
-    //menu->Append(wxID_REPLACE_ALL, "&Replace All File\tCtrl-SHIFT-H", " ");
     return menu;
 }
+
+
+static wxMenuBar *create_default_menubar()
+{
+   auto menubar = new wxMenuBar();
+
+   if (menubar)
+   {
+      auto fileMenu = create_file_menu_entries();
+      menubar->Append(fileMenu, "&File");
+      auto edit_menu = create_edit_menu_entries();
+      menubar->Append(edit_menu, "&Edit");
+      auto view_menu = create_view_menu_entries();
+      menubar->Append(view_menu, "&View");
+   }
+   
+   return menubar;
+}
+
+#endif /// __MENUBAR_DEFINED_H

@@ -2,14 +2,18 @@
 #define __ID_HANDLER_DEFINED
 #include <wx/wx.h>
 #include <stdint.h>
-#include <unordered_map>
-
-static std::unordered_map<int, std::function<void(wxCommandEvent &)>> callback_list;
+ 
+ 
 
 enum FixedID{
    OpenFolder = wxID_LAST+1,
-   CloseFolder, 
-   LastFixedId
+   CloseFolder,
+   ViewFileExplorer,
+   OpenBinaryFileReadOnly,
+   SaveAs,
+   CloseTab,
+   ExplorerItemTaken,
+   LastFixedId,
 };
 
 

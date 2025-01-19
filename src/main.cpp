@@ -1,126 +1,103 @@
-#include "main_frame.h"
+#include <wx/wx.h>
+
+#include <wx/wx.h>
+#include <wx/txtstrm.h>  
+#include <wx/file.h>
+#include <wx/stc/stc.h>
+#include <wx/filedlg.h>
+#include <wx/aui/aui.h>
+#include <wx/treectrl.h>
+#include <wx/dir.h>
+#include <wx/file.h>
+
+#include "callbacks.h"
+#include "do_devwindow.h"
+#include "tabs.h"
+#include "explorer_panel.h"
+
+#if 0 
+class editor_tab_panel;
+
+struct editorpanel : public wxPanel{
+   
+   wxAuiNotebook* editorTabs;
+   wxButton *newTab;
+   editorpanel(wxWindow *frame) : wxPanel(frame, wxID_ANY){
+       SetBackgroundColour(wxColour(255,0,0,255));
+       wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+       newTab = new wxButton(this, wxID_LAST + 1, wxString("Agregar"));
+       editorTabs = new wxAuiNotebook(this, wxID_LAST+2, wxDefaultPosition, wxDefaultSize,
+                                  wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ACTIVE_TAB);
+
+
+      
+        Bind(wxEVT_BUTTON, [this](wxCommandEvent& event) {
+            wxPanel *panel = new wxPanel(editorTabs, wxID_ANY);
+            panel->SetBackgroundColour(wxColour(0,0,255,255));
+            wxStyledTextCtrl *textEditor = new wxStyledTextCtrl(panel, wxID_ANY);
+            textEditor->SetMinSize(wxSize(800, 600));
+            textEditor->SetBackgroundColour(wxColour(255, 30, 30));
+            textEditor->SetForegroundColour(wxColour(255, 255, 255));
+            textEditor->SetBackgroundColour("#FFFFFF");
+            textEditor->StyleSetSize(wxSTC_STYLE_DEFAULT, 12);
+            wxBoxSizer *Ssizer = new wxBoxSizer(wxVERTICAL);
+            Ssizer->Add(textEditor, 1, wxEXPAND);
+            panel->SetSizer(Ssizer);
+            editorTabs->AddPage(panel, "HP", true);
+            
+        }, wxID_LAST + 1);
+
+       sizer->Add(newTab, 0);
+       sizer->Add(editorTabs, 1, wxEXPAND);
+       SetSizer(sizer);
+   }
+};
+struct editor_tab_panel : public wxFrame{
+   
+   wxAuiManager auiManager;
+   editorpanel *panel;
+   editor_tab_panel(): wxFrame(nullptr, wxID_ANY,wxEmptyString,wxDefaultPosition,wxDefaultSize )
+   {
+       auiManager.SetManagedWindow(this);
+       panel = new editorpanel(this);
+       auiManager.AddPane(panel, wxAuiPaneInfo().Name("editor_panel_name").CenterPane());
+       Maximize();
+   }
+};
+#endif
+
+
 
 class DoDevEditorApp : public wxApp {
 public:
     virtual bool OnInit() {
-        auto frame = do_editor::get(); ///new do_editor();
+        auto frame =  new do_devwindow(); ////new editor_tab_panel(); ///do_editor::get(); ///new do_editor();
+        set_default_callback();
+        auto editortabs = new editor_tab(frame);  
+        auto explorerpanel = new explorer_panel(frame);
+
+        panel_info editorPanel;        
+        editorPanel.panel = editortabs;
+        editorPanel.info  = wxAuiPaneInfo().Name("editor_panel_name").CenterPane();
+
+        panel_info explorerPanel;        
+        explorerPanel.panel = explorerpanel;
+        explorerPanel.info  = wxAuiPaneInfo().Name("file_explorer_panel_name").Left().Caption("Explorer").BestSize(300, 800).MinSize(200, 600);
+
+        set_base_window(
+            frame,
+            editortabs,
+            explorerpanel
+        );
+        frame->add_panel(&explorerPanel);
+        frame->add_panel(&editorPanel);
+ 
+
+
+        frame->update_components();
         frame->Show(true);
         return true;
     }
 };
 
 wxIMPLEMENT_APP(DoDevEditorApp);
-
-
-#if 0
-#include <iostream>
-#include <cstdio>
-#include <memory>
-#include <stdexcept>
-#include <string>
-#include <functional>
-
-// Function to execute a shell command and stream its output
-void executeAndStreamOutput(const std::string& command, std::function<void(const std::string&)> callback) {
-    // Open a pipe to the command using popen()
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
-    if (!pipe) {
-        throw std::runtime_error("Failed to open pipe");
-    }
-
-    char buffer[128];
-    while (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
-        // Stream the output to the callback function
-        callback(buffer);
-    }
-}
-
-// Example callback function
-void outputCallback(const std::string& line) {
-    // Process or display the streamed output
-    std::cout << "Output: " << line;
-}
-
-int main() {
-    try {
-        std::string command = "sudo apt-get update"; // Example command
-        executeAndStreamOutput(command, outputCallback);
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << '\n';
-    }
-
-    return 0;
-}
-
-
-#endif
-#if 0
-#include <wx/wx.h>
-#include <cstdio>
-#include <memory>
-#include <stdexcept>
-#include <string>
-#include <thread>
-
-// Application class
-class MyApp : public wxApp {
-public:
-    virtual bool OnInit();
-};
-
-// Frame class
-class MyFrame : public wxFrame {
-public:
-    MyFrame();
-
-private:
-    wxTextCtrl* outputCtrl;
-
-    void executeAndStreamOutput(const std::string& command);
-    void appendOutput(const std::string& line);
-};
-
-wxIMPLEMENT_APP(MyApp);
-
-bool MyApp::OnInit() {
-    MyFrame* frame = new MyFrame();
-    frame->Show(true);
-    return true;
-}
-
-MyFrame::MyFrame()
-    : wxFrame(nullptr, wxID_ANY, "Shell Command Output", wxDefaultPosition, wxSize(600, 400)) {
-    // Create a multi-line text control to display output
-    outputCtrl = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY);
-
-    // Start streaming output in a separate thread
-    std::thread([this]() {
-        executeAndStreamOutput("cd test && ./dodeveditor_test"); // Example command
-    }).detach();
-}
-
-void MyFrame::executeAndStreamOutput(const std::string& command) {
-    // Open a pipe to the command
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
-    if (!pipe) {
-        appendOutput("Failed to execute command.\n");
-        return;
-    }
-
-    char buffer[128];
-    while (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
-        std::string line(buffer);
-        appendOutput(line); // Append the output line to the text control
-    }
-    appendOutput("Test Finish");
-}
-
-void MyFrame::appendOutput(const std::string& line) {
-    // Safely update the wxTextCtrl from the main GUI thread
-    CallAfter([this, line]() {
-        outputCtrl->AppendText(line);
-    });
-}
-
-
-#endif

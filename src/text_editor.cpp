@@ -1,98 +1,8 @@
 #include "text_editor.h"
-#include <iostream>
-#include <wx/wx.h>
-#include <wx/stc/stc.h>
-text_editor::text_editor(wxWindow *parent, int id) : wxPanel(parent, id)
-{
-   changed = false;
-   internal_editor_id = get_next_id();
-   textEditor = new wxStyledTextCtrl(this, internal_editor_id);
-   textEditor->SetMinSize(wxSize(800, 600));
-   textEditor->SetBackgroundColour(wxColour(255, 30, 30));
-   textEditor->SetForegroundColour(wxColour(255, 255, 255));
-   textEditor->SetBackgroundColour("#FFFFFF");
-   textEditor->StyleSetSize(wxSTC_STYLE_DEFAULT, normal_font_size);
-   //textEditor->StyleClearAll();
-   //textEditor->StyleSetBackground(wxSTC_STYLE_DEFAULT, (255, 0, 0));
-   //textEditor->StyleSetForeground(wxSTC_STYLE_DEFAULT, (255, 244, 255));
-   //textEditor->StyleClearAll();
-   configure_cpp_style();
-   std::cout << "panel id=" << id << "\n";
-   wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
-   sizer->Add(textEditor, 1, wxEXPAND);
-   this->SetSizer(sizer);
-   Bind(wxEVT_PAINT, &text_editor::on_paint, this);
-   Bind(wxEVT_STC_CHARADDED, &text_editor::on_char_added, this);
-   Bind(wxEVT_STC_CHANGE, &text_editor::on_char_added, this);
-   Bind(wxEVT_STC_MODIFIED, &text_editor::on_char_added, this);
-}
+#include "id_handler.h"
+#include "utils.h"
 
-text_editor::~text_editor()
-{
-}
-
-void text_editor::set_text(const wxString &str)
-{
-   if (str.length() > 0 && textEditor)
-      textEditor->SetText(str);
-}
-
-wxString text_editor::get_text()
-{
-   if (textEditor)
-      return textEditor->GetText();
-   return wxEmptyString;
-}
-
-bool text_editor::load_text_file(const wxString &path)
-{
-   wxFile file(path);
-   wxString content;
-   if (file.IsOpened())
-   {
-      file.ReadAll(&content);
-      textEditor->SetText(content);
-      filepath = path;
-      file.Close();
-      return true;
-   }
-   return false;
-}
-
-void text_editor::increase_font_size_by_one()
-{
-   if (textEditor)
-   {
-      textEditor->StyleSetSize(wxSTC_STYLE_DEFAULT, ++normal_font_size);
-      wxFont font = textEditor->GetFont();
-      font.SetPointSize(font.GetPointSize() + 1);
-      textEditor->SetFont(font);
-   }
-}
-void text_editor::decrease_font_size_by_one()
-{
-   if (textEditor && normal_font_size >= 9)
-   {
-      textEditor->StyleSetSize(wxSTC_STYLE_DEFAULT, --normal_font_size);
-      wxFont font = textEditor->GetFont();
-      font.SetPointSize(font.GetPointSize() + 1);
-      textEditor->SetFont(font);
-   }
-}
-
-void text_editor::on_paint(wxPaintEvent &event)
-{
-   wxPaintDC dc(this);
-   dc.SetBrush(*wxBLUE_BRUSH);
-   dc.DrawRectangle(10, 10, 100, 50); // Dibuja un rectángulo azul
-}
-
-void text_editor::on_char_added(wxStyledTextEvent &event)
-{
-   changed = true;
-}
-
-void text_editor::configure_cpp_style()
+void cpp(wxStyledTextCtrl *textEditor)
 {
    // Set the lexer for C++
    textEditor->SetLexer(wxSTC_LEX_CPP);
@@ -105,6 +15,10 @@ void text_editor::configure_cpp_style()
                          "private protected public register reinterpret_cast return short signed sizeof static static_assert "
                          "static_cast struct switch template this thread_local throw true try typedef typeid typename union "
                          "unsigned using virtual void volatile wchar_t while");
+
+
+      textEditor->SetKeyWords(1,
+                         "std::string std::cout");
 
 
    static wxColor green("#123b28");
@@ -127,7 +41,7 @@ void text_editor::configure_cpp_style()
 
    // Fonts
    textEditor->StyleSetFont(wxSTC_C_DEFAULT, wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
-   textEditor->StyleSetFont(wxSTC_C_PREPROCESSOR, wxFont(17, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+   textEditor->StyleSetFont(wxSTC_C_PREPROCESSOR, wxFont(13, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
    // Enable line numbers
    textEditor->SetMarginType(0, wxSTC_MARGIN_NUMBER);
@@ -138,5 +52,65 @@ void text_editor::configure_cpp_style()
    textEditor->SetMarginBackground(0, *wxRED);
    textEditor->SetCaretForeground(wxColour(255, 0, 0)); // Red caret
    textEditor->SetCaretWidth(100);
- 
+}
+
+
+void set_style_for_default_language(const wxString& languange, wxStyledTextCtrl *ctrl){
+   cpp(ctrl);
+}
+text_editor::~text_editor(){
+   std::cout << "Destroy one\n";
+}
+
+
+text_editor::text_editor(wxWindow *parent) : wxPanel(parent, wxID_ANY)
+{
+    internal_id = get_next_id();
+    fromfile = false;
+    changed = false;
+    ///SetBackgroundColour(wxColour(0, 0, 255, 255));
+    textEditor = new wxStyledTextCtrl(this, internal_id);
+    textEditor->SetMinSize(wxSize(800, 600));
+    textEditor->SetBackgroundColour(wxColour(255, 30, 30));
+    textEditor->SetForegroundColour(wxColour(255, 255, 255));
+    textEditor->SetBackgroundColour("#000000FF");
+   /// textEditor->StyleSetBackground(wxSTC_STYLE_DEFAULT, wxColor(255,0,0,255)); //before that you need define some style for all content
+   /// textEditor->StyleSetBackground(wxSTC_STYLE_DEFAULT, wxColor(255,0,0,255)); //before that you need define some style for all content
+   // textEditor->SetSelBackground(wxColour(255,255,255,255)); //before that you need to select all content
+    textEditor->StyleSetSize(wxSTC_STYLE_DEFAULT, 12);
+    wxBoxSizer *Ssizer = new wxBoxSizer(wxVERTICAL);
+    Ssizer->Add(textEditor, 1, wxEXPAND);
+    set_style_for_default_language("cpp",textEditor);
+    SetSizer(Ssizer);
+
+
+   Bind(wxEVT_STC_CHARADDED, &text_editor::on_char_added, this);
+   //Bind(wxEVT_STC_CHANGE, &text_editor::on_char_added, this);
+   //Bind(wxEVT_STC_MODIFIED, &text_editor::on_char_added, this);
+}
+
+void text_editor::set_filepath(const wxString& path){
+   fromfile = true;
+   this->path=path;  
+}
+
+void text_editor::set_text(const wxString &text)
+{
+    if (textEditor)
+    {
+        textEditor->SetText(text);
+    }
+}
+
+wxString text_editor::get_text()
+{
+   if (textEditor)
+      return textEditor->GetText();
+   return wxEmptyString;
+}
+
+void text_editor::on_char_added(wxStyledTextEvent &event)
+{
+  /// std::cout <<"EVent triggerd\n";
+   changed = true;
 }
