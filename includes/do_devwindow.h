@@ -28,7 +28,7 @@ class do_devwindow : public wxFrame{
 
     void on_exit(wxCommandEvent &event);
     void on_key_entered(wxCommandEvent &event);
-    
+    void on_context_menu(wxContextMenuEvent& event);    
     public:
     
 

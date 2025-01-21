@@ -1,3 +1,5 @@
+#include <wx/imaglist.h>
+#include <wx/artprov.h>
 #include "explorer_panel.h"
 #include "utils.h"
 #include "callbacks.h"
@@ -13,8 +15,21 @@ explorer_panel::explorer_panel(wxWindow *parent) : wxPanel(parent,wxID_ANY)
    // explorerSizer->Add(controlVersion, 1, wxEXPAND);
    SetSizer(explorerSizer);
 
-    Bind(wxEVT_TREE_ITEM_ACTIVATED, &explorer_panel::on_tree_item_activated, this);
+   Bind(wxEVT_TREE_ITEM_ACTIVATED, &explorer_panel::on_tree_item_activated, this);
+
+   wxImageList* imageList = new wxImageList(16, 16, true);
+
+        // Add icons to the image list
+   wxBitmap folderIcon(wxArtProvider::GetBitmap(wxART_FOLDER, wxART_OTHER, wxSize(16, 16)));
+   wxBitmap fileIcon(wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(16, 16)));
+   imageList->Add(folderIcon);
+   imageList->Add(fileIcon);
+   folderTree->AssignImageList(imageList);
+
 }
+
+
+
 explorer_panel::~explorer_panel() {}
 
 
@@ -47,12 +62,12 @@ void explorer_panel::populate_folder_tree(const wxString &path, wxTreeItemId par
       wxString fullPath = path + "/" + filename;
       if (wxDirExists(fullPath))
       {
-         wxTreeItemId folderItem = folderTree->AppendItem(parent, filename);
+         wxTreeItemId folderItem = folderTree->AppendItem(parent, filename,0);
          populate_folder_tree(fullPath, folderItem);
       }
       else
       {
-         folderTree->AppendItem(parent, filename);
+         folderTree->AppendItem(parent, filename,1);
       }
       hasFiles = dir.GetNext(&filename);
    }

@@ -2,6 +2,15 @@
 #define __MENUBAR_DEFINED_H
 #include <wx/wx.h>
 #include "id_handler.h"
+
+
+static inline wxMenu* create_action_menu()
+{
+   wxMenu *fileMenu = new wxMenu();
+   fileMenu->Append(ActionMenuCommands, "&Execute\tCtrl-NODEFINED", "Execute");
+   return fileMenu;
+}
+
 static inline wxMenu* create_file_menu_entries()
 {
    wxMenu *fileMenu = new wxMenu();
@@ -55,11 +64,20 @@ static wxMenuBar *create_default_menubar()
    if (menubar)
    {
       auto fileMenu = create_file_menu_entries();
-      menubar->Append(fileMenu, "&File");
+      if(fileMenu)
+         menubar->Append(fileMenu, "&File");
+      
       auto edit_menu = create_edit_menu_entries();
-      menubar->Append(edit_menu, "&Edit");
+      if(edit_menu)
+          menubar->Append(edit_menu, "&Edit");
+      
       auto view_menu = create_view_menu_entries();
-      menubar->Append(view_menu, "&View");
+      if(view_menu)
+         menubar->Append(view_menu, "&View");
+      auto action = create_action_menu();
+      if(action)
+         menubar->Append(action, "&Action");
+         
    }
    
    return menubar;

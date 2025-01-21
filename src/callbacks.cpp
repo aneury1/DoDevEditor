@@ -1,116 +1,133 @@
 #include "callbacks.h"
 #include "utils.h"
-
+#include "exec_dialog.h"
 #include <functional>
 
-namespace{
-    do_devwindow *window;
-    editor_tab *tabamanger;
-    explorer_panel *explorerpanel;
-    std::unordered_map<int,std::function<void(wxCommandEvent)>> functions;
-    wxString rootPath;
+namespace
+{
+   do_devwindow *window;
+   editor_tab *tabamanger;
+   explorer_panel *explorerpanel;
+   std::unordered_map<int, std::function<void(wxCommandEvent)>> functions;
+   wxString rootPath;
 }
 
-void add_new_page(wxString& selectedName){
-   if(tabamanger){
+void add_new_page(wxString &selectedName)
+{
+   if (tabamanger)
+   {
       tabamanger->add_empty_page();
       tabamanger->set_title_current_page(selectedName);
    }
 }
 
-text_editor* get_current_text_editor(){
-   if(tabamanger)
-     return tabamanger->get_current_editor();
+text_editor *get_current_text_editor()
+{
+   if (tabamanger)
+      return tabamanger->get_current_editor();
    return nullptr;
 }
 
-
-void open_new_tab(wxCommandEvent ev){
-   if(tabamanger){
-     tabamanger->add_empty_page();
-   }else{
-     std::cout <<"Tab Manager is nullptr";
+void open_new_tab(wxCommandEvent ev)
+{
+   if (tabamanger)
+   {
+      tabamanger->add_empty_page();
+   }
+   else
+   {
+      std::cout << "Tab Manager is nullptr";
    }
 }
 
-void open_text_file_tab(wxCommandEvent ev){
-   if(tabamanger){
-     tabamanger->add_empty_page();
-     auto currenttexteditor = tabamanger->get_current_editor();
-     auto file = obtain_existing_file("Select the file want open", (wxFrame *)window);
-      
-     auto content = read_file(file.ToStdString());
-    
-     if(content.size()>0)
-     {
-      currenttexteditor->set_text(content);
-      currenttexteditor->set_filepath(file);
-      int lead = file.find_last_of("/");
-      if(lead<0)
-         lead = 1;
-      auto name = file.SubString(lead, file.size());
-      tabamanger->set_title_current_page(name);
-     }
+void open_text_file_tab(wxCommandEvent ev)
+{
+   if (tabamanger)
+   {
+      tabamanger->add_empty_page();
+      auto currenttexteditor = tabamanger->get_current_editor();
+      auto file = obtain_existing_file("Select the file want open", (wxFrame *)window);
 
-     
-   }else{
-     std::cout <<"Tab Manager is nullptr";
+      auto content = read_file(file.ToStdString());
+
+      if (content.size() > 0)
+      {
+         currenttexteditor->set_text(content);
+         currenttexteditor->set_filepath(file);
+         int lead = file.find_last_of("/");
+         if (lead < 0)
+            lead = 1;
+         auto name = file.SubString(lead, file.size());
+         tabamanger->set_title_current_page(name);
+      }
+   }
+   else
+   {
+      std::cout << "Tab Manager is nullptr";
    }
 }
 
-void save_current_file_tab(wxCommandEvent ev){
-   
+void save_current_file_tab(wxCommandEvent ev)
+{
+
    auto current_editor = tabamanger->get_current_editor();
-   if(current_editor){
-     if(current_editor->get_from_file() && current_editor->get_changed()){
-        bool accept = question_yes_or_not(wxString("The file has changed, do you want to save?"));
-        if(accept){
-          std::cout <<"save content at: "<< current_editor->get_path()<<"\n";
-           write_content_to_file(current_editor->get_path(), current_editor->get_text());
-        }
-     }
-     else if(current_editor->get_changed()){
-       bool accept =  question_yes_or_not(wxString("This file does not exist, do you want to save?"));
-       if(accept){
-        auto status = create_new_file_with_content_with_dialog(window, current_editor->get_text());
-        
-        if(status.size()>0)
-          tabamanger->set_title_current_page(status);
-        
-       }
-     }
+   if (current_editor)
+   {
+      if (current_editor->get_from_file() && current_editor->get_changed())
+      {
+         bool accept = question_yes_or_not(wxString("The file has changed, do you want to save?"));
+         if (accept)
+         {
+            std::cout << "save content at: " << current_editor->get_path() << "\n";
+            write_content_to_file(current_editor->get_path(), current_editor->get_text());
+         }
+      }
+      else if (current_editor->get_changed())
+      {
+         bool accept = question_yes_or_not(wxString("This file does not exist, do you want to save?"));
+         if (accept)
+         {
+            auto status = create_new_file_with_content_with_dialog(window, current_editor->get_text());
+
+            if (status.size() > 0)
+               tabamanger->set_title_current_page(status);
+         }
+      }
    }
 }
 
-void save_current_file_tab_as(wxCommandEvent ev){
-   
+void save_current_file_tab_as(wxCommandEvent ev)
+{
+
    auto current_editor = tabamanger->get_current_editor();
-   if(current_editor){
-        auto status = create_new_file_with_content_with_dialog(window, current_editor->get_text());
-        if(status.size()>0)
-          tabamanger->set_title_current_page(status);
-       }
+   if (current_editor)
+   {
+      auto status = create_new_file_with_content_with_dialog(window, current_editor->get_text());
+      if (status.size() > 0)
+         tabamanger->set_title_current_page(status);
+   }
 }
 
-void set_status_text(const wxString text){
-
+void set_status_text(const wxString text)
+{
 }
 
-wxString get_root_path(){
+wxString get_root_path()
+{
    return rootPath;
 }
 
-bool is_file_already_in_the_editor(const wxString& path){
-     return tabamanger->is_file_already_in_the_editor(path);
+bool is_file_already_in_the_editor(const wxString &path)
+{
+   return tabamanger->is_file_already_in_the_editor(path);
 }
 
+void on_open_folder(wxCommandEvent event)
+{
+   wxDirDialog openFolderDialog(window,
+                                "Select a Folder to Open", "",
+                                wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
 
-void on_open_folder(wxCommandEvent event){
-      wxDirDialog openFolderDialog(window, 
-      "Select a Folder to Open", "", 
-      wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
-   
-   
    if (openFolderDialog.ShowModal() == wxID_CANCEL)
       return;
 
@@ -129,10 +146,12 @@ void on_open_folder(wxCommandEvent event){
    set_status_text("Opened folder: " + folderPath);
 }
 
-void on_close_folder(wxCommandEvent event){
-   if(explorerpanel){
+void on_close_folder(wxCommandEvent event)
+{
+   if (explorerpanel)
+   {
       explorerpanel->clear_folder_tree();
-      rootPath ="";
+      rootPath = "";
    }
 }
 
@@ -167,6 +186,13 @@ void on_close_tab(wxAuiNotebookEvent &event)
    return;
 }
 
+void open_action_menu(wxCommandEvent ev)
+{
+   exec_dialog *dialog = new exec_dialog(nullptr);
+   dialog->ShowModal();
+   dialog->Destroy();
+}
+
 /// @brief end callback list
 void set_default_callback()
 {
@@ -176,6 +202,7 @@ void set_default_callback()
    functions[SaveAs] = &save_current_file_tab_as;
    functions[OpenFolder] = &on_open_folder;
    functions[CloseFolder] = &on_close_folder;
+   functions[ActionMenuCommands] = &open_action_menu;
 }
 
 void set_base_window(
@@ -183,19 +210,23 @@ void set_base_window(
     editor_tab *_tabamanager,
     explorer_panel *_explorerpanel
     /// Todo: Add other base element.
-){
-    window = _window;
-    tabamanger = _tabamanager;
-    explorerpanel = _explorerpanel;
+)
+{
+   window = _window;
+   tabamanger = _tabamanager;
+   explorerpanel = _explorerpanel;
 }
 
-
-void call_by_event(const wxCommandEvent& ev){
-    int id = ev.GetId();
-    auto iter = functions.find(id);
-    if(iter!=functions.end()){
-        iter->second(ev);
-    }else{
-        std::cout <<"Callback not found for ID: "<< id <<"\n";
-    }
+void call_by_event(const wxCommandEvent &ev)
+{
+   int id = ev.GetId();
+   auto iter = functions.find(id);
+   if (iter != functions.end())
+   {
+      iter->second(ev);
+   }
+   else
+   {
+      std::cout << "Callback not found for ID: " << id << "\n";
+   }
 }
