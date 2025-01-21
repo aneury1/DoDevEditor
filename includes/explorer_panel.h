@@ -26,9 +26,9 @@ struct explorer_panel : wxPanel {
    public:
 
    explorer_panel(wxWindow *parent);
+  
    ~explorer_panel();
-
-   
+ 
    void set_path_label(const wxString& path);
 
    void clear_folder_tree();

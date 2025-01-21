@@ -16,6 +16,8 @@ do_devwindow::do_devwindow() : wxFrame(nullptr, wxID_ANY, wxEmptyString) {
     Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, SaveAs);
     Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, OpenFolder);
     Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, CloseFolder);
+    Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, ActionMenuCommands);
+    
 
     Bind(wxEVT_CONTEXT_MENU, &do_devwindow::on_context_menu, this); 
 }

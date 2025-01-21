@@ -13,6 +13,7 @@ enum FixedID{
    SaveAs,
    CloseTab,
    ExplorerItemTaken,
+   ActionMenuCommands,
    LastFixedId,
 };
 
