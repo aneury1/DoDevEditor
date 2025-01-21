@@ -2,6 +2,13 @@
 #define __MENUBAR_DEFINED_H
 #include <wx/wx.h>
 #include "id_handler.h"
+
+
+static inline wxMenu* create_action_menu()
+{
+
+}
+
 static inline wxMenu* create_file_menu_entries()
 {
    wxMenu *fileMenu = new wxMenu();

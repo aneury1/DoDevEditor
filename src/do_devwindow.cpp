@@ -16,6 +16,8 @@ do_devwindow::do_devwindow() : wxFrame(nullptr, wxID_ANY, wxEmptyString) {
     Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, SaveAs);
     Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, OpenFolder);
     Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, CloseFolder);
+
+    Bind(wxEVT_CONTEXT_MENU, &do_devwindow::on_context_menu, this); 
 }
 do_devwindow::~do_devwindow() {}
 
@@ -33,10 +35,24 @@ void do_devwindow::on_exit(wxCommandEvent &event)
 void do_devwindow::add_panel(panel_info *panel){
     auiManager.AddPane(panel->panel,panel->info);
 }
+void do_devwindow::on_context_menu(wxContextMenuEvent& event){
+   std::cout <<"EVent has been triggered\n";
+           // Create the context menu
+        wxMenu menu;
+        menu.Append(wxID_OPEN,   "Open");
+        menu.Append(OpenFolder,  "Open folder");
+        menu.Append(CloseFolder, "Close Open folder");
+        menu.Append(wxID_SAVE, "Save Current");
+        menu.AppendSeparator();
+        menu.Append(wxID_SAVE, "Apply Format");
+        menu.AppendSeparator();
+        menu.Append(wxID_EXIT, "Exit");
+        // Show the menu at the current mouse position
+        PopupMenu(&menu, ScreenToClient(wxGetMousePosition()));
+}
 
-void do_devwindow::on_key_entered(wxCommandEvent &ev){
- 
- /// std::cout << "EVent :" << ev.GetId()<<"\n";
+void do_devwindow::on_key_entered(wxCommandEvent &ev)
+{ 
   call_by_event(ev);
 }
 
