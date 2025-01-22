@@ -43,6 +43,8 @@ public:
       return path;
    }
 
+   void set_font(const wxFont& font);
+
    inline void debug(){
       std::cout <<"Path" << path.ToStdString()<<" from file:"<< fromfile<<"\n";
    }
