@@ -14,15 +14,21 @@
 #include "do_devwindow.h"
 #include "tabs.h"
 #include "explorer_panel.h"
+#include "exec_dialog.h"
 
 class DoDevEditorApp : public wxApp {
 
 public:
+
     virtual bool OnInit() {
-        auto frame =  new do_devwindow(); ////new editor_tab_panel(); ///do_editor::get(); ///new do_editor();
+
+        auto frame =  new do_devwindow();
+
         set_default_callback();
+
         auto editortabs = new editor_tab(frame);  
         auto explorerpanel = new explorer_panel(frame);
+        auto exec_panel = new exec_dialog(frame);
 
         panel_info editorPanel;        
         editorPanel.panel = editortabs;
@@ -32,6 +38,12 @@ public:
         explorerPanel.panel = explorerpanel;
         explorerPanel.info  = wxAuiPaneInfo().Name("file_explorer_panel_name").Left().Caption("Explorer").BestSize(300, 800).MinSize(200, 600);
 
+        panel_info execPanel;        
+        execPanel.panel = exec_panel;
+        execPanel.info  = wxAuiPaneInfo().Name("exec_panel_name").Bottom().Caption("exec").BestSize(300, 400).MinSize(200, 100);
+
+
+
         set_base_window(
             frame,
             editortabs,
@@ -39,7 +51,7 @@ public:
         );
         frame->add_panel(&explorerPanel);
         frame->add_panel(&editorPanel);
- 
+        frame->add_panel(&execPanel);
         frame->update_components();
         frame->Show(true);
         return true;

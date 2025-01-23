@@ -2,7 +2,8 @@
 #include <wx/sstream.h>
 
 exec_dialog::exec_dialog(wxWindow *parent)
-    : wxDialog(parent, wxID_ANY, "Execute Command", wxDefaultPosition, wxSize(600, 400))
+      : wxPanel(parent, wxID_ANY)
+   // : wxPanel(parent, wxID_ANY, "Execute Command", wxDefaultPosition, wxSize(600, 400))
 {
     // Create controls
     wxStaticText *inputLabel = new wxStaticText(this, wxID_ANY, "Select Current Dir:");

@@ -189,8 +189,8 @@ void on_close_tab(wxAuiNotebookEvent &event)
 void open_action_menu(wxCommandEvent ev)
 {
    exec_dialog *dialog = new exec_dialog(nullptr);
-   dialog->ShowModal();
-   dialog->Destroy();
+  /// dialog->ShowModal();
+  /// dialog->Destroy();
 }
 
 /// @brief end callback list
