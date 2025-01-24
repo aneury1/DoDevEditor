@@ -3,6 +3,8 @@
 
 #include "do_devwindow.h"
 #include "text_editor.h"
+#include <wx/spinctrl.h>
+
 
 struct editor_tab : public wxPanel
 {
@@ -11,6 +13,7 @@ private:
    wxAuiNotebook *editorTabs;
    wxButton *newTab;
    wxChoice *fontChoice;
+   wxSpinCtrl *fontSize;
    text_editor *current_text_editor = nullptr;
 
    void on_close_tab(wxAuiNotebookEvent &event);

@@ -15,6 +15,7 @@
 #include "tabs.h"
 #include "explorer_panel.h"
 #include "exec_dialog.h"
+#include "terminal_emulator.h"
 
 class DoDevEditorApp : public wxApp {
 
@@ -42,8 +43,7 @@ public:
         execPanel.panel = exec_panel;
         execPanel.info  = wxAuiPaneInfo().Name("exec_panel_name").Bottom().Caption("exec").BestSize(300, 400).MinSize(200, 100);
 
-
-
+ 
         set_base_window(
             frame,
             editortabs,
@@ -52,6 +52,7 @@ public:
         frame->add_panel(&explorerPanel);
         frame->add_panel(&editorPanel);
         frame->add_panel(&execPanel);
+    
         frame->update_components();
         frame->Show(true);
         return true;

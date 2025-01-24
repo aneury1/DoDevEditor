@@ -20,11 +20,12 @@ editor_tab::editor_tab(do_devwindow *parent) : wxPanel(parent, wxID_ANY)
 
    wxPanel *action_panel = new wxPanel(this, wxID_ANY, wxDefaultPosition);
    
-   action_panel->SetBackgroundColour(wxColour(0, 255, 0, 244));
+   action_panel->SetBackgroundColour(wxColour(0x43, 0x43, 0x43, 255));
 
    newTab = new wxButton(action_panel, wxID_LAST + 1, wxString("Add empty text"));
 
    wxStaticText *fontChooseText = new wxStaticText(action_panel, wxID_ANY, wxString(" Select Font"));
+   
 
    fontChoice = new wxChoice(action_panel, wxID_ANY);
    {
@@ -32,11 +33,23 @@ editor_tab::editor_tab(do_devwindow *parent) : wxPanel(parent, wxID_ANY)
       fontEnum.EnumerateFacenames();
       const wxArrayString &fonts = fontEnum.GetFacenames();
       fontChoice->Append(fonts);
+      auto size = fontChoice->GetSize();
+      size.SetHeight(100);
+      fontChoice->SetSize(size);
    }
+
+   wxStaticText *fontSizeLabel = new wxStaticText(action_panel, wxID_ANY, wxString(" Font Size:"));
+
+   fontSize = new wxSpinCtrl(action_panel, wxID_ANY, wxT("0"),wxDefaultPosition, wxDefaultSize,
+     wxSP_ARROW_KEYS, 0, 100, 5
+   );
+
    wxBoxSizer *panel_tool_sizer = new wxBoxSizer(wxHORIZONTAL);
-   panel_tool_sizer->Add(newTab, 0, wxSHRINK, 15);
-   panel_tool_sizer->Add(fontChooseText, 0, wxSHRINK, 15);
-   panel_tool_sizer->Add(fontChoice, 0, wxSHRINK, 15);
+   panel_tool_sizer->Add(newTab, 0, wxEXPAND | wxALL);
+   panel_tool_sizer->Add(fontChooseText, 0,wxEXPAND | wxALL, 15);
+   panel_tool_sizer->Add(fontChoice, 0, wxEXPAND | wxALL);
+   panel_tool_sizer->Add(fontSizeLabel, 0, wxEXPAND | wxALL,15);
+   panel_tool_sizer->Add(fontSize, 0, wxEXPAND | wxALL);
 
    action_panel->SetSizer(panel_tool_sizer);
 

@@ -98,7 +98,8 @@ void text_editor::set_filepath(const wxString& path){
       if(textEditor)
         textEditor->SetFont(font);
         textEditor->StyleSetFont(wxSTC_C_DEFAULT, font);
-        textEditor->Layout();
+        ///textEditor->Layout();
+        textEditor->StyleClearAll();
    }
 
 void text_editor::set_text(const wxString &text)
