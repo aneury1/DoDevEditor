@@ -5,6 +5,9 @@ set(PROJECT_NAME DoDevEditor)
 project(${PROJECT_NAME} LANGUAGES CXX)
 set(CMAKE_BUILD_TYPE Debug)
 
+set(FETCH_LIBGIT_DEFINITIONS FALSE)
+set(COMPILE_CLANG_DEFINITIONS TRUE)
+
 option(ENABLE_CLANG_TIDY "Enable clang-tidy" FALSE)
 option(ENABLE_COVERAGE "Enable code coverage" FALSE)
 option(ENABLE_TESTING "Enable code Testing" FALSE)
@@ -12,9 +15,10 @@ option(ENABLE_THIRDPARTY "Allow Insta" FALSE)
 option(FETCH_WXWIDGET "Allow Insta" FALSE)
 option(FETCH_JSON "Allow JSON" FALSE)
 option(USING_PLUGINS "Allow Insta" FALSE)
-option(COMPILE_CLANG_DEFINITIONS, "Allow clang-dev for cpp" FALSE)
+option(COMPILE_CLANG_DEFINITIONS, "Allow clang-dev for cpp" ${COMPILE_CLANG_DEFINITIONS})
 
 set (CMAKE_CXX_STANDARD 17)
+
 
 if(ENABLE_CLANG_TIDY)
     set(CMAKE_CXX_CLANG_TIDY "clang-tidy;-checks=*")
@@ -63,31 +67,56 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 include_directories(includes PUBLIC)
 
 
+
+### Try static Compilation only
+#set(wxWidgets_USE_STATIC ON)
+
+
+#find_package(wxWidgets REQUIRED COMPONENTS core base)
+
+#if(wxWidgets_FOUND)
+#    message(STATUS "wxWidgets encontrado: ${wxWidgets_INCLUDE_DIRS}")
+#else()
+#    message(FATAL_ERROR "wxWidgets no encontrado")
+#endif()
+### Try static Compilation only, Above
+
+
+
 if(COMPILE_CLANG_DEFINITIONS)
-
+    set(CLANG_EXTERNAL_LIBS /usr/lib/llvm-18)
+    message("Using clang 18")
+    link_directories(${CLANG_EXTERNAL_LIBS}/lib)
+    include_directories(${CLANG_EXTERNAL_LIBS}/include)
+    #add_definitions(-DLLVM_ENABLE_ABI_BREAKING_CHECKS)
+    #add_definitions(${LLVM_DEFINITIONS})
     # Find Clang installation
-    find_package(LLVM REQUIRED CONFIG)
+    # find_package(LLVM REQUIRED CONFIG)
+    #if (LLVM_FOUND)
+    #else()
+    #   message("Clang not foundxx")
+    #endif()
+    set(CLANG_LIBRARIES
+        clangTooling
+        clangBasic
+        clangAST
+        clangASTMatchers
+        clangDriver
+        clangFrontend
+        clangFrontendTool
+        clangToolingCore
+        clangRewrite
+        clangRewriteFrontend
+        clangLex
+        clangParse
+        clangAnalysis
+    )
 
-    if (LLVM_FOUND)
-        message(STATUS "Found LLVM: ${LLVM_PACKAGE_VERSION}")
-        message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-        # Include LLVM and Clang headers
-        include_directories(${LLVM_INCLUDE_DIRS})
-        add_definitions(${LLVM_DEFINITIONS})
-
-        # Add Clang Format header path
-        include_directories(${LLVM_INCLUDE_DIRS}/clang)
-
-        # Link Clang libraries
-        link_directories(${LLVM_LIBRARY_DIRS})
-    else()
-       message("Clang not foundxx")
-    endif()
-    set(CLANG_LIBRARIES  clangFormat clangBasic clangTooling)
 else()
     message("Clang not foundvy")
     set(CLANG_LIBRARIES  )
+
 endif()
 
 
