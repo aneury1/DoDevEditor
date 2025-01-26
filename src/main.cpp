@@ -17,9 +17,10 @@
 #include "exec_dialog.h"
 #include "terminal_emulator.h"
 #include "symbol_panel.h"
+#include "git_panel.h"
 
 #include <iostream>
-
+#include <git2.h>
 
 
 class DoDevEditorApp : public wxApp {
@@ -27,6 +28,12 @@ class DoDevEditorApp : public wxApp {
 public:
 
     virtual bool OnInit() {
+
+ 
+        if (git_libgit2_init() < 0) {
+            std::cerr << "Failed to initialize libgit2" << std::endl;
+            return 1;
+        }
 
         auto frame =  new do_devwindow();
 
@@ -36,6 +43,7 @@ public:
         auto explorerpanel = new explorer_panel(frame);
         auto exec_panel = new exec_dialog(frame);
         auto symbolpanel = new symbol_panel(frame);
+        auto gitpanel = new git_panel(frame);
 
         panel_info editorPanel;        
         editorPanel.panel = editortabs;
@@ -53,15 +61,21 @@ public:
         symbolPanel.panel = symbolpanel;
         symbolPanel.info  = wxAuiPaneInfo().Name("symbol_panel_name").Left().Caption("symbol").BestSize(300, 400).MinSize(200, 100);
 
+        panel_info gitPanel;        
+        gitPanel.panel = gitpanel;
+        gitPanel.info  = wxAuiPaneInfo().Name("git_panel_name").Right().Caption("GIT").BestSize(200, 400).MinSize(100, 100);
+
         set_base_window(
             frame,
             editortabs,
-            explorerpanel
+            explorerpanel,
+            gitpanel
         );
         frame->add_panel(&explorerPanel);
         frame->add_panel(&editorPanel);
         frame->add_panel(&execPanel);
         frame->add_panel(&symbolPanel);
+        frame->add_panel(&gitPanel);
     
         frame->update_components();
         frame->Show(true);

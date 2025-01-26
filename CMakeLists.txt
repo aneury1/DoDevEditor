@@ -6,7 +6,7 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 set(CMAKE_BUILD_TYPE Debug)
 
 set(FETCH_LIBGIT_DEFINITIONS FALSE)
-set(COMPILE_CLANG_DEFINITIONS TRUE)
+set(COMPILE_CLANG_DEFINITIONS FALSE)
 
 option(ENABLE_CLANG_TIDY "Enable clang-tidy" FALSE)
 option(ENABLE_COVERAGE "Enable code coverage" FALSE)
@@ -83,6 +83,9 @@ include_directories(includes PUBLIC)
 
 
 
+# Find the libgit2 package
+
+
 if(COMPILE_CLANG_DEFINITIONS)
     set(CLANG_EXTERNAL_LIBS /usr/lib/llvm-18)
     message("Using clang 18")
@@ -128,7 +131,13 @@ find_package(wxWidgets REQUIRED COMPONENTS core base stc aui)
 
 include(${wxWidgets_USE_FILE})
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} ${CLANG_LIBRARIES} tinyxml2)
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} ${CLANG_LIBRARIES} tinyxml2 git2 )
+
+# If needed, pass compiler/linker flags
+target_compile_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_CFLAGS_OTHER})
+target_link_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_LDFLAGS_OTHER})
+
+
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wwrite-strings")

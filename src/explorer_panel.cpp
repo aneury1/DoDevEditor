@@ -6,7 +6,7 @@
 
 explorer_panel::explorer_panel(wxWindow *parent) : wxPanel(parent,wxID_ANY)
 {
-   SetBackgroundColour(wxColour(255,100,100,255));
+   SetBackgroundColour(wxColour(0x43,0x43,0x43,255));
    wxBoxSizer *explorerSizer = new wxBoxSizer(wxVERTICAL);
    explorerLabel = new wxStaticText(this, wxID_ANY, "File Explorer");
    folderTree = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT);

@@ -78,6 +78,7 @@
         "thread": "cpp",
         "cfenv": "cpp",
         "valarray": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "netfwd": "cpp"
     }
 }
