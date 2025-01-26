@@ -10,6 +10,7 @@
 #include <wx/dir.h>
 #include <wx/file.h>
 
+#include "utils.h"
 #include "callbacks.h"
 #include "do_devwindow.h"
 #include "tabs.h"
@@ -25,6 +26,8 @@
 
 class DoDevEditorApp : public wxApp {
 
+
+    wxString filenamePath;
 public:
 
     virtual bool OnInit() {
@@ -79,7 +82,34 @@ public:
     
         frame->update_components();
         frame->Show(true);
+
+        if(filenamePath.size()){
+            editortabs->add_empty_page();
+            auto current = editortabs->get_current_editor();
+            auto text = read_file(filenamePath.ToStdString());
+            if(text.size()>0)
+            {
+                current->set_text(text);
+                current->set_filepath(filenamePath);
+                editortabs->set_title_current_page(filenamePath);
+            }
+
+        }
+
         return true;
+    }
+
+    virtual bool Initialize(int& argc, wxChar **argv)override{
+       wxApp::Initialize(argc, argv);
+       int iter = 0;
+       if(argc==2){
+          filenamePath = argv[1];
+       }
+       for(int i=0;i<iter;i++){
+         std::cout <<" iter = "<<i;
+
+       }
+       return true;
     }
 };
 

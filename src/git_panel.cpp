@@ -65,6 +65,39 @@ std::vector<std::string> get_file_that_has_changed(git_commit* commit) {
     return changedFiles;
 }
 
+void git_panel::print_commit_info(git_commit *commit)
+{
+   const git_signature *author = git_commit_author(commit);
+   const char *message = git_commit_message(commit);
+   const git_oid *oid = git_commit_id(commit);
+
+   git_commit_information_base save_object;
+   // Print commit hash
+   char oid_str[GIT_OID_HEXSZ + 1];
+   git_oid_tostr(oid_str, sizeof(oid_str), oid);
+   std::cout << "Commit: " << oid_str << std::endl;
+   save_object.commit_id = oid_str;
+
+   // Print author details
+   if (author)
+   {
+      std::stringstream stream;
+      std::cout << "Author: " << author->name << " <" << author->email << ">" << std::endl;
+      stream << "Author: " << author->name << " <" << author->email << ">" << std::endl;
+      save_object.author = stream.str();
+   }
+
+   // Print commit message
+   if (message)
+   {
+      save_object.message = message;
+      std::cout << "Message: " << message << std::endl;
+   }
+   save_object.files_changed = get_file_that_has_changed(commit);
+
+   commits_list.emplace_back(save_object);
+   std::cout << "------------------------" << std::endl;
+}
 
 
 
@@ -120,45 +153,6 @@ void git_panel::on_list_boxselect(wxCommandEvent &event)
    }
 }
 
-void git_panel::print_commit_info(git_commit *commit)
-{
-   const git_signature *author = git_commit_author(commit);
-   const char *message = git_commit_message(commit);
-   const git_oid *oid = git_commit_id(commit);
-
-   git_commit_information_base save_object;
-
-
-   
-
-   // Print commit hash
-   char oid_str[GIT_OID_HEXSZ + 1];
-   git_oid_tostr(oid_str, sizeof(oid_str), oid);
-   std::cout << "Commit: " << oid_str << std::endl;
-   save_object.commit_id = oid_str;
-
-   // Print author details
-   if (author)
-   {
-      std::stringstream stream;
-      std::cout << "Author: " << author->name << " <" << author->email << ">" << std::endl;
-      stream << "Author: " << author->name << " <" << author->email << ">" << std::endl;
-      save_object.author = stream.str();
-   }
-
-   // Print commit message
-   if (message)
-   {
-      save_object.message = message;
-      std::cout << "Message: " << message << std::endl;
-   }
-
-
-   save_object.files_changed = get_file_that_has_changed(commit);
-
-   commits_list.emplace_back(save_object);
-   std::cout << "------------------------" << std::endl;
-}
 
 void git_panel::load_commits_information_in_folder(const std::string &path)
 {
