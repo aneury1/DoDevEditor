@@ -8,7 +8,9 @@
 #include <atomic>
 #include <mutex>
 
-class exec_dialog :  public wxDialog {
+class exec_dialog :  public wxPanel {
+
+
 public:
     exec_dialog(wxWindow* parent);
     ~exec_dialog();

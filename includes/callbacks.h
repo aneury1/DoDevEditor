@@ -10,11 +10,12 @@
 #include "text_editor.h"
 #include "explorer_panel.h"
 #include "text_editor.h"
+#include "git_panel.h"
 void set_base_window(
     do_devwindow *window,
     editor_tab *tabamanger,
-    explorer_panel *_explorerpanel
-    
+    explorer_panel *_explorerpanel,
+    git_panel *_gitpanel
 );
 
 void set_default_callback();

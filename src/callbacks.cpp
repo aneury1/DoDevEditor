@@ -1,6 +1,7 @@
 #include "callbacks.h"
 #include "utils.h"
 #include "exec_dialog.h"
+#include "git_panel.h"
 #include <functional>
 
 namespace
@@ -8,6 +9,7 @@ namespace
    do_devwindow *window;
    editor_tab *tabamanger;
    explorer_panel *explorerpanel;
+   git_panel *gitpanel;
    std::unordered_map<int, std::function<void(wxCommandEvent)>> functions;
    wxString rootPath;
 }
@@ -143,6 +145,7 @@ void on_open_folder(wxCommandEvent event)
    explorerpanel->populate_folder_tree(folderPath, root);
    rootPath = folderPath;
    explorerpanel->set_path_label(rootPath);
+   gitpanel->load_commits_information_in_folder(std::string(folderPath.ToUTF8().data()));
    set_status_text("Opened folder: " + folderPath);
 }
 
@@ -189,8 +192,8 @@ void on_close_tab(wxAuiNotebookEvent &event)
 void open_action_menu(wxCommandEvent ev)
 {
    exec_dialog *dialog = new exec_dialog(nullptr);
-   dialog->ShowModal();
-   dialog->Destroy();
+  /// dialog->ShowModal();
+  /// dialog->Destroy();
 }
 
 /// @brief end callback list
@@ -208,13 +211,15 @@ void set_default_callback()
 void set_base_window(
     do_devwindow *_window,
     editor_tab *_tabamanager,
-    explorer_panel *_explorerpanel
+    explorer_panel *_explorerpanel,
+    git_panel *_gitpanel
     /// Todo: Add other base element.
 )
 {
    window = _window;
    tabamanger = _tabamanager;
    explorerpanel = _explorerpanel;
+   gitpanel = _gitpanel;
 }
 
 void call_by_event(const wxCommandEvent &ev)
