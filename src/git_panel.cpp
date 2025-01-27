@@ -2,71 +2,135 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <ctime>
+#include <stdio.h>
 #include "git_panel.h"
 
+std::vector<std::string> get_file_that_has_changed(git_commit *commit)
+{
+   std::vector<std::string> changedFiles;
 
-std::vector<std::string> get_file_that_has_changed(git_commit* commit) {
-    std::vector<std::string> changedFiles;
+   git_tree *tree = nullptr;
+   git_tree *parentTree = nullptr;
+   git_diff *diff = nullptr;
 
-    git_tree* tree = nullptr;
-    git_tree* parentTree = nullptr;
-    git_diff* diff = nullptr;
+   try
+   {
+      // Get the tree of the current commit
+      if (git_commit_tree(&tree, commit) != 0)
+      {
+         throw std::runtime_error("Failed to get the commit tree");
+      }
 
-    try {
-        // Get the tree of the current commit
-        if (git_commit_tree(&tree, commit) != 0) {
-            throw std::runtime_error("Failed to get the commit tree");
-        }
+      // Get the parent commit
+      if (git_commit_parentcount(commit) > 0)
+      {
+         git_commit *parentCommit = nullptr;
 
-        // Get the parent commit
-        if (git_commit_parentcount(commit) > 0) {
-            git_commit* parentCommit = nullptr;
+         if (git_commit_parent(&parentCommit, commit, 0) != 0)
+         {
+            throw std::runtime_error("Failed to get parent commit");
+         }
 
-            if (git_commit_parent(&parentCommit, commit, 0) != 0) {
-                throw std::runtime_error("Failed to get parent commit");
-            }
-
-            // Get the tree of the parent commit
-            if (git_commit_tree(&parentTree, parentCommit) != 0) {
-                git_commit_free(parentCommit);
-                throw std::runtime_error("Failed to get parent commit tree");
-            }
-
+         // Get the tree of the parent commit
+         if (git_commit_tree(&parentTree, parentCommit) != 0)
+         {
             git_commit_free(parentCommit);
-        }
+            throw std::runtime_error("Failed to get parent commit tree");
+         }
 
-        // Create a diff between the trees
-        if (git_diff_tree_to_tree(&diff, git_commit_owner(commit), parentTree, tree, nullptr) != 0) {
-            throw std::runtime_error("Failed to create diff");
-        }
+         git_commit_free(parentCommit);
+      }
 
-        // Iterate through the diff and collect changed file paths
-        git_diff_foreach(diff,
-            [](const git_diff_delta* delta, float /*progress*/, void* payload) -> int {
+      // Create a diff between the trees
+      if (git_diff_tree_to_tree(&diff, git_commit_owner(commit), parentTree, tree, nullptr) != 0)
+      {
+         throw std::runtime_error("Failed to create diff");
+      }
+
+      // Iterate through the diff and collect changed file paths
+      git_diff_foreach(diff, [](const git_diff_delta *delta, float /*progress*/, void *payload) -> int
+                       {
                 auto* files = static_cast<std::vector<std::string>*>(payload);
                 files->push_back(delta->new_file.path);
-                return 0;
-            },
-            nullptr, nullptr, nullptr, &changedFiles);
+                return 0; }, nullptr, nullptr, nullptr, &changedFiles);
+   }
+   catch (const std::exception &e)
+   {
+      // Clean up in case of exceptions
+      if (tree)
+         git_tree_free(tree);
+      if (parentTree)
+         git_tree_free(parentTree);
+      if (diff)
+         git_diff_free(diff);
+      throw; // Re-throw the exception
+   }
 
-    } catch (const std::exception& e) {
-        // Clean up in case of exceptions
-        if (tree) git_tree_free(tree);
-        if (parentTree) git_tree_free(parentTree);
-        if (diff) git_diff_free(diff);
-        throw;  // Re-throw the exception
-    }
+   // Cleanup
+   if (tree)
+      git_tree_free(tree);
+   if (parentTree)
+      git_tree_free(parentTree);
+   if (diff)
+      git_diff_free(diff);
 
-    // Cleanup
-    if (tree) git_tree_free(tree);
-    if (parentTree) git_tree_free(parentTree);
-    if (diff) git_diff_free(diff);
-
-    return changedFiles;
+   return changedFiles;
 }
 
+void git_panel::print_commit_info(git_commit *commit)
+{
+   const git_signature *author = git_commit_author(commit);
+   const char *message = git_commit_message(commit);
+   const git_oid *oid = git_commit_id(commit);
+   const git_signature *committer = git_commit_committer(commit);
 
+   git_commit_information_base save_object;
+   // Print commit hash
+   char oid_str[GIT_OID_HEXSZ + 1];
+   git_oid_tostr(oid_str, sizeof(oid_str), oid);
+   std::cout  << oid_str << std::endl;
+   save_object.commit_id = oid_str;
 
+   if (committer)
+   {
+      std::stringstream stream;
+      stream << committer->name << "(" << committer->email << ")";
+      save_object.commiter_info = stream.str();
+    
+   }
+   if (committer)
+   {
+      std::stringstream stream;
+      stream << ctime(&author->when.time);
+      save_object.commit_date = stream.str();
+   }
+
+   // Print author details
+   if (author)
+   {
+      std::stringstream stream;
+      stream  << author->name << " <" << author->email << ">" << std::endl;
+      save_object.author = stream.str();
+   } 
+   if(author)
+   {
+      std::stringstream stream;
+      stream << "Author Date: " << ctime(&author->when.time);
+      save_object.author_date = stream.str();
+   }
+
+   // Print commit message
+   if (message)
+   {
+      save_object.message = message;
+      std::cout << "Message: " << message << std::endl;
+   }
+   save_object.files_changed = get_file_that_has_changed(commit);
+
+   commits_list.emplace_back(save_object);
+   std::cout << "------------------------" << std::endl;
+}
 
 git_panel::git_panel(wxWindow *window) : wxPanel(window, wxID_ANY)
 {
@@ -102,62 +166,32 @@ void git_panel::on_list_boxselect(wxCommandEvent &event)
    {
       std::stringstream stream;
       std::string value = commits->GetString(selection).ToUTF8().data();
-      for(auto commit : commits_list ){
-         if(commit.commit_id ==  value){
+      for (auto commit : commits_list)
+      {
+
+         int fnd = value.find("||=> ");
+         auto strcommit = value.substr(fnd + 5);
+
+         if (commit.commit_id == strcommit)
+         {
             commit_information->Clear();
             commit_information->Append("Commit ID");
-            commit_information->Append(value.c_str());
+            commit_information->Append(commit.commit_id);
             commit_information->Append("Author:");
             commit_information->Append(commit.author.c_str());
+            commit_information->Append("Commiter: ");
+            commit_information->Append(commit.commiter_info.c_str());
+            commit_information->Append("Commiter Date: ");
+            commit_information->Append(commit.commit_date.c_str());
             commit_information->Append("message:");
             commit_information->Append(commit.message.c_str());
-            
-            for(auto file : commit.files_changed )
+            file_changed_in_this_commit->Clear();
+            for (auto file : commit.files_changed)
                file_changed_in_this_commit->Append(file.c_str());
-            return ;
+            return;
          }
       }
    }
-}
-
-void git_panel::print_commit_info(git_commit *commit)
-{
-   const git_signature *author = git_commit_author(commit);
-   const char *message = git_commit_message(commit);
-   const git_oid *oid = git_commit_id(commit);
-
-   git_commit_information_base save_object;
-
-
-   
-
-   // Print commit hash
-   char oid_str[GIT_OID_HEXSZ + 1];
-   git_oid_tostr(oid_str, sizeof(oid_str), oid);
-   std::cout << "Commit: " << oid_str << std::endl;
-   save_object.commit_id = oid_str;
-
-   // Print author details
-   if (author)
-   {
-      std::stringstream stream;
-      std::cout << "Author: " << author->name << " <" << author->email << ">" << std::endl;
-      stream << "Author: " << author->name << " <" << author->email << ">" << std::endl;
-      save_object.author = stream.str();
-   }
-
-   // Print commit message
-   if (message)
-   {
-      save_object.message = message;
-      std::cout << "Message: " << message << std::endl;
-   }
-
-
-   save_object.files_changed = get_file_that_has_changed(commit);
-
-   commits_list.emplace_back(save_object);
-   std::cout << "------------------------" << std::endl;
 }
 
 void git_panel::load_commits_information_in_folder(const std::string &path)
@@ -226,7 +260,12 @@ void git_panel::load_commits_information_in_folder(const std::string &path)
    {
       for (auto commit : commits_list)
       {
-         commits->Append(commit.commit_id);
+         wxString strcommit;
+         if (commit.message.size() > 16)
+            strcommit = commit.message.SubString(0, 16);
+         else
+            strcommit = commit.message;
+         commits->Append(strcommit + " ||=> " + commit.commit_id);
       }
    }
 

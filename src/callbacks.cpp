@@ -3,6 +3,7 @@
 #include "exec_dialog.h"
 #include "git_panel.h"
 #include <functional>
+#include <wx/textdlg.h>
 
 namespace
 {
@@ -124,6 +125,17 @@ bool is_file_already_in_the_editor(const wxString &path)
    return tabamanger->is_file_already_in_the_editor(path);
 }
 
+void open_folder(const wxString& folderPath)
+{
+   explorerpanel->clear_folder_tree();
+   wxTreeItemId root = explorerpanel->add_root("Root");
+   explorerpanel->populate_folder_tree(folderPath, root);
+   rootPath = folderPath;
+   explorerpanel->set_path_label(rootPath);
+   gitpanel->load_commits_information_in_folder(std::string(folderPath.ToUTF8().data()));
+   set_status_text("Opened folder: " + folderPath);
+}
+
 void on_open_folder(wxCommandEvent event)
 {
    wxDirDialog openFolderDialog(window,
@@ -157,6 +169,22 @@ void on_close_folder(wxCommandEvent event)
       rootPath = "";
    }
 }
+
+void create_file_in_current_selection(wxCommandEvent event){
+   ///CreateFileInCurrentSelection,
+   
+   wxTextEntryDialog dialog(window,
+       wxT("Enter the file Name")
+   );
+    
+   if(dialog.ShowModal() == wxID_OK){
+      wxMessageBox(dialog.GetValue(), wxT("Got this"));
+   }
+
+}
+
+
+
 
 void on_close_tab(wxAuiNotebookEvent &event)
 {
@@ -206,6 +234,7 @@ void set_default_callback()
    functions[OpenFolder] = &on_open_folder;
    functions[CloseFolder] = &on_close_folder;
    functions[ActionMenuCommands] = &open_action_menu;
+   functions[CreateFileInCurrentSelection]=&create_file_in_current_selection;
 }
 
 void set_base_window(

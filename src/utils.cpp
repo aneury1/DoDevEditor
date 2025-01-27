@@ -1,6 +1,7 @@
 #include "utils.h"
 #include "constant.h"
 #include <fstream>
+#include <sys/stat.h>
 
 std::vector<uint8_t> read_binary_file(const std::string filename)
 {
@@ -153,4 +154,13 @@ wxString create_new_file_with_content_with_dialog(wxWindow* parent, const wxStri
     file.close();
     wxLogMessage("File created successfully: %s", filePath);
     return filePath;
+}
+
+
+bool is_file(wxString path){
+    struct stat path_stat;
+    if (stat(path.c_str(), &path_stat) != 0) {
+        return false; // Error accessing the path
+    }
+    return S_ISREG(path_stat.st_mode); // Check if it's a regular file
 }

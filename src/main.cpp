@@ -1,7 +1,7 @@
 
- 
+
 #include <wx/wx.h>
-#include <wx/txtstrm.h>  
+#include <wx/txtstrm.h>
 #include <wx/file.h>
 #include <wx/stc/stc.h>
 #include <wx/filedlg.h>
@@ -10,6 +10,7 @@
 #include <wx/dir.h>
 #include <wx/file.h>
 
+#include "utils.h"
 #include "callbacks.h"
 #include "do_devwindow.h"
 #include "tabs.h"
@@ -22,63 +23,117 @@
 #include <iostream>
 #include <git2.h>
 
+class DoDevEditorApp : public wxApp
+{
 
-class DoDevEditorApp : public wxApp {
+    wxString filenamePath;
+    bool is_path = false;
 
 public:
+    virtual bool OnInit()
+    {
 
-    virtual bool OnInit() {
-
- 
-        if (git_libgit2_init() < 0) {
+        if (git_libgit2_init() < 0)
+        {
             std::cerr << "Failed to initialize libgit2" << std::endl;
             return 1;
         }
 
-        auto frame =  new do_devwindow();
+        auto frame = new do_devwindow();
 
         set_default_callback();
 
-        auto editortabs = new editor_tab(frame);  
+        auto editortabs = new editor_tab(frame);
         auto explorerpanel = new explorer_panel(frame);
         auto exec_panel = new exec_dialog(frame);
         auto symbolpanel = new symbol_panel(frame);
         auto gitpanel = new git_panel(frame);
 
-        panel_info editorPanel;        
+        panel_info editorPanel;
         editorPanel.panel = editortabs;
-        editorPanel.info  = wxAuiPaneInfo().Name("editor_panel_name").CenterPane();
+        editorPanel.info = wxAuiPaneInfo().Name("editor_panel_name").CenterPane();
 
-        panel_info explorerPanel;        
+        panel_info explorerPanel;
         explorerPanel.panel = explorerpanel;
-        explorerPanel.info  = wxAuiPaneInfo().Name("file_explorer_panel_name").Left().Caption("Explorer").BestSize(300, 800).MinSize(200, 600);
+        explorerPanel.info = wxAuiPaneInfo().Name("file_explorer_panel_name").Left().Caption("Explorer").BestSize(300, 800).MinSize(200, 600);
 
-        panel_info execPanel;        
+        panel_info execPanel;
         execPanel.panel = exec_panel;
-        execPanel.info  = wxAuiPaneInfo().Name("exec_panel_name").Bottom().Caption("exec").BestSize(300, 400).MinSize(200, 100);
+        execPanel.info = wxAuiPaneInfo().Name("exec_panel_name").Bottom().Caption("exec").BestSize(300, 400).MinSize(200, 100);
 
-        panel_info symbolPanel;        
+        panel_info symbolPanel;
         symbolPanel.panel = symbolpanel;
-        symbolPanel.info  = wxAuiPaneInfo().Name("symbol_panel_name").Left().Caption("symbol").BestSize(300, 400).MinSize(200, 100);
+        symbolPanel.info = wxAuiPaneInfo().Name("symbol_panel_name").Left().Caption("symbol").BestSize(300, 400).MinSize(200, 100);
 
-        panel_info gitPanel;        
+        panel_info gitPanel;
         gitPanel.panel = gitpanel;
-        gitPanel.info  = wxAuiPaneInfo().Name("git_panel_name").Right().Caption("GIT").BestSize(200, 400).MinSize(100, 100);
+        gitPanel.info = wxAuiPaneInfo().Name("git_panel_name").Right().Caption("GIT").BestSize(200, 400).MinSize(100, 100);
 
         set_base_window(
             frame,
             editortabs,
             explorerpanel,
-            gitpanel
-        );
+            gitpanel);
         frame->add_panel(&explorerPanel);
         frame->add_panel(&editorPanel);
         frame->add_panel(&execPanel);
         frame->add_panel(&symbolPanel);
         frame->add_panel(&gitPanel);
-    
+
         frame->update_components();
         frame->Show(true);
+
+        if (filenamePath.size())
+        {
+
+            if (is_path)
+            {
+                open_folder(filenamePath);
+                return true;
+            }
+            editortabs->add_empty_page();
+            auto current = editortabs->get_current_editor();
+            auto text = read_file(filenamePath.ToStdString());
+            if (text.size() > 0)
+            {
+                current->set_text(text);
+                current->set_filepath(filenamePath);
+                editortabs->set_title_current_page(filenamePath);
+            }
+        }
+
+        return true;
+    }
+
+    virtual bool Initialize(int &argc, wxChar **argv) override
+    {
+        wxApp::Initialize(argc, argv);
+
+        if (argc == 2)
+        {
+
+            std::cout << "argv[1]" << argv[1] << "\n";
+
+            wxString p = argv[1];
+            bool cond = p != wxString(".") && p != wxString("./");
+            std::cout << "argv[1] transformed :" << p << "Cond:" << cond << "\n";
+
+            if (cond)
+            {
+                if (is_file(p))
+                    filenamePath = p;
+                else
+                {
+                    is_path = true;
+                    filenamePath = p;
+                }
+            }
+            else
+            {
+                is_path = true;
+                filenamePath = wxGetCwd();
+            }
+        }
         return true;
     }
 };

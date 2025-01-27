@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.25.0)
 
 set(PROJECT_NAME DoDevEditor)
 project(${PROJECT_NAME} LANGUAGES CXX)
-set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE Debug)
 
 set(FETCH_LIBGIT_DEFINITIONS FALSE)
 set(COMPILE_CLANG_DEFINITIONS FALSE)
@@ -167,3 +167,8 @@ if(ENABLE_TESTING)
     include(CTest)
     add_subdirectory(test)
 endif()
+
+include(CPack)
+
+install(TARGETS ${PROJECT_NAME} DESTINATION /usr/bin)
+

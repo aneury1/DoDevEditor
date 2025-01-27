@@ -13,7 +13,11 @@
 #include <wx/dir.h>
 #include <wx/file.h>
 
-
+enum class selection_type{
+   File,
+   Folder,
+   None
+};
 
 struct explorer_panel : wxPanel {
    private:
@@ -22,7 +26,9 @@ struct explorer_panel : wxPanel {
    wxStaticText *explorerLabel;
    wxTreeCtrl* folderTree;
    void on_tree_item_activated(wxTreeEvent &event);
-   
+   void on_context_menu(wxContextMenuEvent& event);
+   void create_file_in_current_selection(wxCommandEvent &ev);
+   void create_folder_in_current_selection(wxCommandEvent &ev);
    public:
 
    explorer_panel(wxWindow *parent);
@@ -36,6 +42,10 @@ struct explorer_panel : wxPanel {
    wxTreeItemId add_root(const wxString& text);
 
    void populate_folder_tree(const wxString &path, wxTreeItemId parent);
+
+   wxString getSelectedPath();
+
+   selection_type get_seletion_type();
 
 };
 
