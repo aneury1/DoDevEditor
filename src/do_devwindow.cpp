@@ -38,15 +38,13 @@ void do_devwindow::add_panel(panel_info *panel){
     auiManager.AddPane(panel->panel,panel->info);
 }
 void do_devwindow::on_context_menu(wxContextMenuEvent& event){
-   std::cout <<"EVent has been triggered\n";
+   std::cout <<"EVent has been triggered: "<< event.GetId() <<"\n";
            // Create the context menu
         wxMenu menu;
         menu.Append(wxID_OPEN,   "Open");
         menu.Append(OpenFolder,  "Open folder");
         menu.Append(CloseFolder, "Close Open folder");
         menu.Append(wxID_SAVE, "Save Current");
-        menu.AppendSeparator();
-        menu.Append(wxID_SAVE, "Apply Format");
         menu.AppendSeparator();
         menu.Append(wxID_EXIT, "Exit");
         // Show the menu at the current mouse position

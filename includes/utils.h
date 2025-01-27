@@ -22,5 +22,6 @@ bool write_content_to_file(const wxString& file, const wxString& content);
 
 wxString create_new_file_with_content_with_dialog(wxWindow* parent, const wxString& defaultContent);
 
+bool is_file(wxString path);
 
 #endif // UTILS_H_DEFINED

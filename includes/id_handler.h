@@ -14,6 +14,13 @@ enum FixedID{
    CloseTab,
    ExplorerItemTaken,
    ActionMenuCommands,
+   CreateFileInCurrentSelection,
+   CreateFolderInCurrentSelection,
+   DeleteCurrentFile,
+   RenameFile,
+   OpenFile,
+   CloneFile,
+   ExpandSubFolder,
    LastFixedId,
 };
 

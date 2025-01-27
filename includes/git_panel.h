@@ -19,6 +19,9 @@ private:
       wxString author;
       wxString message;
       wxString commit_id;
+      wxString author_date;
+      wxString commiter_info;
+      wxString commit_date;
       std::vector<std::string>  files_changed;
    };
    std::vector<git_commit_information_base> commits_list;
