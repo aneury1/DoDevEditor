@@ -2,6 +2,7 @@
 #include "id_handler.h"
 #include "utils.h"
 
+
 void cpp(wxStyledTextCtrl *textEditor)
 {
    // Set the lexer for C++
