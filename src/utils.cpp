@@ -107,6 +107,7 @@ bool write_content_to_file(const wxString& file, const wxString& content){
     stream.write(fileContent.c_str(), fileContent.size());
     if (stream.fail()) {
         wxLogError("Error writing to file: %s", file);
+        stream.close();
         return false;
     }
 

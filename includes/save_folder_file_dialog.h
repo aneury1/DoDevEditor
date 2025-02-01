@@ -12,9 +12,6 @@ struct save_dialog_folder_or_file_in_current_dir : public wxFrame{
    wxStaticText *label;
    save_dialog_folder_or_file_in_current_dir(wxWindow *window);
    ~save_dialog_folder_or_file_in_current_dir();
-
-
-
 };
 
 
