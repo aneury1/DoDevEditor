@@ -13,4 +13,6 @@ struct do_devwindow : public wxFrame{
 
 
 
+
+
 #endif __CUSTOM_UI_CLASS_H_DEFINEd

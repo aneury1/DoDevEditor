@@ -25,8 +25,12 @@ private:
    bool changed = false;
    wxString path;
    void on_char_added(wxStyledTextEvent &event);
+   wxWindow *custome_editor;
 public:
    text_editor(wxWindow *parent);
+   text_editor(wxWindow *parent, wxWindow *editor);
+   
+
    ~text_editor();
    void set_filepath(const wxString &path);
    void set_text(const wxString &text);

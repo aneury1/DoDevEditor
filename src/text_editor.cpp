@@ -63,6 +63,23 @@ text_editor::~text_editor(){
    std::cout << "Destroy one\n";
 }
 
+ text_editor::text_editor(wxWindow *parent, wxWindow *editor) : wxPanel(parent, wxID_ANY)
+ {
+    fromfile = false;
+    changed = false;
+    wxBoxSizer *Ssizer = new wxBoxSizer(wxVERTICAL);
+    editor->Reparent(this);
+    editor->Layout();
+    Ssizer->Add(editor, 1, wxEXPAND);
+    SetSizer(Ssizer);
+
+
+   Bind(wxEVT_STC_CHARADDED, &text_editor::on_char_added, this);
+   //Bind(wxEVT_STC_CHANGE, &text_editor::on_char_added, this);
+   //Bind(wxEVT_STC_MODIFIED, &text_editor::on_char_added, this);
+
+
+ }
 
 text_editor::text_editor(wxWindow *parent) : wxPanel(parent, wxID_ANY)
 {
