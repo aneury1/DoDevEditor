@@ -18,6 +18,8 @@
 #include "terminal_emulator.h"
 #include "symbol_panel.h"
 #include "git_panel.h"
+///#include "argc_handler.h"
+
 
 #include <iostream>
 #include <git2.h>
@@ -41,7 +43,9 @@ public:
         auto frame = new do_devwindow();
 
         set_default_callback();
-
+ 
+        frame->setup_default_panels();
+/*
         auto editortabs = new editor_tab(frame);
         auto explorerpanel = new explorer_panel(frame);
         auto exec_panel = new exec_dialog(frame);
@@ -50,19 +54,19 @@ public:
 
         panel_info editorPanel;
         editorPanel.panel = editortabs;
-        editorPanel.info = wxAuiPaneInfo().Name("editor_panel_name").CenterPane();
+        editorPanel.info = wxAuiPaneInfo().Name(editor_panel_name).CenterPane();
 
         panel_info explorerPanel;
         explorerPanel.panel = explorerpanel;
-        explorerPanel.info = wxAuiPaneInfo().Name("file_explorer_panel_name").Left().Caption("Explorer").BestSize(300, 800).MinSize(200, 600);
+        explorerPanel.info = wxAuiPaneInfo().Name(file_explorer_panel_name).Left().Caption("Explorer").BestSize(300, 800).MinSize(200, 200);
 
         panel_info execPanel;
         execPanel.panel = exec_panel;
-        execPanel.info = wxAuiPaneInfo().Name("exec_panel_name").Bottom().Caption("exec").BestSize(300, 400).MinSize(200, 100);
+        execPanel.info = wxAuiPaneInfo().Name(exec_panel_name).Bottom().Caption("exec").BestSize(300, 400).MinSize(200, 100);
 
         panel_info symbolPanel;
         symbolPanel.panel = symbolpanel;
-        symbolPanel.info = wxAuiPaneInfo().Name("symbol_panel_name").Left().Caption("symbol").BestSize(300, 400).MinSize(200, 100);
+        symbolPanel.info = wxAuiPaneInfo().Name(symbol_panel_name).Left().Caption("symbol").BestSize(300, 400).MinSize(200, 100);
 
         panel_info gitPanel;
         gitPanel.panel = gitpanel;
@@ -80,11 +84,14 @@ public:
         frame->add_panel(&gitPanel);
 
         frame->update_components();
+*/
+
         frame->Show(true);
 
         if (filenamePath.size())
         {
 
+           #if 0
             if (is_path)
             {
                 open_folder(filenamePath);
@@ -99,6 +106,7 @@ public:
                 current->set_filepath(filenamePath);
                 editortabs->set_title_current_page(filenamePath);
             }
+            #endif
         }
 
         return true;
