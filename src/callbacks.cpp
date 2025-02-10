@@ -183,8 +183,20 @@ void create_file_in_current_selection(wxCommandEvent event){
 
 }
 
+void open_view_explorer(wxCommandEvent event)
+{
+   window->show_explorer();
+}
 
+void open_git_explorer(wxCommandEvent event)
+{
+   window->show_git_panel();
+}
 
+void open_exec_panel(wxCommandEvent event)
+{
+   window->show_exec();
+}
 
 void on_close_tab(wxAuiNotebookEvent &event)
 {
@@ -235,6 +247,9 @@ void set_default_callback()
    functions[CloseFolder] = &on_close_folder;
    functions[ActionMenuCommands] = &open_action_menu;
    functions[CreateFileInCurrentSelection]=&create_file_in_current_selection;
+   functions[ViewFileExplorer] = &open_view_explorer;
+   functions[ViewGitExplorer] = &open_git_explorer;
+   functions[ViewExecPanel] = &open_exec_panel;
 }
 
 void set_base_window(

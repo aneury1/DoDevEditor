@@ -27,6 +27,9 @@ do_devwindow::do_devwindow() : wxFrame(nullptr, wxID_ANY, wxEmptyString)
   Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, OpenFolder);
   Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, CloseFolder);
   Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, ActionMenuCommands);
+  Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, ViewFileExplorer);
+  Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, ViewGitExplorer);
+  Bind(wxEVT_MENU, &do_devwindow::on_key_entered, this, ViewExecPanel);
 
   Bind(wxEVT_CONTEXT_MENU, &do_devwindow::on_context_menu, this);
 }
@@ -74,7 +77,7 @@ void do_devwindow::setup_default_panels()
         frame->add_panel(&explorerPanel);
         frame->add_panel(&editorPanel);
         frame->add_panel(&execPanel);
-        frame->add_panel(&symbolPanel);
+       /// frame->add_panel(&symbolPanel);
         frame->add_panel(&gitPanel);
 
         frame->update_components();
@@ -112,7 +115,36 @@ void do_devwindow::on_key_entered(wxCommandEvent &ev)
   call_by_event(ev);
 }
 
-void do_devwindow::show_explorer(bool show) {}
-void do_devwindow::show_editor(bool show) {}
-void do_devwindow::show_git_panel(bool show) {}
-void do_devwindow::show_exec(bool show) {}
+void do_devwindow::show_explorer() {
+  wxAuiPaneInfo& pane = auiManager.GetPane(file_explorer_panel_name);
+
+  if (!pane.IsShown()) {
+      pane.Show(true);  // Show the pane
+      auiManager.Update();  // Apply changes
+  }
+}
+void do_devwindow::show_editor() 
+{
+  wxAuiPaneInfo& pane = auiManager.GetPane(editor_panel_name);
+
+  if (!pane.IsShown()) {
+      pane.Show(true);  // Show the pane
+      auiManager.Update();  // Apply changes
+  }
+}
+void do_devwindow::show_git_panel() {
+    wxAuiPaneInfo& pane = auiManager.GetPane(git_panel_name);
+
+  if (!pane.IsShown()) {
+      pane.Show(true);  // Show the pane
+      auiManager.Update();  // Apply changes
+  }
+}
+void do_devwindow::show_exec() {
+    wxAuiPaneInfo& pane = auiManager.GetPane(exec_panel_name);
+
+  if (!pane.IsShown()) {
+      pane.Show(true);  // Show the pane
+      auiManager.Update();  // Apply changes
+  }
+}

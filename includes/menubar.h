@@ -51,8 +51,8 @@ static inline wxMenu *create_view_menu_entries()
     menu->Append(ViewFileExplorer, "File Explorer ", " ");
     menu->Append(wxID_ANY, "Bottom Options", " ");
     menu->AppendSeparator();
-    menu->Append(wxID_ANY, "View Control Version(Not Implememted)", " ");
-    menu->Append(wxID_ANY, "View Symbols(Not Implemented)", " ");
+    menu->Append(ViewGitExplorer, "View Control Version(git)", " ");
+    menu->Append(ViewExecPanel, "View Exec Panel", " ");
     return menu;
 }
 

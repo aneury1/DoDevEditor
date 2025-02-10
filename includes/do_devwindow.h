@@ -33,16 +33,16 @@ class do_devwindow : public wxFrame
     void on_exit(wxCommandEvent &event);
     void on_key_entered(wxCommandEvent &event);
     void on_context_menu(wxContextMenuEvent &event);    
-    void show_explorer(bool show);
-    void show_editor(bool show);
-    void show_git_panel(bool show);
-    void show_exec(bool show);
+
  
     
 public:
     do_devwindow();
 
-
+    void show_explorer();
+    void show_editor();
+    void show_git_panel();
+    void show_exec();
     void setup_default_panels();
 
     static do_devwindow &get()

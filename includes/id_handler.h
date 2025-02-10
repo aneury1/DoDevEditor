@@ -9,6 +9,8 @@ enum FixedID{
    OpenFolder = wxID_LAST+1,
    CloseFolder,
    ViewFileExplorer,
+   ViewGitExplorer,
+   ViewExecPanel,
    HideFileExplorer,
    OpenBinaryFileReadOnly,
    SaveAs,
