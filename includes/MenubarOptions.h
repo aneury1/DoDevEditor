@@ -1,7 +1,7 @@
 #ifndef __MENUBAR_DEFINED_H
 #define __MENUBAR_DEFINED_H
 #include <wx/wx.h>
-#include "id_handler.h"
+#include "constant.h"
 
 
 static inline wxMenu* create_action_menu()
@@ -16,13 +16,13 @@ static inline wxMenu* create_file_menu_entries()
    wxMenu *fileMenu = new wxMenu();
    fileMenu->Append(wxID_NEW, "&New File\tCtrl-N", "Create a new document");
    fileMenu->Append(wxID_OPEN, "&Open File\tCtrl-O", "Open a File");
-   /// fileMenu->Append(OpenBinaryFileReadOnly, "&Open Binary File\tCtrl-O", "Open a File as Read Only");
+   fileMenu->Append(OpenBinaryFileReadOnly, "&Open Binary File\tCtrl-O", "Open a File as Read Only");
    fileMenu->Append(OpenFolder, "&Open Folder\tCtrl-O", "Open a Folder");
    fileMenu->Append(CloseFolder, "&Close Opened Folder\tCtrl-Q", "Close a Folder");
    fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current document");
    fileMenu->Append(SaveAs, "&Save as \tCtrl-S", "Save the current document");
-   //fileMenu->AppendSeparator();
-   //fileMenu->Append(wxID_SAVE, "&Print File\tCtrl-P", "Print current file");
+   fileMenu->AppendSeparator();
+   fileMenu->Append(wxID_SAVE, "&Print File\tCtrl-P", "Print current file");
    fileMenu->AppendSeparator();
    fileMenu->Append(wxID_EXIT, "E&xit\tCtrl-Q", "Exit the application");
    return fileMenu;
@@ -57,7 +57,7 @@ static inline wxMenu *create_view_menu_entries()
 }
 
 
-static wxMenuBar *create_default_menubar()
+static wxMenuBar *CreateMenuBarAndOptions()
 {
    auto menubar = new wxMenuBar();
 
