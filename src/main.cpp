@@ -8,7 +8,6 @@ struct App : public wxApp{
     public:
 
     bool OnInit(){
-      /// GetTerminal();
         auto f = WindowFrame::get();
         f->Show(true);
         return true;

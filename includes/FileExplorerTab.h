@@ -6,7 +6,7 @@
 #include <wx/listctrl.h>
 #include "frame.h"
 #include "constant.h"
-
+#include "GitPanel.h"
 
 struct FileExplorerTabContainer : public wxPanel{
      
@@ -25,7 +25,11 @@ struct FileExplorerTabContainer : public wxPanel{
     wxListCtrl* listCtrl = nullptr;
     /// 2 
     wxStaticText *explorerLabel;
+    /// 3
     wxTreeCtrl* folderTree;
+    /// 4 
+    GitPanel * gitPanel;
+
 
     wxTreeItemId AddRoot(const wxString &text);
     Response OpenFolder();
@@ -34,6 +38,7 @@ struct FileExplorerTabContainer : public wxPanel{
     void CreateFileListPanel();
     void CreateFileTreePanel();
     void CreateFileSymbolPanel();
+    void CreateGitPanel();
     
     void SetupPanel();
 

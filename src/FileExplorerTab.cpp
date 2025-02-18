@@ -2,6 +2,7 @@
 #include <wx/artprov.h>
 #include <wx/filename.h>
 
+
 #include "utils.h"
 #include "TabContainer.h"
 #include "FileExplorerTab.h"
@@ -50,11 +51,17 @@ void FileExplorerTabContainer::CreateFileSymbolPanel()
 {
 }
 
+void FileExplorerTabContainer::CreateGitPanel()
+{
+   gitPanel = new GitPanel(this);
+}
+
 void FileExplorerTabContainer::SetupPanel()
 {
     CreateFileListPanel();
     CreateFileTreePanel();
     CreateFileSymbolPanel();
+    CreateGitPanel();
     filemanagertabs = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                         wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ACTIVE_TAB);
     if(fileListPanel)
@@ -65,6 +72,13 @@ void FileExplorerTabContainer::SetupPanel()
     {
         filemanagertabs->AddPage(fileTreePanel, "Folder Tree", true);
     }
+
+    if(gitPanel)
+    {
+        filemanagertabs->AddPage(gitPanel, "Git Panel", true);
+
+    }
+
     wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL); 
     sizer->Add(filemanagertabs,1, wxEXPAND|wxALL,1);
     SetSizer(sizer);
@@ -126,6 +140,10 @@ Response FileExplorerTabContainer::OpenFolder()
    wxTreeItemId root = AddRoot("Root");
    PopulateFolderTree(folderPath.ToStdString(), root);
    rootPath = folderPath.ToStdString();
+   if(gitPanel)
+   {
+      gitPanel->LoadCommitsInformationInFolder(rootPath);
+   }
    ///explorerpanel->set_path_label(rootPath);
    ///gitpanel->load_commits_information_in_folder(std::string(folderPath.ToUTF8().data()));
    ///set_status_text("Opened folder: " + folderPath);
