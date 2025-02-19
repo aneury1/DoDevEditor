@@ -23,7 +23,8 @@ WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, ViewGitExplorer);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, ViewExecPanel);
 }
-
+#include <mutex>
+#include <thread>
 void WindowFrame::AddDefaultEvent()
 {
   auto newEmptyFile=[this](WindowFrame *frame){
@@ -40,9 +41,14 @@ void WindowFrame::AddDefaultEvent()
         tabContainer->SetDataToCurrentContainer(vc);
         int lastSlashOnPath = path.find_last_of(FileSeparator);
         if(lastSlashOnPath==std::string::npos)
-          tabContainer->SetTitleToCurrentPage(path);
+        {
+         tabContainer->SetTitleToCurrentPage(path);
+         tabContainer->GetCurrentTab()->SetPath(path);
+        } 
+        
         else
         {
+          tabContainer->GetCurrentTab()->SetPath(path); 
           path = path.substr(lastSlashOnPath+1, path.size()-lastSlashOnPath);
           tabContainer->SetTitleToCurrentPage(path);
         }
@@ -50,7 +56,9 @@ void WindowFrame::AddDefaultEvent()
     }
   };
 
+  std::mutex mu;
   auto openFolder = [this](WindowFrame *frame){
+   
      if(explorerTabContainer)
       explorerTabContainer->OpenFolder();
   };
@@ -61,13 +69,16 @@ void WindowFrame::AddDefaultEvent()
   };
 
 
-
+  auto openTerminal =[this](WindowFrame *frame){
+     GetTerminal();
+  };
 
 
   AddCMDCallback(wxID_NEW, newEmptyFile);
   AddCMDCallback(wxID_OPEN, openExistingFile);
   AddCMDCallback(OpenFolder, openFolder);
   AddCMDCallback(wxID_SAVE, saveCurrentFile);
+  AddCMDCallback(ViewExecPanel, openTerminal);
 
 }
 
@@ -133,6 +144,16 @@ EditorTab* WindowFrame::AddNewPage(){
   }
   return nullptr;
 }
+
+EditorTab* WindowFrame::AddNewPage(std::string filename){
+  if(tabContainer){
+    tabContainer->AddPage(filename);
+    EditorTab *tab = tabContainer->GetCurrentTab();
+    return tab;
+  }
+  return nullptr;
+}
+
 
 TabContainer* WindowFrame::GetTabContainer(){
    return tabContainer;

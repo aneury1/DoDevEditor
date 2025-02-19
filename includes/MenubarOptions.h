@@ -7,7 +7,7 @@
 static inline wxMenu* create_action_menu()
 {
    wxMenu *fileMenu = new wxMenu();
-   fileMenu->Append(ActionMenuCommands, "&Execute\tCtrl-NODEFINED", "Execute");
+   fileMenu->Append(ActionMenuCommands, "&Execute\tCtrl-+", "Execute");
    return fileMenu;
 }
 
@@ -16,7 +16,7 @@ static inline wxMenu* create_file_menu_entries()
    wxMenu *fileMenu = new wxMenu();
    fileMenu->Append(wxID_NEW, "&New File\tCtrl-N", "Create a new document");
    fileMenu->Append(wxID_OPEN, "&Open File\tCtrl-O", "Open a File");
-   fileMenu->Append(OpenBinaryFileReadOnly, "&Open Binary File\tCtrl-O", "Open a File as Read Only");
+   ///fileMenu->Append(OpenBinaryFileReadOnly, "&Open Binary File\tCtrl-O", "Open a File as Read Only");
    fileMenu->Append(OpenFolder, "&Open Folder\tCtrl-O", "Open a Folder");
    fileMenu->Append(CloseFolder, "&Close Opened Folder\tCtrl-Q", "Close a Folder");
    fileMenu->Append(wxID_SAVE, "&Save\tCtrl-S", "Save the current document");

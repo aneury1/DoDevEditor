@@ -39,8 +39,23 @@ static TTYTerminal GetTerminal(){
     return TTYTerminal::OtherLinux;
 }
 
+static inline std::string ExtraOnlyFileName(const std::string& fullpath)
+{
+    int pos = fullpath.find_last_of(FileSeparator);
+    if(pos==std::string::npos)
+      return fullpath;
+    
+    return fullpath.substr(pos+1, fullpath.size()-pos);
+}
 
-
+static inline std::string ExtractFileExtension(const std::string& file)
+{
+    int pos = file.find_last_of(".");
+    if(pos!=std::string::npos){ 
+      return file;
+    }
+    return file.substr(pos+1, file.size()-pos);
+}
 
 
 

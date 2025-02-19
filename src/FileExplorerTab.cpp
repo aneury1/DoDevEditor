@@ -2,7 +2,6 @@
 #include <wx/artprov.h>
 #include <wx/filename.h>
 
-
 #include "utils.h"
 #include "TabContainer.h"
 #include "FileExplorerTab.h"
@@ -11,28 +10,28 @@
 
 void FileExplorerTabContainer::CreateFileListPanel()
 {
-    fileListPanel = new wxPanel(this, wxID_ANY);
-    wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
-    wxStaticText *panelTitle = new wxStaticText(fileListPanel, wxID_ANY, wxT("File List Metadata:"));
-    listCtrl = new wxListCtrl(fileListPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT);
-    listCtrl->InsertColumn(0, "File Name", wxLIST_FORMAT_LEFT, 150);
-    listCtrl->InsertColumn(1, "Directory", wxLIST_FORMAT_LEFT, 200);
-    listCtrl->InsertColumn(2, "size", wxLIST_FORMAT_LEFT, 100);
-    listCtrl->InsertColumn(2, "last Modified", wxLIST_FORMAT_LEFT, 150);
-    sizer->Add(panelTitle, 0, wxEXPAND);
-    sizer->Add(listCtrl, 1, wxEXPAND);
-    fileListPanel->SetSizer(sizer);
+   fileListPanel = new wxPanel(this, wxID_ANY);
+   wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
+   wxStaticText *panelTitle = new wxStaticText(fileListPanel, wxID_ANY, wxT("File List Metadata:"));
+   listCtrl = new wxListCtrl(fileListPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT);
+   listCtrl->InsertColumn(0, "File Name", wxLIST_FORMAT_LEFT, 150);
+   listCtrl->InsertColumn(1, "Directory", wxLIST_FORMAT_LEFT, 200);
+   listCtrl->InsertColumn(2, "size", wxLIST_FORMAT_LEFT, 100);
+   listCtrl->InsertColumn(2, "last Modified", wxLIST_FORMAT_LEFT, 150);
+   sizer->Add(panelTitle, 0, wxEXPAND);
+   sizer->Add(listCtrl, 1, wxEXPAND);
+   fileListPanel->SetSizer(sizer);
 }
 void FileExplorerTabContainer::CreateFileTreePanel()
 {
-   fileTreePanel= new wxPanel(this, wxID_ANY);
+   fileTreePanel = new wxPanel(this, wxID_ANY);
    wxBoxSizer *explorerSizer = new wxBoxSizer(wxVERTICAL);
    explorerLabel = new wxStaticText(fileTreePanel, wxID_ANY, "File Explorer");
    folderTree = new wxTreeCtrl(fileTreePanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT);
    explorerSizer->Add(explorerLabel, 0, wxEXPAND | wxALL, 5);
    explorerSizer->Add(folderTree, 1, wxEXPAND);
-   
-      wxImageList *imageList = new wxImageList(16, 16, true);
+
+   wxImageList *imageList = new wxImageList(16, 16, true);
 
    // Add icons to the image list
    wxBitmap folderIcon(wxArtProvider::GetBitmap(wxART_FOLDER, wxART_OTHER, wxSize(16, 16)));
@@ -40,11 +39,8 @@ void FileExplorerTabContainer::CreateFileTreePanel()
    imageList->Add(folderIcon);
    imageList->Add(fileIcon);
    folderTree->AssignImageList(imageList);
-   
-   
+
    fileTreePanel->SetSizer(explorerSizer);
-
-
 }
 
 void FileExplorerTabContainer::CreateFileSymbolPanel()
@@ -58,52 +54,59 @@ void FileExplorerTabContainer::CreateGitPanel()
 
 void FileExplorerTabContainer::SetupPanel()
 {
-    CreateFileListPanel();
-    CreateFileTreePanel();
-    CreateFileSymbolPanel();
-    CreateGitPanel();
-    filemanagertabs = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                        wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ACTIVE_TAB);
-    if(fileListPanel)
-    {
-        filemanagertabs->AddPage(fileListPanel, "Files", true);
-    }
-    if(fileTreePanel)
-    {
-        filemanagertabs->AddPage(fileTreePanel, "Folder Tree", true);
-    }
+   CreateFileListPanel();
+   CreateFileTreePanel();
+   CreateFileSymbolPanel();
+   CreateGitPanel();
 
-    if(gitPanel)
-    {
-        filemanagertabs->AddPage(gitPanel, "Git Panel", true);
+   int flags = wxAUI_NB_DEFAULT_STYLE & ~wxAUI_NB_CLOSE_BUTTON & ~wxAUI_NB_CLOSE_ON_ACTIVE_TAB;
+   //// Original wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ACTIVE_TAB;
+   filemanagertabs = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                       flags);
 
-    }
+   if (fileTreePanel)
+   {
+      filemanagertabs->AddPage(fileTreePanel, "Folder Tree", true);
+   }
+   if (fileListPanel)
+   {
+      filemanagertabs->AddPage(fileListPanel, "Files", false);
+   }
+   if (gitPanel)
+   {
+      filemanagertabs->AddPage(gitPanel, "Git Panel", false);
+   }
 
-    wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL); 
-    sizer->Add(filemanagertabs,1, wxEXPAND|wxALL,1);
-    SetSizer(sizer);
+   wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
+   sizer->Add(filemanagertabs, 1, wxEXPAND | wxALL, 1);
+   SetSizer(sizer);
 }
 
 void FileExplorerTabContainer::AddEvents()
 {
-    Bind(wxEVT_TREE_ITEM_ACTIVATED, &FileExplorerTabContainer::OnItemTreeActivate, this);
+   Bind(wxEVT_TREE_ITEM_ACTIVATED, &FileExplorerTabContainer::OnItemTreeActivate, this);
+}
+
+void FileExplorerTabContainer::UpdateFileList()
+{
+   PopulateList(this->explorer_files);
 }
 
 FileExplorerTabContainer::FileExplorerTabContainer(wxWindow *parent) : wxPanel(parent, wxID_ANY)
 {
-    SetupPanel();
-    AddEvents();
-    SetBackgroundColour(wxColour(200, 200, 0, 255));
+   SetupPanel();
+   AddEvents();
+   SetBackgroundColour(wxColour(200, 200, 0, 255));
 }
 
 FileExplorerTabContainer *FileExplorerTabContainer::get()
 {
-    static FileExplorerTabContainer *instance = nullptr;
-    if (instance == nullptr)
-    {
-        instance = new FileExplorerTabContainer(WindowFrame::get());
-    }
-    return instance;
+   static FileExplorerTabContainer *instance = nullptr;
+   if (instance == nullptr)
+   {
+      instance = new FileExplorerTabContainer(WindowFrame::get());
+   }
+   return instance;
 }
 
 wxTreeItemId FileExplorerTabContainer::AddRoot(const wxString &text)
@@ -111,12 +114,20 @@ wxTreeItemId FileExplorerTabContainer::AddRoot(const wxString &text)
    return folderTree->AddRoot(text);
 }
 
-
 void FileExplorerTabContainer::ClearFolderTree()
 {
    if (folderTree)
    {
       folderTree->DeleteAllItems();
+   }
+}
+
+void FileExplorerTabContainer::ClearFileList()
+{
+   explorer_files.clear();
+   if (listCtrl)
+   {
+      listCtrl->DeleteAllItems();
    }
 }
 
@@ -132,27 +143,35 @@ Response FileExplorerTabContainer::OpenFolder()
    wxString folderPath = openFolderDialog.GetPath();
    if (folderPath.IsEmpty())
    {
-      ///set_status_text("No folder selected.");
+      /// set_status_text("No folder selected.");
       return Response::Cancel;
    }
 
    ClearFolderTree();
    wxTreeItemId root = AddRoot("Root");
+   currentEditorState = EditorState::OpeningFolder;
    PopulateFolderTree(folderPath.ToStdString(), root);
    rootPath = folderPath.ToStdString();
-   if(gitPanel)
+   if (gitPanel)
    {
       gitPanel->LoadCommitsInformationInFolder(rootPath);
    }
-   ///explorerpanel->set_path_label(rootPath);
-   ///gitpanel->load_commits_information_in_folder(std::string(folderPath.ToUTF8().data()));
-   ///set_status_text("Opened folder: " + folderPath);
+   UpdateFileList();
+   /// explorerpanel->set_path_label(rootPath);
+   /// gitpanel->load_commits_information_in_folder(std::string(folderPath.ToUTF8().data()));
+   /// set_status_text("Opened folder: " + folderPath);
    return Response::Success;
 }
 
-
 void FileExplorerTabContainer::PopulateFolderTree(const std::string &path, wxTreeItemId parent)
 {
+
+   if (path.size() <= 0)
+      return;
+
+   if (path[0] == '.')
+      return;
+
    wxDir dir(path.c_str());
    if (!dir.IsOpened())
       return;
@@ -169,7 +188,15 @@ void FileExplorerTabContainer::PopulateFolderTree(const std::string &path, wxTre
       }
       else
       {
-        /// explorer_file.insert(std::string(fullPath.c_str()));
+         auto s = fullPath.c_str();
+         FileInfo info;
+         info.file = ExtraOnlyFileName(std::string(s));
+         info.path = fullPath.c_str();
+         info.dateOfCreation = "00/00/0000";
+         info.lastModification = "00/00/0000";
+         info.size = 1000;
+
+         explorer_files.insert(info);
          folderTree->AppendItem(parent, filename, 1);
       }
       hasFiles = dir.GetNext(&filename);
@@ -191,7 +218,7 @@ void FileExplorerTabContainer::OnItemTreeActivate(wxTreeEvent &event)
       fullPath = folderTree->GetItemText(parent) + "/" + fullPath;
       parent = folderTree->GetItemParent(parent);
    }
-
+   currentEditorState = EditorState::DoingNothing;
    if (wxDirExists(fullPath))
    {
       PopulateFolderTree(fullPath.ToStdString(), selected);
@@ -200,46 +227,47 @@ void FileExplorerTabContainer::OnItemTreeActivate(wxTreeEvent &event)
    {
 
       wxString fileFullPath = rootPath + FileSeparator + fullPath;
-      
+
       // std::cout << "full selected name:" << fileFullPath.ToStdString() << "\n";
 
       if (wxFileName::DirExists(fileFullPath))
       {
-        /// std::cout << "xfull selected name:" << fileFullPath.ToStdString() << "\n";
+         /// std::cout << "xfull selected name:" << fileFullPath.ToStdString() << "\n";
          return;
       }
 
       if (isFileOpened(fileFullPath.ToStdString()))
       {
-        /// std::cout << "zfull selected name:" << fileFullPath.ToStdString() << "\n";
+         /// std::cout << "zfull selected name:" << fileFullPath.ToStdString() << "\n";
 
          return;
       }
 
-      auto textEditor =  WindowFrame::get()->AddNewPage();
+      auto textEditor = WindowFrame::get()->AddNewPage(fileFullPath.ToStdString());
       //// add_new_page(selectedName);
       //// std::cout <<"Call set Auto completer "<< explorer_file.size()<<"\n";
       if (textEditor)
       {
          auto content = ReadFile(fileFullPath.ToStdString());
-         
+
          /// std::cout <<"Call set Auto completer "<< explorer_file.size()<<"\n";
-         
+
          auto ds = fromStrTo8Vec(content);
-         
-        // textEditor->set_filepath(fileFullPath);
-         
-       //  if(explorer_file.size()>0)
-        //    textEditor->set_auto_completer(new FileCompleter(this->explorer_file));
-         
+
+         // textEditor->set_filepath(fileFullPath);
+
+         //  if(explorer_file.size()>0)
+         //    textEditor->set_auto_completer(new FileCompleter(this->explorer_file));
+
          if (ds.size() > 0)
          {
             auto str = fileFullPath.ToStdString();
             int pos = str.find_last_of(FileSeparator);
-            if(pos != std::string::npos){
-               str = str.substr(pos+1, str.size()-pos);
+            if (pos != std::string::npos)
+            {
+               str = str.substr(pos + 1, str.size() - pos);
             }
-            WindowFrame::get()->GetTabContainer()->SetTitleToCurrentPage(str); 
+            WindowFrame::get()->GetTabContainer()->SetTitleToCurrentPage(str);
             textEditor->SetPath(fileFullPath.ToStdString());
             textEditor->setData(ds);
          }
@@ -247,13 +275,27 @@ void FileExplorerTabContainer::OnItemTreeActivate(wxTreeEvent &event)
          {
          }
          return;
-      }else
+      }
+      else
       {
-       
       }
    }
 }
 
-bool FileExplorerTabContainer::isFileOpened(std::string fileFullPath){
-    return false;
+bool FileExplorerTabContainer::isFileOpened(std::string fileFullPath)
+{
+   return false;
+}
+
+void FileExplorerTabContainer::PopulateList(const std::set<FileInfo> &fileSet)
+{
+   listCtrl->DeleteAllItems(); // Clear any existing items
+
+   for (const auto &file : fileSet)
+   {
+      long index = listCtrl->InsertItem(listCtrl->GetItemCount(), file.file);
+      listCtrl->SetItem(index, 1, file.path);
+      listCtrl->SetItem(index, 2, file.lastModification);
+      listCtrl->SetItem(index, 3, wxString::Format("%ld", file.size));
+   }
 }

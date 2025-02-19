@@ -32,6 +32,19 @@ void TabContainer::AddEmptyTextPage()
    currentTab = panel;
 }
 
+void TabContainer::AddPage(const std::string file)
+{
+  
+   std::string extension = ExtractFileExtension(file);
+    
+   if(extension=="txt"){
+      auto panel = new TextEditor(this);
+      editorTabs->AddPage(panel, "Untitled", true);
+      currentTab = panel;
+      return ;
+   }
+   throw std::runtime_error("Is not implemented");
+}
 
 void TabContainer::AddEmptyTextPage(wxCommandEvent &ev)
 {

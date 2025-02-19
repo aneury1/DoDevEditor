@@ -35,6 +35,9 @@ struct WindowFrame : public wxFrame{
 
     EditorTab* AddNewPage();
 
+    EditorTab* AddNewPage(std::string filename);
+
+
     void AddCMDCallback(int id, std::function<void(WindowFrame*)> cb);
 
     TabContainer* GetTabContainer();

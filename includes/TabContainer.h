@@ -19,6 +19,8 @@ struct TabContainer : public wxPanel{
     TabContainer(wxWindow *parent);
    
     void AddEmptyTextPage();
+
+    void AddPage(const std::string file);
  
     void AddEmptyTextPage(wxCommandEvent& ev);
 

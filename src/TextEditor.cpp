@@ -95,7 +95,7 @@ std::vector<uint8_t> TextEditor::getData()
 
 void TextEditor::OnCharAdded(wxStyledTextEvent &event)
 {
-   changed = true;
+   changed = textEditor->CanUndo();
 }
 
 void TextEditor::SetLineNumber(bool value)
