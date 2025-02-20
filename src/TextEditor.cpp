@@ -68,10 +68,10 @@ TextEditor::TextEditor(wxWindow *parent) : EditorTab(parent)
 
    cpp(textEditor);
    Bind(wxEVT_STC_CHARADDED, &TextEditor::OnCharAdded, this);
-
-
-   findIn = new FindDialogInCurrentTextEditor(this);
-   findIn->ShowModal();
+   
+   //@Todo: decide and fix position, Add Accelerator for showing up on CTRL-<KEY>
+   //findIn = new FindDialogInCurrentTextEditor(this);
+   //findIn->ShowModal();
 }
 
 int TextEditor::getTypeOfEditor()

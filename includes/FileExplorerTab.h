@@ -7,6 +7,7 @@
 #include "frame.h"
 #include "constant.h"
 #include "GitPanel.h"
+#include <wx/tokenzr.h>
 
 struct FileExplorerTabContainer : public wxPanel
 {
@@ -16,7 +17,7 @@ struct FileExplorerTabContainer : public wxPanel
        OpeningFolder,
        OtherNotKnownState
     };
-
+    wxTreeItemId root; 
     EditorState currentEditorState = EditorState::DoingNothing;
 
 
@@ -59,6 +60,8 @@ struct FileExplorerTabContainer : public wxPanel
     wxTreeItemId AddRoot(const wxString &text);
     Response OpenFolder();
     void PopulateFolderTree(const std::string &path, wxTreeItemId parent);
+    wxTreeItemId FindOrCreateNode(wxTreeItemId parent, const wxString &label);
+    void AddEntry(const std::string &path);
     void ClearFolderTree();
     void ClearFileList();
     void CreateFileListPanel();
@@ -75,6 +78,8 @@ struct FileExplorerTabContainer : public wxPanel
     bool isFileOpened(std::string fileFullPath);
 
     void OnItemTreeActivate(wxTreeEvent &event);
+    
+    void OnItemListActivate(wxListEvent& ev );
 
     FileExplorerTabContainer(wxWindow *parent);
 

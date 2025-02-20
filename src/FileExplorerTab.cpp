@@ -8,6 +8,8 @@
 #include "frame.h"
 #include "constant.h"
 
+static const char *RootTree = "Root";
+
 void FileExplorerTabContainer::CreateFileListPanel()
 {
    fileListPanel = new wxPanel(this, wxID_ANY);
@@ -85,6 +87,51 @@ void FileExplorerTabContainer::SetupPanel()
 void FileExplorerTabContainer::AddEvents()
 {
    Bind(wxEVT_TREE_ITEM_ACTIVATED, &FileExplorerTabContainer::OnItemTreeActivate, this);
+   Bind(wxEVT_LIST_ITEM_SELECTED, &FileExplorerTabContainer::OnItemListActivate, this);
+}
+
+void FileExplorerTabContainer::OnItemListActivate(wxListEvent &event)
+{
+   long itemIndex = event.GetIndex();
+   // Example: Get text from column 1 (assuming columns exist)
+   wxString fileFullPath = listCtrl->GetItemText(itemIndex, 1);
+   auto textEditor = WindowFrame::get()->AddNewPage(); /// WindowFrame::get()->AddNewPage(fileFullPath.ToStdString());
+   //// add_new_page(selectedName);
+   //// std::cout <<"Call set Auto completer "<< explorer_file.size()<<"\n";
+   if (textEditor)
+   {
+      auto content = ReadFile(fileFullPath.ToStdString());
+
+      /// std::cout <<"Call set Auto completer "<< explorer_file.size()<<"\n";
+
+      auto ds = fromStrTo8Vec(content);
+
+      // textEditor->set_filepath(fileFullPath);
+
+      //  if(explorer_file.size()>0)
+      //    textEditor->set_auto_completer(new FileCompleter(this->explorer_file));
+
+      if (ds.size() > 0)
+      {
+         auto str = fileFullPath.ToStdString();
+         int pos = str.find_last_of(FileSeparator);
+         if (pos != std::string::npos)
+         {
+            str = str.substr(pos + 1, str.size() - pos);
+         }
+         WindowFrame::get()->GetTabContainer()->SetTitleToCurrentPage(str);
+         textEditor->SetPath(fileFullPath.ToStdString());
+         textEditor->setData(ds);
+      }
+      else
+      {
+      }
+      return;
+   }
+   else
+   {
+   }
+   /// wxLogMessage("Selected row: %ld, Column 1 data: %s", itemIndex, columnData);
 }
 
 void FileExplorerTabContainer::UpdateFileList()
@@ -148,7 +195,7 @@ Response FileExplorerTabContainer::OpenFolder()
    }
 
    ClearFolderTree();
-   wxTreeItemId root = AddRoot("Root");
+   root = AddRoot(RootTree);
    currentEditorState = EditorState::OpeningFolder;
    PopulateFolderTree(folderPath.ToStdString(), root);
    rootPath = folderPath.ToStdString();
@@ -195,6 +242,8 @@ void FileExplorerTabContainer::PopulateFolderTree(const std::string &path, wxTre
          info.dateOfCreation = "00/00/0000";
          info.lastModification = "00/00/0000";
          info.size = 1000;
+
+         AddEntry(fullPath.ToStdString() + "/00/000/000");
 
          explorer_files.insert(info);
          folderTree->AppendItem(parent, filename, 1);
@@ -243,7 +292,7 @@ void FileExplorerTabContainer::OnItemTreeActivate(wxTreeEvent &event)
          return;
       }
 
-      auto textEditor = WindowFrame::get()->AddNewPage(fileFullPath.ToStdString());
+      auto textEditor = WindowFrame::get()->AddNewPage(); /// WindowFrame::get()->AddNewPage(fileFullPath.ToStdString());
       //// add_new_page(selectedName);
       //// std::cout <<"Call set Auto completer "<< explorer_file.size()<<"\n";
       if (textEditor)
@@ -297,5 +346,41 @@ void FileExplorerTabContainer::PopulateList(const std::set<FileInfo> &fileSet)
       listCtrl->SetItem(index, 1, file.path);
       listCtrl->SetItem(index, 2, file.lastModification);
       listCtrl->SetItem(index, 3, wxString::Format("%ld", file.size));
+   }
+}
+
+wxTreeItemId FileExplorerTabContainer::FindOrCreateNode(wxTreeItemId parent, const wxString &label)
+{
+   if (!parent.IsOk())
+      return wxTreeItemId();
+
+   // Check if the node already exists
+   wxTreeItemIdValue cookie;
+   wxTreeItemId child = folderTree->GetFirstChild(parent, cookie);
+   while (child.IsOk())
+   {
+      if (folderTree->GetItemText(child) == label)
+      {
+         return child;
+      }
+      child = folderTree->GetNextChild(parent, cookie);
+   }
+
+   // Create new node
+   return folderTree->AppendItem(parent, label);
+}
+
+void FileExplorerTabContainer::AddEntry(const std::string &path)
+{
+   wxArrayString nodes = wxStringTokenize(path, FileSeparator);
+   if (nodes.IsEmpty())
+      return;
+
+   wxTreeItemId parent = (nodes[0] == RootTree) ? root : wxTreeItemId();
+   wxTreeItemId current = parent;
+
+   for (size_t i = 1; i < nodes.GetCount(); ++i)
+   {
+      current = FindOrCreateNode(current, nodes[i]);
    }
 }
