@@ -60,7 +60,7 @@ enum FixedID{
    CreateFolderInCurrentSelection,
    DeleteCurrentFile,
    RenameFile,
-   OpenFile,
+   OpenFileOn,
    CloneFile,
    ExpandSubFolder,
    LastFixedId,

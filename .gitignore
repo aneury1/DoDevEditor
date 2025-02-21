@@ -40,3 +40,4 @@ build/
 config/
 obj/
 .vs/
+build-mingw32/

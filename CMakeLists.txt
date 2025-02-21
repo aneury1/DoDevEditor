@@ -5,6 +5,16 @@ set(PROJECT_NAME DoDevEditor)
 project(${PROJECT_NAME} LANGUAGES CXX)
 # set(CMAKE_BUILD_TYPE Debug)
 
+set(CMAKE_WIN32_MINGW FALSE)
+
+
+if(CMAKE_WIN32_MINGW)
+    # Include the toolchain setup file
+    include(cmake/mingw32.cmake)
+    # Apply the toolchain settings
+    setup_mingw_toolchain()
+endif()
+
 set(FETCH_LIBGIT_DEFINITIONS TRUE)
 set(COMPILE_CLANG_DEFINITIONS FALSE)
 
@@ -42,22 +52,24 @@ if(FETCH_WXWIDGET)
         GIT_REPOSITORY https://github.com/wxWidgets/wxWidgets.git
         GIT_TAG        v3.0.0  # Use the latest stable version
     )
-
     FetchContent_MakeAvailable(wxWidgets)
 endif()
 
-if(FETCH_JSON)
-    message("Fetching nlohmann version v3.11.2")
+
+if(CMAKE_WIN32_MINGW)
     include(FetchContent)
-   
+
     FetchContent_Declare(
-        nlohmann
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        # GIT_TAG        v3.11.2  # Use the latest stable version
+        libgit2
+        GIT_REPOSITORY https://github.com/libgit2/libgit2.git
+        GIT_TAG v1.7.1  # Change this to the latest version
     )
 
-    FetchContent_MakeAvailable(wxWidgets)
+    # Fetch and add libgit2
+    FetchContent_MakeAvailable(libgit2)
 endif()
+
+
 
 
 add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS)
@@ -82,56 +94,25 @@ include_directories(includes PUBLIC)
 ### Try static Compilation only, Above
 
 
-
-# Find the libgit2 package
-
-
-if(COMPILE_CLANG_DEFINITIONS)
-    set(CLANG_EXTERNAL_LIBS /usr/lib/llvm-18)
-    message("Using clang 18")
-    link_directories(${CLANG_EXTERNAL_LIBS}/lib)
-    include_directories(${CLANG_EXTERNAL_LIBS}/include)
-    #add_definitions(-DLLVM_ENABLE_ABI_BREAKING_CHECKS)
-    #add_definitions(${LLVM_DEFINITIONS})
-    # Find Clang installation
-    # find_package(LLVM REQUIRED CONFIG)
-    #if (LLVM_FOUND)
-    #else()
-    #   message("Clang not foundxx")
-    #endif()
-    set(CLANG_LIBRARIES
-        clangTooling
-        clangBasic
-        clangAST
-        clangASTMatchers
-        clangDriver
-        clangFrontend
-        clangFrontendTool
-        clangToolingCore
-        clangRewrite
-        clangRewriteFrontend
-        clangLex
-        clangParse
-        clangAnalysis
-    )
-
-
-else()
-    message("Clang not foundvy")
-    set(CLANG_LIBRARIES  )
-
+if(CMAKE_WIN32_MINGW)
+    add_compile_definitions(__lib_git_2_defined)
+    # Include the toolchain setup file
+    include(cmake/mingw32.cmake)
+    # Apply the toolchain settings
+    setup_mingw_toolchain()
 endif()
 
 
-
-
 add_executable(${PROJECT_NAME} ${SRCS})
+#cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/mingw-toolchain.cmake  ~/Documents/projects/myprojects/DoDevEditor/
+
 
 find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
 
 include(${wxWidgets_USE_FILE})
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} ${CLANG_LIBRARIES} tinyxml2 git2 )
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2) 
+# tinyxml2 git2 )
 
 # If needed, pass compiler/linker flags
 target_compile_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_CFLAGS_OTHER})
