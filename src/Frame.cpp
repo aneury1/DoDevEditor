@@ -79,6 +79,7 @@ void WindowFrame::AddDefaultEvent()
      if(tabContainer){
       auto dlt = new DLTViewerTab(tabContainer);
       tabContainer->addCustomEditorTab(dlt);
+      tabContainer->SetTitleToCurrentPage("--DLT File viewer:--");
      }
   };
 

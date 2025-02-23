@@ -42,6 +42,7 @@ static const char* file_filter =
     ;
 
 static const char *automotive_filter= "Covesa DLT File (*.dlt)|*.dlt|Binary File (*.bin)|*.bin";
+ 
 
 
 enum FixedID{

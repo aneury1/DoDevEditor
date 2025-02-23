@@ -9,6 +9,9 @@
 
 struct DLTInformation{
   int index;
+  std::string timestamp;
+  std::string apid;
+  std::string context;
   std::string headerText;
   std::string payload;
 };
@@ -17,13 +20,17 @@ std::vector<DLTInformation> parseDLTFile(const std::string file);
 
 struct DLTViewerTab : public EditorTab{
     
-
     wxBoxSizer *sizer;
     wxStaticText *label;
     wxPanel* optionPanel;
     wxButton* openDLTFile;
     wxListCtrl *dltentries;
-
+    wxCheckListBox* apid;
+    // wxCheckListBox* ctid;
+  
+    wxPanel *viewerInteralPanel;
+    wxBoxSizer *viewerInteralPanelSizer;
+    wxPanel *opionsPanel;
 
     DLTViewerTab(wxWindow *parent);
 

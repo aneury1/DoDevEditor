@@ -8,6 +8,10 @@
 #include "constant.h"
 ///#include <system.h>
 #include <stdlib.h>
+#include <iostream>
+#include <regex>
+#include <string>
+
 
 enum class TTYTerminal{
     Konsole,
@@ -205,5 +209,23 @@ static Response OpenFileDialog(wxWindow *parent, std::string &file, const char *
     }
     return Response::Error;
 }
+
+
+static inline bool validateExpression(std::string text, std::string regexPattern) {
+    try {
+        // Create a regex object from the provided pattern
+        std::regex pattern(regexPattern);
+        
+        // Use regex_match to check if the entire text matches the pattern
+        return std::regex_match(text, pattern);
+    }
+    catch (const std::regex_error& e) {
+        // Handle invalid regex pattern
+        std::cerr << "Regex error: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+
 
 #endif ///__UTILS_H_DEFINED

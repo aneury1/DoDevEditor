@@ -31,6 +31,7 @@ std::vector<DLTInformation> parseDLTFile(const std::string source)
         }
         for (int num = begin; num < end; num++)
         {
+
             if (dlt_file_message(&file, num, vflag) < DLT_RETURN_OK)
                 continue;
 
@@ -41,6 +42,17 @@ std::vector<DLTInformation> parseDLTFile(const std::string source)
                 if (dlt_message_print_hex(&(file.msg), text, DLT_CONVERT_TEXTBUFSIZE, vflag) < DLT_RETURN_OK)
                     continue;
             }
+            
+            {
+                printf("Here only\n");
+                DltMessage msg;
+                dlt_message_init(&msg, vflag);
+                char text[DLT_CONVERT_TEXTBUFSIZE + 1] = {0x00};
+                 dlt_message_header(&file.msg,  text, DLT_CONVERT_TEXTBUFSIZE, vflag);
+                 dlt_message_print_header(&file.msg,  text, DLT_CONVERT_TEXTBUFSIZE, vflag);
+                
+            }
+            if(1)
             {
                 printf("\n%d ", num);
                 char texth[DLT_CONVERT_TEXTBUFSIZE + 1] = {0x00};
@@ -55,6 +67,11 @@ std::vector<DLTInformation> parseDLTFile(const std::string source)
 
                 printf("[%s]\n", text);
                 DLTInformation entry;
+
+                entry.timestamp = std::to_string(file.msg.storageheader->microseconds)+
+                " "+std::to_string(file.msg.storageheader->seconds);
+                entry.apid = file.msg.extendedheader->apid;
+                entry.context = file.msg.extendedheader->ctid;
                 entry.headerText = texth;
                 entry.payload = text;
                 entry.index = num;
@@ -86,14 +103,29 @@ Response DLTViewerTab::saveDocument()
 {
     return Response::Success;
 }
-
+#include <map>
 Response DLTViewerTab::openFile(std::string filepath)
 {
     auto dltContent = parseDLTFile(filepath);
+    
+    std::map<std::string, bool> apids;
+
+    apid->Clear();
+    dltentries->DeleteAllItems();
     for(auto it : dltContent){
       long index = dltentries->InsertItem(dltentries->GetItemCount(), std::to_string(it.index).c_str());
-      dltentries->SetItem(index, 1, it.headerText);
-      dltentries->SetItem(index, 2, it.payload);
+      ///dltentries->SetItem(index, 1, it.headerText);
+      if(apids[it.apid]==false)
+         apids[it.apid]=true;
+      if(!apids[it.apid])
+         apid->Append(it.apid);
+      dltentries->SetItem(index, 1, it.timestamp);
+      dltentries->SetItem(index, 2, it.apid);
+      dltentries->SetItem(index, 3, it.context);
+      dltentries->SetItem(index, 4, it.payload);
+      dltentries->SetItemBackgroundColour(index, 
+      validateExpression(it.payload, ".*hello.*")?
+      wxColour(255, 200, 200):*wxWHITE); 
     }
     if(dltContent.size()>0)
         return Response::Success;
@@ -107,14 +139,34 @@ DLTViewerTab::DLTViewerTab(wxWindow *parent) : EditorTab(parent)
 
     dltentries = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT);
     dltentries->InsertColumn(0, "Index", wxLIST_FORMAT_LEFT, 150);
-    dltentries->InsertColumn(1, "Header", wxLIST_FORMAT_LEFT, 400);
-    dltentries->InsertColumn(2, "payload", wxLIST_FORMAT_LEFT, 500);
+    dltentries->InsertColumn(1, "TIMESTAMP", wxLIST_FORMAT_LEFT, 200);
+    dltentries->InsertColumn(2, "APID", wxLIST_FORMAT_LEFT, 100);
+    dltentries->InsertColumn(3, "CONTEXT", wxLIST_FORMAT_LEFT, 100);
+    dltentries->InsertColumn(4, "payload", wxLIST_FORMAT_LEFT, 600);
 
     optionPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
     openDLTFile = new wxButton(optionPanel, OpenDLTFile, wxT("Open a DLT File(read only, not filtering)"));
+   
+   
+   
     wxBoxSizer *efimerus = new wxBoxSizer(wxHORIZONTAL);
-    efimerus->Add(openDLTFile, 1, wxEXPAND | wxALL);
+    efimerus->Add(openDLTFile, 0,   wxALL);
+        wxArrayString items;
+      ///          items.Add("Item 1");
+     ///   items.Add("Item 2");
+     ///   items.Add("Item 3");
+    ///    items.Add("Item 4");
+    apid = new wxCheckListBox(optionPanel, wxID_ANY, wxDefaultPosition, wxSize(200,48), items);
+    efimerus->Add(apid, 0,   wxALL);
+    
+    wxButton* filterBySelection = new wxButton(optionPanel, wxID_ANY, wxT("Filter By selection"));
+    efimerus->Add(filterBySelection, 0,   wxALL);
+
     optionPanel->SetSizer(efimerus);
+
+
+
+
 
     Bind(wxEVT_BUTTON, [this](wxCommandEvent &event)
          { 
@@ -129,3 +181,18 @@ DLTViewerTab::DLTViewerTab(wxWindow *parent) : EditorTab(parent)
 
     SetSizer(sizer);
 }
+
+
+#if 0 
+    void OnGetSelection(wxCommandEvent&) {
+        wxArrayInt selections;
+        listBox->GetSelections(selections);
+
+        wxString selectedItems;
+        for (size_t i = 0; i < selections.size(); ++i) {
+            selectedItems += listBox->GetString(selections[i]) + "\n";
+        }
+
+        wxMessageBox("Selected Items:\n" + selectedItems, "Selection");
+    }
+#endif

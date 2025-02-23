@@ -65,7 +65,14 @@ static inline wxMenu *create_automotive_menu_entries()
  
     return menu;
 }
-
+static inline wxMenu *create_extra_menu_entries()
+{
+    wxMenu *menu = new wxMenu();
+    menu->Append(AddDLTViewer, "Open CSV (READ ONLY MODE)", " ");
+    menu->AppendSeparator();
+ 
+    return menu;
+}
 
 
 static wxMenuBar *CreateMenuBarAndOptions()
@@ -91,7 +98,10 @@ static wxMenuBar *CreateMenuBarAndOptions()
       auto automotive = create_automotive_menu_entries();
       if(automotive)
          menubar->Append(automotive, "&Automotive DEV");
-         
+
+      auto extra = create_extra_menu_entries();
+      if(extra)
+         menubar->Append(extra, "&Extra Options");  
    }
    
    return menubar;
