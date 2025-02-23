@@ -110,3 +110,11 @@ void TabContainer::SetDataToCurrentContainer(std::vector<uint8_t> da)
       currentTab->setData(da);
    }
 }
+
+void TabContainer::addCustomEditorTab(EditorTab *tab){
+   auto panel = tab;
+   if(tab){
+      editorTabs->AddPage(panel, "  ", true);
+      currentTab = panel;
+   }
+}

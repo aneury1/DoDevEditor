@@ -103,15 +103,29 @@ if(CMAKE_WIN32_MINGW)
 endif()
 
 
+find_package(Python3 COMPONENTS Development REQUIRED)
+
+
+
 add_executable(${PROJECT_NAME} ${SRCS})
 #cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/mingw-toolchain.cmake  ~/Documents/projects/myprojects/DoDevEditor/
+
+
+
+target_include_directories(${PROJECT_NAME}  PRIVATE ${Python3_INCLUDE_DIRS})
+ 
+
+message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
+message(STATUS "Python library: ${Python3_LIBRARIES}")
+
+
 
 
 find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
 
 include(${wxWidgets_USE_FILE})
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2) 
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2  ${Python3_LIBRARIES} dlt) 
 # tinyxml2 git2 )
 
 # If needed, pass compiler/linker flags

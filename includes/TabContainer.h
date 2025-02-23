@@ -30,6 +30,8 @@ struct TabContainer : public wxPanel{
 
     void SetDataToCurrentContainer(std::vector<uint8_t> da);
 
+    void addCustomEditorTab(EditorTab *tab);
+
     EditorTab *GetCurrentTab(){
         return currentTab;
     }

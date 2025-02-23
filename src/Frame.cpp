@@ -3,6 +3,7 @@
 #include "MenubarOptions.h"
 #include "constant.h"
 #include "utils.h"
+#include "DLTViewer.h"
 
 WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
 {
@@ -22,6 +23,7 @@ WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, ViewFileExplorer);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, ViewGitExplorer);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, ViewExecPanel);
+  Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, AddDLTViewer);
 }
 #include <mutex>
 #include <thread>
@@ -73,12 +75,19 @@ void WindowFrame::AddDefaultEvent()
      GetTerminal();
   };
 
+  auto openDLTViewer=[this](WindowFrame *frame){
+     if(tabContainer){
+      auto dlt = new DLTViewerTab(tabContainer);
+      tabContainer->addCustomEditorTab(dlt);
+     }
+  };
 
-  AddCMDCallback(wxID_NEW, newEmptyFile);
-  AddCMDCallback(wxID_OPEN, openExistingFile);
-  AddCMDCallback(OpenFolder, openFolder);
-  AddCMDCallback(wxID_SAVE, saveCurrentFile);
+  AddCMDCallback(wxID_NEW     , newEmptyFile);
+  AddCMDCallback(wxID_OPEN    , openExistingFile);
+  AddCMDCallback(OpenFolder   , openFolder);
+  AddCMDCallback(wxID_SAVE    , saveCurrentFile);
   AddCMDCallback(ViewExecPanel, openTerminal);
+  AddCMDCallback(AddDLTViewer , openDLTViewer);
 
 }
 

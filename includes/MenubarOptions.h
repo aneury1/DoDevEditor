@@ -56,6 +56,17 @@ static inline wxMenu *create_view_menu_entries()
     return menu;
 }
 
+static inline wxMenu *create_automotive_menu_entries()
+{
+    wxMenu *menu = new wxMenu();
+    menu->Append(AddDLTViewer, "Open DLT Panel on Editor(READ ONLY MODE)", " ");
+    menu->Append(wxID_ANY, "Open CAN Protocol Viewer(NOT IMPLEMENTED)", " ");
+    menu->AppendSeparator();
+ 
+    return menu;
+}
+
+
 
 static wxMenuBar *CreateMenuBarAndOptions()
 {
@@ -77,6 +88,9 @@ static wxMenuBar *CreateMenuBarAndOptions()
       auto action = create_action_menu();
       if(action)
          menubar->Append(action, "&Action");
+      auto automotive = create_automotive_menu_entries();
+      if(automotive)
+         menubar->Append(automotive, "&Automotive DEV");
          
    }
    

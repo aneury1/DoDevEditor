@@ -182,9 +182,9 @@ static std::string ReadFile(std::string file)
     return s;
 }
 
-static Response OpenFileDialog(wxWindow *parent, std::string &file)
+static Response OpenFileDialog(wxWindow *parent, std::string &file, const char *filter=nullptr)
 {
-    wxFileDialog openFileDialog(parent, "Open a file", "", "", file_filter,
+    wxFileDialog openFileDialog(parent, "Open a file", "", "",(filter!=nullptr?filter:file_filter),
                                 wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
     if (openFileDialog.ShowModal() == wxID_CANCEL)

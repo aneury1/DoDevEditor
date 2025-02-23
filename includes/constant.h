@@ -41,6 +41,8 @@ static const char* file_filter =
     "Binary File (*.bin)|*.bin"
     ;
 
+static const char *automotive_filter= "Covesa DLT File (*.dlt)|*.dlt|Binary File (*.bin)|*.bin";
+
 
 enum FixedID{
    First = wxID_LAST+3,
@@ -63,6 +65,8 @@ enum FixedID{
    OpenFileOn,
    CloneFile,
    ExpandSubFolder,
+   AddDLTViewer,
+   OpenDLTFile,
    LastFixedId,
 };
 
