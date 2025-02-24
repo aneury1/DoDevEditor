@@ -4,6 +4,7 @@
 #include "constant.h"
 #include "utils.h"
 #include "DLTViewer.h"
+#include "CSVEditor.h"
 
 WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
 {
@@ -24,6 +25,7 @@ WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, ViewGitExplorer);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, ViewExecPanel);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, AddDLTViewer);
+  Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, AddCSVViewer);
 }
 #include <mutex>
 #include <thread>
@@ -83,13 +85,21 @@ void WindowFrame::AddDefaultEvent()
      }
   };
 
+  auto openCSVViewer=[this](WindowFrame *frame){
+     if(tabContainer){
+      auto csv = new CSVEditor(tabContainer);
+      tabContainer->addCustomEditorTab(csv);
+      tabContainer->SetTitleToCurrentPage("--CSV Editor--");
+     }
+  };
+
   AddCMDCallback(wxID_NEW     , newEmptyFile);
   AddCMDCallback(wxID_OPEN    , openExistingFile);
   AddCMDCallback(OpenFolder   , openFolder);
   AddCMDCallback(wxID_SAVE    , saveCurrentFile);
   AddCMDCallback(ViewExecPanel, openTerminal);
   AddCMDCallback(AddDLTViewer , openDLTViewer);
-
+  AddCMDCallback(AddCSVViewer , openCSVViewer);
 }
 
 void WindowFrame::SetDefaultPanel()

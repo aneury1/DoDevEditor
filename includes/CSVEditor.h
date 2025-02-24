@@ -8,9 +8,11 @@
 struct CSVEditor : public EditorTab{
 
 
+    wxBoxSizer* sizer;
     wxGrid* grid;
+    wxButton *openFileButton;
 
-    CSVEditor(wxWindow *parent) : EditorTab(parent){}
+    CSVEditor(wxWindow *parent);/// : EditorTab(parent){}
    
     virtual ~CSVEditor(){}
 

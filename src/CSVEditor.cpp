@@ -5,6 +5,9 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+
+#include "utils.h"
+
 namespace
 {
 
@@ -57,6 +60,24 @@ namespace
 
 }
 
+CSVEditor::CSVEditor(wxWindow *parent) : EditorTab(parent)
+{
+    sizer= new wxBoxSizer(wxVERTICAL);
+    openFileButton = new wxButton(this, OpenCSVFile,wxT("Open CSV File"));
+    sizer->Add(openFileButton, 0);
+   
+       Bind(wxEVT_BUTTON, [this](wxCommandEvent &event)
+         { 
+        std::string path;
+         if(OpenFileDialog(this, path, csv_filter)==Response::Success && path.size()>0){
+              this->openFile(path);
+        } }, OpenCSVFile);
+   
+   
+    SetSizer(sizer);   
+}
+
+
 int CSVEditor::getTypeOfEditor()
 {
     return 0;
@@ -81,7 +102,7 @@ Response CSVEditor::saveDocument() {
 
 Response CSVEditor::openFile(std::string filepath)
 {
-    auto el = parseCSV("./sample.csv");
+    auto el = parseCSV(filepath.size()<=0?"./sample.csv":filepath.c_str());
     int rows = el.size();
     int cols = 0;
     if (rows > 0)
@@ -90,8 +111,8 @@ Response CSVEditor::openFile(std::string filepath)
     }
     grid = new wxGrid(this,
                       -1,
-                      wxPoint(0, 0),
-                      wxSize(400, 300));
+                      wxDefaultPosition,
+                      wxSize(800,600));
     grid->CreateGrid(rows, cols);
     grid->SetRowSize(0, 60);
     grid->SetColSize(0, 120);
@@ -105,5 +126,8 @@ Response CSVEditor::openFile(std::string filepath)
             grid->SetCellValue(r, c, str.c_str());
         }
     }
+    sizer->Add(grid, 1, wxEXPAND|wxALL);
+    Refresh();
+
     return Response::Success;
 }

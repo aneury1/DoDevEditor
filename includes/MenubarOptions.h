@@ -68,7 +68,7 @@ static inline wxMenu *create_automotive_menu_entries()
 static inline wxMenu *create_extra_menu_entries()
 {
     wxMenu *menu = new wxMenu();
-    menu->Append(AddDLTViewer, "Open CSV (READ ONLY MODE)", " ");
+    menu->Append(AddCSVViewer, "Open CSV (READ ONLY MODE)", " ");
     menu->AppendSeparator();
  
     return menu;
