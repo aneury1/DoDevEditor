@@ -103,6 +103,18 @@ Response DLTViewerTab::saveDocument()
 {
     return Response::Success;
 }
+
+
+wxColour getBackgroundByAPIDHardcode(std::string path)
+{
+////"KER","SYS","WIF","CON"
+   if(path == "KERN")return *wxRED;
+   if(path == "CON")return *wxGREEN;
+   if(path == "SYS")return *wxCYAN;
+   if(path == "WIF")return *wxYELLOW;
+   return *wxWHITE;
+}
+
 #include <map>
 Response DLTViewerTab::openFile(std::string filepath)
 {
@@ -115,17 +127,20 @@ Response DLTViewerTab::openFile(std::string filepath)
     for(auto it : dltContent){
       long index = dltentries->InsertItem(dltentries->GetItemCount(), std::to_string(it.index).c_str());
       ///dltentries->SetItem(index, 1, it.headerText);
-      if(apids[it.apid]==false)
-         apids[it.apid]=true;
+      
       if(!apids[it.apid])
-         apid->Append(it.apid);
+        apid->Append(it.apid);
+      apids[it.apid]=true;
       dltentries->SetItem(index, 1, it.timestamp);
       dltentries->SetItem(index, 2, it.apid);
       dltentries->SetItem(index, 3, it.context);
       dltentries->SetItem(index, 4, it.payload);
-      dltentries->SetItemBackgroundColour(index, 
-      validateExpression(it.payload, ".*hello.*")?
-      wxColour(255, 200, 200):*wxWHITE); 
+      
+      dltentries->SetItemBackgroundColour(index,getBackgroundByAPIDHardcode(it.apid));
+     
+     // dltentries->SetItemBackgroundColour(index, 
+     // validateExpression(it.payload, ".*hello.*")?
+     // wxColour(255, 200, 200):*wxWHITE); 
     }
     if(dltContent.size()>0)
         return Response::Success;
@@ -151,7 +166,7 @@ DLTViewerTab::DLTViewerTab(wxWindow *parent) : EditorTab(parent)
    
     wxBoxSizer *efimerus = new wxBoxSizer(wxHORIZONTAL);
     efimerus->Add(openDLTFile, 0,   wxALL);
-        wxArrayString items;
+    wxArrayString items;
       ///          items.Add("Item 1");
      ///   items.Add("Item 2");
      ///   items.Add("Item 3");
@@ -163,10 +178,6 @@ DLTViewerTab::DLTViewerTab(wxWindow *parent) : EditorTab(parent)
     efimerus->Add(filterBySelection, 0,   wxALL);
 
     optionPanel->SetSizer(efimerus);
-
-
-
-
 
     Bind(wxEVT_BUTTON, [this](wxCommandEvent &event)
          { 
