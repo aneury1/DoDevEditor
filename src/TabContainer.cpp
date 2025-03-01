@@ -2,7 +2,7 @@
 #include "TextEditor.h"
 #include "utils.h"
 #include "frame.h"
-
+#include "Dialogs.h"
  
 
 TabContainer::TabContainer(wxWindow *parent) : wxPanel(parent, wxID_ANY)
@@ -118,3 +118,5 @@ void TabContainer::addCustomEditorTab(EditorTab *tab){
       currentTab = panel;
    }
 }
+
+ 

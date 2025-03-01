@@ -58,13 +58,11 @@ endif()
 
 if(CMAKE_WIN32_MINGW)
     include(FetchContent)
-
     FetchContent_Declare(
         libgit2
         GIT_REPOSITORY https://github.com/libgit2/libgit2.git
         GIT_TAG v1.7.1  # Change this to the latest version
     )
-
     # Fetch and add libgit2
     FetchContent_MakeAvailable(libgit2)
 endif()
@@ -102,24 +100,15 @@ if(CMAKE_WIN32_MINGW)
     setup_mingw_toolchain()
 endif()
 
-
 find_package(Python3 COMPONENTS Development REQUIRED)
-
-
 
 add_executable(${PROJECT_NAME} ${SRCS})
 #cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/mingw-toolchain.cmake  ~/Documents/projects/myprojects/DoDevEditor/
 
-
-
 target_include_directories(${PROJECT_NAME}  PRIVATE ${Python3_INCLUDE_DIRS})
  
-
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
 message(STATUS "Python library: ${Python3_LIBRARIES}")
-
-
-
 
 find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
 
@@ -132,29 +121,15 @@ target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2  ${Python3_LIB
 target_compile_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_CFLAGS_OTHER})
 target_link_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_LDFLAGS_OTHER})
 
-
-
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wwrite-strings")
    target_compile_options(${PROJECT_NAME} PRIVATE -Wwrite-strings)
 endif()
 
-
-
-list(
-        APPEND IncludesDirs 
-        PRIVATE includes
-    )
+list(APPEND IncludesDirs PRIVATE includes)
     
-if(USING_PLUGINS)
-    list(APPEND IncludesDirs PRIVATE ${CMAKE_SOURCE_DIR}/plugins-sdk)
-endif()
 
 target_include_directories(${PROJECT_NAME} BEFORE ${IncludesDirs})
-
-# set(PLUGIN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/plugins)
-
-# file(MAKE_DIRECTORY ${PLUGIN_OUTPUT_DIR})
 
 if(ENABLE_TESTING)
     message("Testing is enabled")

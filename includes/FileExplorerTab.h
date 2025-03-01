@@ -84,6 +84,9 @@ struct FileExplorerTabContainer : public wxPanel
     FileExplorerTabContainer(wxWindow *parent);
 
     static FileExplorerTabContainer *get();
+
+    std::set<std::string> GetFiles();
+
 };
 
 #endif /// __FILE_EXPLORER_TAB_H_DEFINED

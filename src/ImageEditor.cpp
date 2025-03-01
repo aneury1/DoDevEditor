@@ -6,6 +6,8 @@ ImageEditor::ImageEditor(wxWindow* parent)
    
 }
     
+
+
 int ImageEditor::getTypeOfEditor(){
     return 0;
 }

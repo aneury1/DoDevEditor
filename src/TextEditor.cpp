@@ -34,10 +34,12 @@ void cpp(wxStyledTextCtrl *textEditor)
    textEditor->StyleSetForeground(wxSTC_C_PREPROCESSOR, otherBlue);
 
    textEditor->StyleSetSize(wxSTC_C_PREPROCESSOR, 40);
-
+   wxFont dfont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+   wxFont pfont(18, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
    // Fonts
-   textEditor->StyleSetFont(wxSTC_C_DEFAULT, wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
-   textEditor->StyleSetFont(wxSTC_C_PREPROCESSOR, wxFont(13, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+
+   textEditor->StyleSetFont(wxSTC_C_DEFAULT, dfont);
+   textEditor->StyleSetFont(wxSTC_C_PREPROCESSOR, pfont);
 
    // Enable line numbers
    textEditor->SetMarginType(0, wxSTC_MARGIN_NUMBER);
@@ -51,7 +53,33 @@ void cpp(wxStyledTextCtrl *textEditor)
 
    textEditor->StyleSetItalic(wxSTC_C_PREPROCESSOR, true);
    textEditor->StyleSetUnderline(wxSTC_C_PREPROCESSOR, true);
+   
+   textEditor->StyleSetBackground(wxSTC_STYLE_DEFAULT, wxColour(0x43,0x43,0x43,255));
+   textEditor->StyleSetBackground(wxSTC_STYLE_LINENUMBER, wxColour(0x70,0x73,0x73,255));
    textEditor->SetBackgroundColour(*wxBLACK);
+   textEditor->SetWhitespaceBackground(false,wxColour(0x43,0x43,0x43,255));
+
+
+///Experiments.
+   textEditor->StyleSetBackground( wxSTC_MARK_BACKGROUND , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground(wxSTC_MARK_DOTDOTDOT, wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground(wxSTC_MARK_ARROWS , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground(wxSTC_MARK_PIXMAP , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground(wxSTC_MARK_FULLRECT , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground(wxSTC_MARK_LEFTRECT , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground(wxSTC_MARK_AVAILABLE , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground(wxSTC_MARK_UNDERLINE , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_MARK_RGBAIMAGE , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_MARK_BOOKMARK, wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_STYLE_LINENUMBER, wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_STYLE_BRACELIGHT , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_STYLE_BRACEBAD , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_STYLE_CONTROLCHAR , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_STYLE_INDENTGUIDE, wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_STYLE_CALLTIP, wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_STYLE_FOLDDISPLAYTEXT , wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_STYLE_LASTPREDEFINED, wxColour(0x70,0x73,0x73,255));
+   textEditor->StyleSetBackground( wxSTC_STYLE_MAX, wxColour(0x70,0x73,0x73,255));
 }
 
 TextEditor::TextEditor(wxWindow *parent) : EditorTab(parent)

@@ -35,6 +35,8 @@ struct TabContainer : public wxPanel{
     EditorTab *GetCurrentTab(){
         return currentTab;
     }
+
+    
    
 };
 

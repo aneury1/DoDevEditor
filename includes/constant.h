@@ -71,6 +71,12 @@ enum FixedID{
    OpenDLTFile,
    AddCSVViewer,
    OpenCSVFile,
+   AddDataServerEditor,
+   OnEnterClickedForOpenFile,
+
+
+   //// Accelerator must be place bellow to control it.
+   OpenFileAccelerator,   
    LastFixedId,
 };
 

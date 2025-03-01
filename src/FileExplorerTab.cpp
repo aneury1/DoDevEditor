@@ -209,7 +209,7 @@ Response FileExplorerTabContainer::OpenFolder()
    /// set_status_text("Opened folder: " + folderPath);
    return Response::Success;
 }
-
+#include "ParseHeaders.h"
 void FileExplorerTabContainer::PopulateFolderTree(const std::string &path, wxTreeItemId parent)
 {
 
@@ -244,7 +244,10 @@ void FileExplorerTabContainer::PopulateFolderTree(const std::string &path, wxTre
          info.size = 1000;
 
          AddEntry(fullPath.ToStdString() + "/00/000/000");
-
+         
+         if(fullPath.ToStdString().find_last_of(".h")!= std::string::npos)
+            ParseHeaderFile(fullPath.ToStdString());
+         
          explorer_files.insert(info);
          folderTree->AppendItem(parent, filename, 1);
       }
@@ -383,4 +386,14 @@ void FileExplorerTabContainer::AddEntry(const std::string &path)
    {
       current = FindOrCreateNode(current, nodes[i]);
    }
+}
+
+
+std::set<std::string> FileExplorerTabContainer::GetFiles(){
+   std::set<std::string> files;
+   for(auto it : explorer_files){
+      std::string pd = it.path+FileSeparator+it.file;
+      files.insert(pd);
+   }
+   return files;
 }

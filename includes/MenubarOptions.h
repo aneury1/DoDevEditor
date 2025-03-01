@@ -69,6 +69,7 @@ static inline wxMenu *create_extra_menu_entries()
 {
     wxMenu *menu = new wxMenu();
     menu->Append(AddCSVViewer, "Open CSV (READ ONLY MODE)", " ");
+    menu->Append(AddDataServerEditor, "Open Data Server Editor", " ");
     menu->AppendSeparator();
  
     return menu;

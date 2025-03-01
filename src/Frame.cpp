@@ -5,6 +5,8 @@
 #include "utils.h"
 #include "DLTViewer.h"
 #include "CSVEditor.h"
+#include "DataServerEditor.h"
+#include "Dialogs.h"
 
 WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
 {
@@ -26,6 +28,8 @@ WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, ViewExecPanel);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, AddDLTViewer);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, AddCSVViewer);
+  Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, AddDataServerEditor);
+  Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, OpenFileAccelerator);
 }
 #include <mutex>
 #include <thread>
@@ -93,6 +97,23 @@ void WindowFrame::AddDefaultEvent()
      }
   };
 
+    auto openDataServerEditor=[this](WindowFrame *frame){
+     if(tabContainer){
+      auto csv = new DataServerEditor(tabContainer);
+      tabContainer->addCustomEditorTab(csv);
+      tabContainer->SetTitleToCurrentPage("--DataServer Editor--");
+     }
+  };
+
+
+  auto openFileByAccelerator=[this](WindowFrame *frame){
+      auto files = this->explorerTabContainer->GetFiles();
+      OpenExistingFile file(frame, files);
+      if (file.ShowModal() == wxID_CANCEL){
+
+      }
+  };
+
   AddCMDCallback(wxID_NEW     , newEmptyFile);
   AddCMDCallback(wxID_OPEN    , openExistingFile);
   AddCMDCallback(OpenFolder   , openFolder);
@@ -100,6 +121,17 @@ void WindowFrame::AddDefaultEvent()
   AddCMDCallback(ViewExecPanel, openTerminal);
   AddCMDCallback(AddDLTViewer , openDLTViewer);
   AddCMDCallback(AddCSVViewer , openCSVViewer);
+  AddCMDCallback(AddDataServerEditor, openDataServerEditor);
+  AddCMDCallback(OpenFileAccelerator, openFileByAccelerator);
+
+
+  wxAcceleratorEntry entries[1];
+  entries[0].Set(wxACCEL_CTRL, (int)'P', OpenFileAccelerator);
+
+  wxAcceleratorTable accel(1, entries);
+  SetAcceleratorTable(accel);
+
+
 }
 
 void WindowFrame::SetDefaultPanel()

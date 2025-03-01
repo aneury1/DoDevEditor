@@ -1,5 +1,5 @@
 #include "GitPanel.h"
-// #define __lib_git_2_defined 0
+#define __lib_git_2_defined 0
 #ifdef __lib_git_2_defined
 #include <git2.h>
 #endif
