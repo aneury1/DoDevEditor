@@ -79,6 +79,7 @@
         "cfenv": "cpp",
         "valarray": "cpp",
         "variant": "cpp",
-        "netfwd": "cpp"
+        "netfwd": "cpp",
+        "complex": "cpp"
     }
 }
