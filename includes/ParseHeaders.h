@@ -7,6 +7,8 @@
 #include <string>
 
 static inline void ParseHeaderFile(const std::string& filename) {
+  
+    return ;
     std::ifstream file(filename);
     if (!file) {
         std::cerr << "Error: Could not open file!" << std::endl;

@@ -1,6 +1,7 @@
 #include <wx/imaglist.h>
 #include <wx/artprov.h>
 #include <wx/filename.h>
+#include "Settings.h"
 
 #include "utils.h"
 #include "TabContainer.h"
@@ -20,9 +21,14 @@ void FileExplorerTabContainer::CreateFileListPanel()
    listCtrl->InsertColumn(1, "Directory", wxLIST_FORMAT_LEFT, 200);
    listCtrl->InsertColumn(2, "size", wxLIST_FORMAT_LEFT, 100);
    listCtrl->InsertColumn(2, "last Modified", wxLIST_FORMAT_LEFT, 150);
+   listCtrl->SetBackgroundColour(defaultSettings.getPanelBG());
+   listCtrl->SetForegroundColour(defaultSettings.getPanelFG());
+
    sizer->Add(panelTitle, 0, wxEXPAND);
    sizer->Add(listCtrl, 1, wxEXPAND);
    fileListPanel->SetSizer(sizer);
+   fileListPanel->SetBackgroundColour(defaultSettings.getPanelBG());
+
 }
 void FileExplorerTabContainer::CreateFileTreePanel()
 {
@@ -41,7 +47,9 @@ void FileExplorerTabContainer::CreateFileTreePanel()
    imageList->Add(folderIcon);
    imageList->Add(fileIcon);
    folderTree->AssignImageList(imageList);
-
+   folderTree->SetBackgroundColour(defaultSettings.getPanelBG());
+   folderTree->SetForegroundColour(defaultSettings.getPanelFG());
+   fileTreePanel->SetBackgroundColour(defaultSettings.getPanelBG());
    fileTreePanel->SetSizer(explorerSizer);
 }
 
@@ -143,7 +151,9 @@ FileExplorerTabContainer::FileExplorerTabContainer(wxWindow *parent) : wxPanel(p
 {
    SetupPanel();
    AddEvents();
-   SetBackgroundColour(wxColour(200, 200, 0, 255));
+   SetBackgroundColour(defaultSettings.getPanelBG());
+  
+   //SetBackgroundColour(wxColour(200, 200, 0, 255));
 }
 
 FileExplorerTabContainer *FileExplorerTabContainer::get()

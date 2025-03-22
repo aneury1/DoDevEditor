@@ -1,3 +1,6 @@
+
+#include <mutex>
+#include <thread>
 #include "frame.h"
 #include "TabContainer.h"
 #include "MenubarOptions.h"
@@ -7,14 +10,25 @@
 #include "CSVEditor.h"
 #include "DataServerEditor.h"
 #include "Dialogs.h"
+#include "Settings.h"
+
 
 WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
 {
+  ///SetBackgroundColour(*wxBLACK);
   auiManager.SetManagedWindow(this);
+ // auiManager.SetBackgroundColour(defaultSettings.getPanelBG());
   AddDefaultEvent();
   SetDefaultPanel();
   SetUpMenu();
   Maximize();
+ 
+  SetBackgroundColour(defaultSettings.getPanelBG());
+  auto ptr = auiManager.GetManagedWindow();
+  ptr->SetBackgroundColour(*wxBLACK);
+  ptr->Update();
+  ptr->Refresh();
+  auiManager.Update();
   Bind(wxEVT_MENU, &WindowFrame::OnExit, this, wxID_EXIT);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, wxID_NEW);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, wxID_OPEN);
@@ -31,8 +45,7 @@ WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, AddDataServerEditor);
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, OpenFileAccelerator);
 }
-#include <mutex>
-#include <thread>
+
 void WindowFrame::AddDefaultEvent()
 {
   auto newEmptyFile=[this](WindowFrame *frame){
@@ -150,6 +163,13 @@ void WindowFrame::SetDefaultPanel()
   add_panel(&explorerpanel);
 
   auiManager.Update();
+  auto ptr = auiManager.GetManagedWindow();
+  ptr->SetBackgroundColour(*wxBLACK);
+  ptr->Update();
+  ptr->Refresh();
+  auiManager.Update();
+
+
 }
 
 void WindowFrame::add_panel(panel_info *panel)

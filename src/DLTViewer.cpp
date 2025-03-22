@@ -23,17 +23,20 @@ std::vector<DLTInformation> parseDLTFile(const std::string source)
     if (dlt_file_open(&file, source.c_str(), vflag) >= DLT_RETURN_OK)
     {
         end = file.counter_total;
+        std::cout <<"File Count=>"<< file.counter<<"\n";
         // printf("Total number of messages: %d %d %d\n", file.counter_total, file.counter, file.index);
         /// printf("Building index...\n");
         while (dlt_file_read(&file, vflag) >= DLT_RETURN_OK)
         {
             end++;
         }
+        std::cout <<"File Counter=>"<< file.counter_total<<"   end"<<end<<"\n";
+
         for (int num = begin; num < end; num++)
         {
 
             if (dlt_file_message(&file, num, vflag) < DLT_RETURN_OK)
-                continue;
+                 continue;
 
             if (0)
             {

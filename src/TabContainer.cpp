@@ -1,3 +1,4 @@
+#include "Settings.h"
 #include "TabContainer.h"
 #include "TextEditor.h"
 #include "utils.h"
@@ -10,12 +11,17 @@ TabContainer::TabContainer(wxWindow *parent) : wxPanel(parent, wxID_ANY)
    wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
    editorTabs = new wxAuiNotebook(this, CloseTab, wxDefaultPosition, wxDefaultSize,
                                   wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ACTIVE_TAB);
+ 
+   editorTabs->SetBackgroundColour(defaultSettings.getPanelBG());
+   editorTabs->SetForegroundColour(defaultSettings.getPanelFG());
    toolPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition);
-   toolPanel->SetBackgroundColour(wxColour(255, 255, 255, 255));
+   toolPanel->SetBackgroundColour(defaultSettings.getPanelBG());
    auto newTab = new wxButton(toolPanel, newEmptyTab, wxString("Add empty text"));
    wxBoxSizer *panel_tool_sizer = new wxBoxSizer(wxHORIZONTAL);
    panel_tool_sizer->Add(newTab, 0, wxEXPAND | wxALL);
    toolPanel->SetSizer(panel_tool_sizer);
+   SetBackgroundColour(defaultSettings.getPanelBG());
+   toolPanel->SetBackgroundColour(defaultSettings.getPanelBG());
    Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, &TabContainer::OnCloseTabEvent, this, CloseTab);
    Bind(wxEVT_BUTTON, [this](wxCommandEvent &event)
         { AddEmptyTextPage(event); }, newEmptyTab);
@@ -28,6 +34,8 @@ TabContainer::TabContainer(wxWindow *parent) : wxPanel(parent, wxID_ANY)
 void TabContainer::AddEmptyTextPage()
 {
    auto panel = new TextEditor(this);
+   panel->SetBackgroundColour(defaultSettings.getPanelBG());
+   panel->SetForegroundColour(defaultSettings.getPanelFG());
    editorTabs->AddPage(panel, "Untitled", true);
    currentTab = panel;
 }
@@ -49,6 +57,7 @@ void TabContainer::AddPage(const std::string file)
 void TabContainer::AddEmptyTextPage(wxCommandEvent &ev)
 {
    auto panel = new TextEditor(this);
+
    editorTabs->AddPage(panel, "Untitled", true);
    currentTab = panel;
 }

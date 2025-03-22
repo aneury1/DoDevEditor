@@ -17,6 +17,24 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
+//#include <type_traits>
+
+//template<typename T, typename O>
+//struct IsTypeOf {
+//    static constexpr bool value = std::is_same_v<T, O>;
+//};
+/*
+template<typename T, typename O>
+struct IsTypeOf {
+    static constexpr bool value = false;
+};
+
+// Specialization when T and O are the same type
+template<typename T>
+struct IsTypeOf<T, T> {
+    static constexpr bool value = true;
+};
+*/
 enum class TTYTerminal{
     Konsole,
     Gnome,
@@ -322,5 +340,12 @@ static inline std::string ExtractPathOnly(const std::string filePa){
     }
   return filePa;
 }
+
+template<typename T, typename O>
+struct IsTypeOf{
+    bool value = false;
+};
+ 
+
 
 #endif ///__UTILS_H_DEFINED
