@@ -346,6 +346,84 @@ struct IsTypeOf{
     bool value = false;
 };
  
+#include <iostream>
+#include <sstream>
+#include <cstdio>
+#include <memory>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <filesystem>
+
+static inline std::string getLatestClangFormat() {
+    std::vector<std::string> possible_versions = {
+        "clang-format", "clang-format-17", "clang-format-16", "clang-format-15",
+        "clang-format-14", "clang-format-13", "clang-format-12", "clang-format-11"
+    };
+
+    for (const auto& version : possible_versions) {
+        if (std::filesystem::exists(std::string("/usr/bin/") + version)) {
+            return version;
+        }
+    }
+
+    return "";
+}
+#include <iostream>
+#include <fstream>
+#include <cstdlib>
+#include <sstream>
+
+
+static inline std::string formatWithClangFormat(const std::string& code, const std::string& clangVersion) {
+    // Create a temporary file
+    std::string filename = "/tmp/temp_code.cpp";
+    std::ofstream file(filename);
+    file << code;
+    file.close();
+
+    // Run clang-format
+    std::string command = clangVersion+ " -i " + filename;
+    system(command.c_str());
+
+    // Read formatted code
+    std::ifstream formattedFile(filename);
+    std::stringstream buffer;
+    buffer << formattedFile.rdbuf();
+    
+    return buffer.str();
+}
+
+
+
+static inline std::string thrashformatCodeWithClang(const std::string& code) {
+    std::string clangFormatCmd = getLatestClangFormat();
+  
+    std::string filename = "/tmp/temp_code.cpp";
+    std::ofstream file(filename);
+    file << code;
+    file.close();
+
+  
+    if (clangFormatCmd.empty()) {
+        return "Error: clang-format not found!";
+    }else{
+        std::cout<<"CLANG VERSION: "<< clangFormatCmd<<"\n";
+    }
+
+    // Open a pipe to clang-format
+    //FILE* pipe = popen((clangFormatCmd + "-i -style=llvm").c_str(), "w");
+    FILE* pipe = popen((clangFormatCmd + " -i "+ filename).c_str(), "w");
+    if (!pipe) {
+        return "Error: Failed to open clang-format pipe!";
+    }
+
+    // Send the code to clang-format
+    fwrite(code.c_str(), 1, code.size(), pipe);
+    pclose(pipe);
+
+    return code;
+}
 
 
 #endif ///__UTILS_H_DEFINED

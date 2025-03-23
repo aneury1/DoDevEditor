@@ -108,7 +108,7 @@ void cpp(wxStyledTextCtrl *textEditor)
 TextEditor::TextEditor(wxWindow *parent) : EditorTab(parent)
 {
    auto panel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(0, 10));
-   panel->SetBackgroundColour(wxColour(255,0,0,255));
+   panel->SetBackgroundColour(defaultSettings.getPanelBG());
    textEditor = new wxStyledTextCtrl(this, wxID_ANY);
    textEditor->SetMinSize(wxSize(800, 600));
    textEditor->StyleSetSize(wxSTC_STYLE_DEFAULT, 12);

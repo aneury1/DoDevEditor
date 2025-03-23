@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20.0)
 set(PROJECT_NAME DoDevEditor)
 project(${PROJECT_NAME} LANGUAGES CXX)
 # set(CMAKE_BUILD_TYPE Debug)
-
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_WIN32_MINGW FALSE)
 
 
@@ -42,6 +42,10 @@ endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+
+# Include Tree-sitter module
+include(TreeSitter)
 
 if(FETCH_WXWIDGET)
     message("Fetching wxWidget version v3.2.2")
@@ -114,11 +118,20 @@ find_package(wxWidgets REQUIRED COMPONENTS core base stc aui)
 
 include(${wxWidgets_USE_FILE})
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2  ${Python3_LIBRARIES} dlt) 
+find_package(wxWidgets REQUIRED COMPONENTS core base)
+
+include(${wxWidgets_USE_FILE})
+ 
+#set(TREE_SITTER_LIBRARY TreeSitter::Core TreeSitter::Cpp)
+
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2  ${Python3_LIBRARIES} dlt )# ${TREE_SITTER_LIBRARY}) 
+
 # tinyxml2 git2 )
 
 # If needed, pass compiler/linker flags
+
 target_compile_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_CFLAGS_OTHER})
+
 target_link_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_LDFLAGS_OTHER})
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
@@ -129,7 +142,7 @@ endif()
 list(APPEND IncludesDirs PRIVATE includes)
     
 
-target_include_directories(${PROJECT_NAME} BEFORE ${IncludesDirs})
+target_include_directories(${PROJECT_NAME} BEFORE ${IncludesDirs} )#${TREE_SITTER_INCLUDE_DIRS})
 
 if(ENABLE_TESTING)
     message("Testing is enabled")
