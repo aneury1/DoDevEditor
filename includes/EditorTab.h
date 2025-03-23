@@ -5,13 +5,15 @@
 #include <string>
 #include <stdint.h>
 #include "constant.h"
-
+#include <Settings.h>
 struct EditorTab: public wxPanel{    
    
     std::string filepath;
     bool is_file = false;
 
-    EditorTab(wxWindow *parent) : wxPanel(parent, wxID_ANY){}
+    EditorTab(wxWindow *parent) : wxPanel(parent, wxID_ANY){
+        SetBackgroundColour(defaultSettings.getPanelBG());
+    }
    
     virtual ~EditorTab(){}
 

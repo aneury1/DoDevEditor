@@ -1,4 +1,5 @@
 #include "GitPanel.h"
+#include "Settings.h"
 #define __lib_git_2_defined 0
 #ifdef __lib_git_2_defined
 #include <git2.h>
@@ -155,6 +156,20 @@ GitPanel::GitPanel(wxWindow *window) : wxPanel(window, wxID_ANY)
 
    wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
 
+   commits->SetBackgroundColour(defaultSettings.getPanelBG());
+   commits->SetForegroundColour(defaultSettings.getPanelFG());
+
+   commit_information->SetBackgroundColour(defaultSettings.getPanelBG());
+   commit_information->SetForegroundColour(defaultSettings.getPanelFG());
+
+   file_changed_in_this_commit->SetBackgroundColour(defaultSettings.getPanelBG());
+   file_changed_in_this_commit->SetForegroundColour(defaultSettings.getPanelFG());
+
+   text->SetForegroundColour(defaultSettings.getPanelFG());
+   ctext->SetForegroundColour(defaultSettings.getPanelFG());
+   xtext->SetForegroundColour(defaultSettings.getPanelFG());
+
+
    sizer->Add(text, 0, wxEXPAND | wxWEST, 10);
    sizer->Add(commits, 2, wxEXPAND | wxALL, 10);
    sizer->Add(ctext, 0, wxEXPAND | wxWEST, 10);
@@ -164,7 +179,7 @@ GitPanel::GitPanel(wxWindow *window) : wxPanel(window, wxID_ANY)
 
    // Bind the selection event to a handler
    commits->Bind(wxEVT_LISTBOX, &GitPanel::OnListBoxSelect, this);
-
+   SetBackgroundColour(defaultSettings.getPanelBG());
    SetSizer(sizer);
 }
 
@@ -207,6 +222,7 @@ void GitPanel::OnListBoxSelect(wxCommandEvent &event)
 
 void GitPanel::LoadCommitsInformationInFolder(const std::string &path)
 {
+   
 #ifdef __lib_git_2_defined
    const char *repo_path = path.c_str();
    git_repository *repo = nullptr;

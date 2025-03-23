@@ -75,10 +75,31 @@ static inline wxMenu *create_extra_menu_entries()
     return menu;
 }
 
+class CustomMenuBar : public wxMenuBar {
+public:
+    CustomMenuBar() : wxMenuBar() {}
+
+    void OnPaint(wxPaintEvent& event) {
+        wxPaintDC dc(this);
+        dc.SetBrush(wxBrush(wxColour(250, 150, 250))); // Dark Gray
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.DrawRectangle(GetClientRect());
+        event.Skip();
+    }
+
+private:
+    wxDECLARE_EVENT_TABLE();
+};
+
+wxBEGIN_EVENT_TABLE(CustomMenuBar, wxMenuBar)
+    EVT_PAINT(CustomMenuBar::OnPaint)
+wxEND_EVENT_TABLE()
+
+
 
 static wxMenuBar *CreateMenuBarAndOptions()
 {
-   auto menubar = new wxMenuBar();
+   auto menubar = new CustomMenuBar();
 
    if (menubar)
    {

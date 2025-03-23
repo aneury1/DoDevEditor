@@ -73,7 +73,8 @@ CSVEditor::CSVEditor(wxWindow *parent) : EditorTab(parent)
               this->openFile(path);
         } }, OpenCSVFile);
    
-   
+        SetBackgroundColour(defaultSettings.getPanelBG());
+  
     SetSizer(sizer);   
 }
 

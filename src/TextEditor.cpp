@@ -1,8 +1,11 @@
+#include "Settings.h"
 #include "TextEditor.h"
 #include "utils.h"
 
 void cpp(wxStyledTextCtrl *textEditor)
 {
+   wxColour bgColourDefault(defaultSettings.getEditorBG());
+   wxColour fgColourDefault(255,255,255,255);
    // Set the lexer for C++
    textEditor->SetLexer(wxSTC_LEX_CPP);
 
@@ -19,9 +22,9 @@ void cpp(wxStyledTextCtrl *textEditor)
    static wxColor blue("#080073");
    static wxColor red("#7d0c1a");
    static wxColor purple("#970d9e");
-   static wxColor otherBlue("#0d0f78");
+   static wxColor otherBlue("#007ACC");
    // Default styles
-   textEditor->StyleSetForeground(wxSTC_C_DEFAULT, *wxBLACK);
+   textEditor->StyleSetForeground(wxSTC_C_DEFAULT, fgColourDefault);
    textEditor->StyleSetForeground(wxSTC_C_COMMENT, *wxGREEN);
    textEditor->StyleSetForeground(wxSTC_C_COMMENTLINE, green);
    textEditor->StyleSetForeground(wxSTC_C_COMMENTDOC, green);
@@ -29,8 +32,8 @@ void cpp(wxStyledTextCtrl *textEditor)
    textEditor->StyleSetForeground(wxSTC_C_WORD, purple); // Keywords
    textEditor->StyleSetForeground(wxSTC_C_STRING, red);
    textEditor->StyleSetForeground(wxSTC_C_CHARACTER, red);
-   textEditor->StyleSetForeground(wxSTC_C_OPERATOR, *wxBLACK);
-   textEditor->StyleSetForeground(wxSTC_C_IDENTIFIER, *wxBLACK);
+   textEditor->StyleSetForeground(wxSTC_C_OPERATOR, fgColourDefault);
+   textEditor->StyleSetForeground(wxSTC_C_IDENTIFIER, fgColourDefault);
    textEditor->StyleSetForeground(wxSTC_C_PREPROCESSOR, otherBlue);
 
    textEditor->StyleSetSize(wxSTC_C_PREPROCESSOR, 40);
@@ -46,21 +49,41 @@ void cpp(wxStyledTextCtrl *textEditor)
    textEditor->SetMarginWidth(0, 50);
    textEditor->SetCaretPeriod(500);
    // textEditor->StyleSetBackground(wxSTC_STYLE_LINENUMBER, wxColour(230, 230, 230)); // Light gray background
-   textEditor->StyleSetForeground(wxSTC_STYLE_LINENUMBER, wxColour(0, 0, 0));
+   textEditor->StyleSetForeground(wxSTC_STYLE_LINENUMBER, fgColourDefault);
    textEditor->SetMarginBackground(0, *wxRED);
-   textEditor->SetCaretForeground(wxColour(255, 0, 0)); // Red caret
+   textEditor->SetCaretForeground(fgColourDefault); // Red caret
    textEditor->SetCaretWidth(100);
 
    textEditor->StyleSetItalic(wxSTC_C_PREPROCESSOR, true);
    textEditor->StyleSetUnderline(wxSTC_C_PREPROCESSOR, true);
    
-   textEditor->StyleSetBackground(wxSTC_STYLE_DEFAULT, wxColour(0x43,0x43,0x43,255));
+   textEditor->StyleSetBackground(wxSTC_STYLE_DEFAULT, bgColourDefault);
+   ////textEditor->SetSelForeground(true, wxColour(0xFF,0x43,0x43,255));
+   textEditor->SetSelBackground(true, wxColour(0x10,0xFF,0x43,255));
    textEditor->StyleSetBackground(wxSTC_STYLE_LINENUMBER, wxColour(0x70,0x73,0x73,255));
    textEditor->SetBackgroundColour(*wxBLACK);
-   textEditor->SetWhitespaceBackground(false,wxColour(0x43,0x43,0x43,255));
-
+   textEditor->SetWhitespaceBackground(false,bgColourDefault);
+   ///textEditor->SetCaretForeground(wxColour(0x70,0x73,0x73,255));
+   ///textEditor->IndicatorSetForeground(false,bgColourDefault);
+   textEditor->IndicatorSetHoverForeground(false,bgColourDefault);
+   ///textEditor->SetWhitespaceForeground(false,bgColourDefault);
+   textEditor->SetWhitespaceBackground(false,bgColourDefault);
+   textEditor->SetCaretLineBackground(bgColourDefault);
+   textEditor->CallTipSetBackground(bgColourDefault);
+   textEditor->SetFoldMarginColour(false,bgColourDefault);
+   textEditor->SetEdgeColour(bgColourDefault);
+   textEditor->MultiEdgeAddLine(1, wxColour(0x33,0x43,0x43,255));
+   textEditor->SetHotspotActiveBackground(false,bgColourDefault);
+   textEditor->SetAdditionalSelBackground(bgColourDefault);
+   textEditor->SetBackgroundColour(wxColour(244,0,0,255));
+   ///textEditor->SetAdditionalCaretForeground(bgColourDefault);
+   ///textEditor->StyleSetBackground(wxSTC_STYLE_DEFAULT, wxColour(30, 30, 30));
 
 ///Experiments.
+   for(int i =0;i<30;i++)
+   ///FF 25 25 26
+      textEditor->StyleSetBackground( i , bgColourDefault);
+   
    textEditor->StyleSetBackground( wxSTC_MARK_BACKGROUND , wxColour(0x70,0x73,0x73,255));
    textEditor->StyleSetBackground(wxSTC_MARK_DOTDOTDOT, wxColour(0x70,0x73,0x73,255));
    textEditor->StyleSetBackground(wxSTC_MARK_ARROWS , wxColour(0x70,0x73,0x73,255));
@@ -85,7 +108,7 @@ void cpp(wxStyledTextCtrl *textEditor)
 TextEditor::TextEditor(wxWindow *parent) : EditorTab(parent)
 {
    auto panel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(0, 10));
-   // panel->SetBackgroundColour(wxColour(255,0,0,255));
+   panel->SetBackgroundColour(defaultSettings.getPanelBG());
    textEditor = new wxStyledTextCtrl(this, wxID_ANY);
    textEditor->SetMinSize(wxSize(800, 600));
    textEditor->StyleSetSize(wxSTC_STYLE_DEFAULT, 12);
