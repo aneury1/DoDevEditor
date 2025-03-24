@@ -6,17 +6,16 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 # set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_WIN32_MINGW FALSE)
-
-
-if(CMAKE_WIN32_MINGW)
-    # Include the toolchain setup file
-    include(cmake/mingw32.cmake)
-    # Apply the toolchain settings
-    setup_mingw_toolchain()
-endif()
-
+set (CMAKE_CXX_STANDARD 17)
 set(FETCH_LIBGIT_DEFINITIONS TRUE)
 set(COMPILE_CLANG_DEFINITIONS FALSE)
+set(FETCH_TREE_SITTER FALSE)
+set(INCLUDE_TREE_SITTER FALSE)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+
+include(FetchContent)
 
 option(ENABLE_CLANG_TIDY "Enable clang-tidy" FALSE)
 option(ENABLE_COVERAGE "Enable code coverage" FALSE)
@@ -27,7 +26,14 @@ option(FETCH_JSON "Allow JSON" FALSE)
 option(USING_PLUGINS "Allow Insta" FALSE)
 option(COMPILE_CLANG_DEFINITIONS, "Allow clang-dev for cpp" ${COMPILE_CLANG_DEFINITIONS})
 
-set (CMAKE_CXX_STANDARD 17)
+
+
+if(CMAKE_WIN32_MINGW)
+    # Include the toolchain setup file
+    include(cmake/mingw32.cmake)
+    # Apply the toolchain settings
+    setup_mingw_toolchain()
+endif()
 
 
 if(ENABLE_CLANG_TIDY)
@@ -40,12 +46,38 @@ if (ENABLE_COVERAGE)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
 endif()
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(FETCH_TREE_SITTER)
+    include(FetchContent)
 
-# Include Tree-sitter module
-include(TreeSitter)
+    # Fetch Tree-sitter Core
+    FetchContent_Declare(
+        tree_sitter
+        GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter.git
+        GIT_TAG master
+    )
+    FetchContent_MakeAvailable(tree_sitter)
+
+    # Fetch Tree-sitter C++ Grammar
+    FetchContent_Declare(
+        tree_sitter_cpp
+        GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter-cpp.git
+        GIT_TAG master
+    )
+    FetchContent_MakeAvailable(tree_sitter_cpp)
+    add_compile_definitions(USE_TREE_SITTER=1) 
+   
+    set(TREE_SITTER_LIBRARY tree_sitter tree_sitter_cpp)
+elseif(INCLUDE_TREE_SITTER)
+   include(TreeSitter)
+   add_compile_definitions(USE_TREE_SITTER=1) 
+   set(TREE_SITTER_LIBRARY tree_sitter tree_sitter_cpp)
+
+else()
+    set(TREE_SITTER_LIBRARY tree_sitter tree_sitter_cpp)
+        
+    message("No three sitter setup")
+endif()
 
 if(FETCH_WXWIDGET)
     message("Fetching wxWidget version v3.2.2")
@@ -71,20 +103,14 @@ if(CMAKE_WIN32_MINGW)
     FetchContent_MakeAvailable(libgit2)
 endif()
 
-
-
-
 add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS)
 
 file(GLOB_RECURSE SRCS src/*.cpp)
 
 include_directories(includes PUBLIC)
 
-
-
 ### Try static Compilation only
 #set(wxWidgets_USE_STATIC ON)
-
 
 #find_package(wxWidgets REQUIRED COMPONENTS core base)
 
@@ -94,7 +120,6 @@ include_directories(includes PUBLIC)
 #    message(FATAL_ERROR "wxWidgets no encontrado")
 #endif()
 ### Try static Compilation only, Above
-
 
 if(CMAKE_WIN32_MINGW)
     add_compile_definitions(__lib_git_2_defined)
@@ -112,19 +137,26 @@ add_executable(${PROJECT_NAME} ${SRCS})
 target_include_directories(${PROJECT_NAME}  PRIVATE ${Python3_INCLUDE_DIRS})
  
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
+
 message(STATUS "Python library: ${Python3_LIBRARIES}")
 
 find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
 
 include(${wxWidgets_USE_FILE})
 
-find_package(wxWidgets REQUIRED COMPONENTS core base)
+find_package(wxWidgets REQUIRED COMPONENTS core base  stc aui)
 
 include(${wxWidgets_USE_FILE})
  
-#set(TREE_SITTER_LIBRARY TreeSitter::Core TreeSitter::Cpp)
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2  ${Python3_LIBRARIES} dlt )# ${TREE_SITTER_LIBRARY}) 
+
+target_link_libraries(${PROJECT_NAME}
+    ${wxWidgets_LIBRARIES} 
+    ${TREE_SITTER_LIBRARY} 
+    git2 
+    ${Python3_LIBRARIES}
+    dlt 
+    )
 
 # tinyxml2 git2 )
 
