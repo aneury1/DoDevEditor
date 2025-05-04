@@ -90,11 +90,9 @@ find_package(Python3 COMPONENTS Development REQUIRED)
 
 add_executable(${PROJECT_NAME} ${SRCS})
 #cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/mingw-toolchain.cmake  ~/Documents/projects/myprojects/DoDevEditor/
-
-target_include_directories(${PROJECT_NAME} PRIVATE ${Python3_INCLUDE_DIRS})
- 
-message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
-message(STATUS "Python library: ${Python3_LIBRARIES}")
+# target_include_directories(${PROJECT_NAME} PRIVATE ${Python3_INCLUDE_DIRS})
+# message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
+# message(STATUS "Python library: ${Python3_LIBRARIES}")
 
 find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
 
@@ -106,7 +104,11 @@ include(${wxWidgets_USE_FILE})
  
 #set(TREE_SITTER_LIBRARY TreeSitter::Core TreeSitter::Cpp)
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES})
+add_subdirectory(plugins)
+
+set(PluginManagerlib pluginManager)
+
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} ${PluginManagerlib})
 
 # tinyxml2 git2 )
 
