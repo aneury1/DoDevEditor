@@ -15,7 +15,7 @@ if(CMAKE_WIN32_MINGW)
     setup_mingw_toolchain()
 endif()
 
-set(FETCH_LIBGIT_DEFINITIONS TRUE)
+set(FETCH_LIBGIT_DEFINITIONS FALSE)
 set(COMPILE_CLANG_DEFINITIONS FALSE)
 
 option(ENABLE_CLANG_TIDY "Enable clang-tidy" FALSE)
@@ -45,31 +45,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
 # Include Tree-sitter module
-include(TreeSitter)
-
-if(FETCH_WXWIDGET)
-    message("Fetching wxWidget version v3.2.2")
-    include(FetchContent)
+# include(TreeSitter)
+include(wxwidgets)
+# if(FETCH_WXWIDGET)
+#     message("Fetching wxWidget version v3.2.2")
+#     include(FetchContent)
     # Fetch wxWidgets
-    FetchContent_Declare(
-        wxWidgets
-        GIT_REPOSITORY https://github.com/wxWidgets/wxWidgets.git
-        GIT_TAG        v3.0.0  # Use the latest stable version
-    )
-    FetchContent_MakeAvailable(wxWidgets)
-endif()
+#     FetchContent_Declare(
+#         wxWidgets
+#         GIT_REPOSITORY https://github.com/wxWidgets/wxWidgets.git
+#         GIT_TAG        v3.0.0  # Use the latest stable version
+#     )
+#     FetchContent_MakeAvailable(wxWidgets)
+# endif()
 
 
-if(CMAKE_WIN32_MINGW)
-    include(FetchContent)
-    FetchContent_Declare(
-        libgit2
-        GIT_REPOSITORY https://github.com/libgit2/libgit2.git
-        GIT_TAG v1.7.1  # Change this to the latest version
-    )
-    # Fetch and add libgit2
-    FetchContent_MakeAvailable(libgit2)
-endif()
+
 
 
 
@@ -95,21 +86,12 @@ include_directories(includes PUBLIC)
 #endif()
 ### Try static Compilation only, Above
 
-
-if(CMAKE_WIN32_MINGW)
-    add_compile_definitions(__lib_git_2_defined)
-    # Include the toolchain setup file
-    include(cmake/mingw32.cmake)
-    # Apply the toolchain settings
-    setup_mingw_toolchain()
-endif()
-
 find_package(Python3 COMPONENTS Development REQUIRED)
 
 add_executable(${PROJECT_NAME} ${SRCS})
 #cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/mingw-toolchain.cmake  ~/Documents/projects/myprojects/DoDevEditor/
 
-target_include_directories(${PROJECT_NAME}  PRIVATE ${Python3_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME} PRIVATE ${Python3_INCLUDE_DIRS})
  
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
 message(STATUS "Python library: ${Python3_LIBRARIES}")
@@ -124,7 +106,7 @@ include(${wxWidgets_USE_FILE})
  
 #set(TREE_SITTER_LIBRARY TreeSitter::Core TreeSitter::Cpp)
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2  ${Python3_LIBRARIES} dlt )# ${TREE_SITTER_LIBRARY}) 
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES})
 
 # tinyxml2 git2 )
 
