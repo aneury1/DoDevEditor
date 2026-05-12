@@ -44,8 +44,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
-# Include Tree-sitter module
-include(TreeSitter)
+ 
 
 if(FETCH_WXWIDGET)
     message("Fetching wxWidget version v3.2.2")
@@ -71,7 +70,10 @@ if(CMAKE_WIN32_MINGW)
     FetchContent_MakeAvailable(libgit2)
 endif()
 
+include(FetchContent)
+FetchContent_Declare(jsoncpp GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git GIT_TAG master)
 
+FetchContent_MakeAvailable(jsoncpp)
 
 
 add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS)
@@ -104,27 +106,24 @@ if(CMAKE_WIN32_MINGW)
     setup_mingw_toolchain()
 endif()
 
-find_package(Python3 COMPONENTS Development REQUIRED)
+ 
 
 add_executable(${PROJECT_NAME} ${SRCS})
 #cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/mingw-toolchain.cmake  ~/Documents/projects/myprojects/DoDevEditor/
 
-target_include_directories(${PROJECT_NAME}  PRIVATE ${Python3_INCLUDE_DIRS})
  
-message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
-message(STATUS "Python library: ${Python3_LIBRARIES}")
 
 find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
 
 include(${wxWidgets_USE_FILE})
 
-find_package(wxWidgets REQUIRED COMPONENTS core base)
+find_package(wxWidgets REQUIRED COMPONENTS core base stc aui)
 
 include(${wxWidgets_USE_FILE})
  
 #set(TREE_SITTER_LIBRARY TreeSitter::Core TreeSitter::Cpp)
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2  ${Python3_LIBRARIES} dlt )# ${TREE_SITTER_LIBRARY}) 
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES}  jsoncpp_lib  ) 
 
 # tinyxml2 git2 )
 
@@ -142,8 +141,8 @@ endif()
 list(APPEND IncludesDirs PRIVATE includes)
     
 
-target_include_directories(${PROJECT_NAME} BEFORE ${IncludesDirs} )#${TREE_SITTER_INCLUDE_DIRS})
-
+target_include_directories(${PROJECT_NAME} BEFORE ${IncludesDirs} )
+target_include_directories(${PROJECT_NAME} PRIVATE ${jsoncpp_SOURCE_DIR}/include)
 if(ENABLE_TESTING)
     message("Testing is enabled")
     enable_testing()
@@ -154,4 +153,3 @@ endif()
 include(CPack)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION /usr/bin)
-

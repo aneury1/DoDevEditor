@@ -1,0 +1,78 @@
+cmake_minimum_required(VERSION 3.20.0)
+
+# ──────────────────────────────────────────────────────────────
+#  Project declaration
+# ──────────────────────────────────────────────────────────────
+set(PROJECT_NAME DoDevEditor)
+project(${PROJECT_NAME} LANGUAGES CXX)
+
+# Extend the module search path BEFORE any include() calls
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+# ──────────────────────────────────────────────────────────────
+#  Build knobs (options + cache variables)
+# ──────────────────────────────────────────────────────────────
+include(Options)
+
+# ──────────────────────────────────────────────────────────────
+#  Compiler standard, warnings, sanitisers, coverage, tidy
+# ──────────────────────────────────────────────────────────────
+include(CompilerSettings)
+
+# ──────────────────────────────────────────────────────────────
+#  Platform / toolchain quirks  (MinGW, etc.)
+# ──────────────────────────────────────────────────────────────
+include(Platform)
+
+# ──────────────────────────────────────────────────────────────
+#  Third-party dependencies
+# ──────────────────────────────────────────────────────────────
+include(Dependencies)
+
+# ──────────────────────────────────────────────────────────────
+#  Sources & target
+# ──────────────────────────────────────────────────────────────
+file(GLOB_RECURSE SRCS CONFIGURE_DEPENDS src/*.cpp)
+
+add_executable(${PROJECT_NAME} ${SRCS})
+
+# ──────────────────────────────────────────────────────────────
+#  Include directories
+# ──────────────────────────────────────────────────────────────
+target_include_directories(${PROJECT_NAME}
+    PRIVATE
+        "${CMAKE_SOURCE_DIR}/includes"
+        ${Python3_INCLUDE_DIRS}
+)
+
+# ──────────────────────────────────────────────────────────────
+#  Link libraries
+# ──────────────────────────────────────────────────────────────
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+        ${wxWidgets_LIBRARIES}
+        ${Python3_LIBRARIES}
+        git2
+        dlt
+)
+
+# ──────────────────────────────────────────────────────────────
+#  Per-target compiler / linker flags coming from pkg-config
+# ──────────────────────────────────────────────────────────────
+target_compile_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_CFLAGS_OTHER})
+target_link_options(${PROJECT_NAME}    PRIVATE ${LIBGIT2_LDFLAGS_OTHER})
+
+# ──────────────────────────────────────────────────────────────
+#  Optional test suite
+# ──────────────────────────────────────────────────────────────
+if(ENABLE_TESTING)
+    message(STATUS "[Testing] CTest enabled")
+    enable_testing()
+    include(CTest)
+    add_subdirectory(test)
+endif()
+
+# ──────────────────────────────────────────────────────────────
+#  Install & packaging
+# ──────────────────────────────────────────────────────────────
+include(Install)

@@ -41,3 +41,4 @@ config/
 obj/
 .vs/
 build-mingw32/
+.ignored_doc
