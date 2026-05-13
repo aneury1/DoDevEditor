@@ -1,6 +1,7 @@
 #ifndef JsonStyledTextCtrl_defined
 #define JsonStyledTextCtrl_defined
 
+#include <fstream>
 #include <wx/wx.h>
 #include <wx/stc/stc.h>
 #include <json/json.h>
@@ -18,6 +19,29 @@ public:
         Bind(wxEVT_STC_CHARADDED, &JsonStyledTextCtrl::OnCharAdded, this);
         Bind(wxEVT_KEY_DOWN, &JsonStyledTextCtrl::OnKeyDown, this);
     }
+
+    void OpenFile(const wxString& path)
+    {
+            std::fstream stream(path.c_str(), std::ios::in | std::ios::binary);
+
+            if (!stream)
+            {
+                // handle error
+                return;
+            }
+
+            stream.seekg(0, std::ios::end);
+            std::streamsize len = stream.tellg();
+            stream.seekg(0, std::ios::beg);
+
+            char* ptr = new char[len];
+
+            stream.read(ptr, len);
+            SetText(ptr);
+
+            delete[] ptr;
+    }
+
 
     void ApplyTheme(const Json::Value &theme)
     {

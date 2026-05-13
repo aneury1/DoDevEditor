@@ -72,7 +72,7 @@ endif()
 
 include(FetchContent)
 FetchContent_Declare(jsoncpp GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git GIT_TAG master)
-
+# sudo apt install clang libclang-dev
 FetchContent_MakeAvailable(jsoncpp)
 
 
@@ -123,7 +123,7 @@ include(${wxWidgets_USE_FILE})
  
 #set(TREE_SITTER_LIBRARY TreeSitter::Core TreeSitter::Cpp)
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES}  jsoncpp_lib  ) 
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES}  jsoncpp_lib  vterm ) 
 
 # tinyxml2 git2 )
 
