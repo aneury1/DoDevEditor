@@ -8,6 +8,7 @@ plugins, LSP Server and other nitty gritty details that would do "powerfull"
 it has the minimun I need in my days, probably in the far future I will improve it with 
 these feature but by now just enjoy this. 
 
+#this editor
 
 # Build 
 

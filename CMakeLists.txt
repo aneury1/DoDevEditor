@@ -113,17 +113,17 @@ add_executable(${PROJECT_NAME} ${SRCS})
 
  
 
-find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
+find_package(wxWidgets REQUIRED COMPONENTS core base stc aui   ) 
 
 include(${wxWidgets_USE_FILE})
 
-find_package(wxWidgets REQUIRED COMPONENTS core base stc aui)
+find_package(wxWidgets REQUIRED COMPONENTS core base stc aui   )
 
 include(${wxWidgets_USE_FILE})
  
 #set(TREE_SITTER_LIBRARY TreeSitter::Core TreeSitter::Cpp)
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES}  jsoncpp_lib  vterm ) 
+target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES}  jsoncpp_lib  vterm  wx_gtk3u_webview-3.2) 
 
 # tinyxml2 git2 )
 
