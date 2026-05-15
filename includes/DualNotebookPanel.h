@@ -3,6 +3,8 @@
 #include <wx/wx.h>
 #include <wx/splitter.h>
 #include <wx/aui/aui.h>
+#include <unordered_map>
+#include <optional>
 
 class DualNotebookPanel : public wxPanel
 {
@@ -15,7 +17,11 @@ public:
 
     wxAuiNotebook *GetTopNotebook() { return m_topNotebook; }
     wxAuiNotebook *GetBottomNotebook() { return m_bottomNotebook; }
-
+    std::optional<wxPanel *>getPanel(const std::string& id){
+        auto f = m_bottom_panels.find(id);
+        if(f != m_bottom_panels.end())return m_bottom_panels[id];
+        return std::nullopt;
+    }
 private:
     wxSplitterWindow *m_splitter = nullptr;
 
@@ -24,6 +30,8 @@ private:
 
     wxAuiNotebook *m_topNotebook = nullptr;
     wxAuiNotebook *m_bottomNotebook = nullptr;
+
+    std::unordered_map<std::string, wxPanel*> m_bottom_panels;
 
 private:
     void BuildUI()
@@ -111,6 +119,7 @@ private:
             page->SetSizer(sizer);
 
             m_bottomNotebook->AddPage(page, tabs[i].name, i == 0);
+            m_bottom_panels[tabs[i].name] = page;
         }
     }
 };

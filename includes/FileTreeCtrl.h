@@ -8,6 +8,7 @@
 #include "constant.h"
 #include "PathData.h"
 #include "Config.h"
+#include "DOContextMenu.h"
 // ─────────────────────────────────────────────────────────────────────────────
 // FileTreeCtrl – folder explorer pane
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,6 +31,28 @@ public:
         il->Add(wxArtProvider::GetIcon(wxART_FOLDER_OPEN,  wxART_OTHER, wxSize(16,16)));
         il->Add(wxArtProvider::GetIcon(wxART_NORMAL_FILE,  wxART_OTHER, wxSize(16,16)));
         AssignImageList(il);
+
+    Bind(
+        wxEVT_CONTEXT_MENU,
+        [&](wxContextMenuEvent&)
+        {
+            auto* menu = new DOContextMenu(this);
+
+            menu->SetOnNewFile([&]()
+            {
+                wxLogMessage("New File");
+            });
+
+            menu->SetOnDelete([&]()
+            {
+                wxLogMessage("Delete");
+            });
+
+            PopupMenu(menu);
+
+            delete menu;
+        });
+
     }
 
     void LoadFolder(const wxString& path) {

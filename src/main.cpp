@@ -200,13 +200,6 @@ private:
         long nbStyle =
             wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ALL_TABS |
             wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS;
-       // m_notebook = new wxAuiNotebook(m_editorPane, ID_NOTEBOOK,
-        //                               wxDefaultPosition, wxDefaultSize, nbStyle);
-       // m_notebook->SetBackgroundColour(Colors::BG_ACTIVE);
-        
-        
-        
-
         DualNotebookPanel *tpanel = new DualNotebookPanel(m_editorPane,  wxID_ANY);
         m_notebook = tpanel->GetTopNotebook();
         edSizer->Add(tpanel, 1, wxEXPAND);
