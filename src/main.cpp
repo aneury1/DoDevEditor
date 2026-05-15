@@ -50,13 +50,14 @@
 #include "Config.h"
 #include "SourceControlPanel.h"
 #include "SymbolTablePanel.h"
+#include "MenuBar.h"
 
 Json::Value AppEditorConfig::config;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MainFrame
 // ─────────────────────────────────────────────────────────────────────────────
-
+static int inex = 0;
 class MainFrame : public wxFrame
 {
 
@@ -100,95 +101,93 @@ private:
     void BuildFileTree()
     {
 
-    sidePanel = new wxPanel(m_splitter, wxID_ANY);
-    sidePanel->SetBackgroundColour(Colors::BG_PANEL);
+        sidePanel = new wxPanel(m_splitter, wxID_ANY);
+        sidePanel->SetBackgroundColour(Colors::BG_PANEL);
 
-    auto* sideSizer = new wxBoxSizer(wxVERTICAL);
+        auto *sideSizer = new wxBoxSizer(wxVERTICAL);
 
-    // ── Header ──
-    auto* sideHeader = new wxPanel(
-        sidePanel,
-        wxID_ANY,
-        wxDefaultPosition,
-        wxSize(-1, 28));
-
-    sideHeader->SetBackgroundColour(wxColour(37, 37, 38));
-
-    auto* hs = new wxBoxSizer(wxHORIZONTAL);
-
-    auto* explorerLabel = new wxStaticText(
-        sideHeader,
-        wxID_ANY,
-        "EXPLORER");
-
-    explorerLabel->SetForegroundColour(wxColour(187, 187, 187));
-
-    wxFont font = explorerLabel->GetFont();
-    font.SetPointSize(9);
-    explorerLabel->SetFont(font);
-
-    hs->Add(
-        explorerLabel,
-        1,
-        wxALIGN_CENTER_VERTICAL | wxLEFT,
-        12);
-
-    sideHeader->SetSizer(hs);
-
-    sideSizer->Add(sideHeader, 0, wxEXPAND);
-
-    // ── MAIN AREA (FILES + TABS) ──
-    wxSplitterWindow* splitter =
-        new wxSplitterWindow(sidePanel, wxID_ANY);
-
-    splitter->SetSashGravity(0.6);
-    splitter->SetMinimumPaneSize(80);
-    splitter->SetSashSize(4);
-
-    splitter->SetBackgroundColour(Colors::BG_PANEL);
-
-    // ── TOP: FILE TREE (UNCHANGED) ──
-    m_tree = new FileTreeCtrl(splitter);
-
-    // ── BOTTOM: NOTEBOOK (3 TABS) ──
-    wxAuiNotebook* bottomTabs =
-        new wxAuiNotebook(
-            splitter,
+        // ── Header ──
+        auto *sideHeader = new wxPanel(
+            sidePanel,
             wxID_ANY,
             wxDefaultPosition,
-            wxDefaultSize,
-            wxAUI_NB_TOP | wxAUI_NB_SCROLL_BUTTONS);
+            wxSize(-1, 28));
 
-    // TAB 1: Source Control
-    SourceControlPanel* gitPanel =
-        new SourceControlPanel(bottomTabs);
+        sideHeader->SetBackgroundColour(wxColour(37, 37, 38));
 
-    // TAB 2: Symbols
-    SymbolTablePanel* symbolsPanel =
-        new SymbolTablePanel(bottomTabs);
+        auto *hs = new wxBoxSizer(wxHORIZONTAL);
 
-    // TAB 3: (optional duplicate view or placeholder)
-    wxPanel* emptyPanel = new wxPanel(bottomTabs);
-    emptyPanel->SetBackgroundColour(wxColour(30, 30, 30));
+        auto *explorerLabel = new wxStaticText(
+            sideHeader,
+            wxID_ANY,
+            "EXPLORER");
 
-    // Add tabs
-    bottomTabs->AddPage(gitPanel, "SCM", true);
-    bottomTabs->AddPage(symbolsPanel, "Symbols", false);
-    bottomTabs->AddPage(emptyPanel, "Debug", false);
+        explorerLabel->SetForegroundColour(wxColour(187, 187, 187));
 
-    // ── SPLIT ──
-    splitter->SplitHorizontally(
-        m_tree,
-        bottomTabs,
-        300);
+        wxFont font = explorerLabel->GetFont();
+        font.SetPointSize(9);
+        explorerLabel->SetFont(font);
 
-    // ── LAYOUT ──
-    sideSizer->Add(splitter, 1, wxEXPAND);
+        hs->Add(
+            explorerLabel,
+            1,
+            wxALIGN_CENTER_VERTICAL | wxLEFT,
+            12);
 
-    sidePanel->SetSizer(sideSizer);
-    sidePanel->Layout();
+        sideHeader->SetSizer(hs);
 
+        sideSizer->Add(sideHeader, 0, wxEXPAND);
 
+        // ── MAIN AREA (FILES + TABS) ──
+        wxSplitterWindow *splitter =
+            new wxSplitterWindow(sidePanel, wxID_ANY);
+
+        splitter->SetSashGravity(0.6);
+        splitter->SetMinimumPaneSize(80);
+        splitter->SetSashSize(4);
+
+        splitter->SetBackgroundColour(Colors::BG_PANEL);
+
+        // ── TOP: FILE TREE (UNCHANGED) ──
+        m_tree = new FileTreeCtrl(splitter);
+
+        // ── BOTTOM: NOTEBOOK (3 TABS) ──
+        wxAuiNotebook *bottomTabs =
+            new wxAuiNotebook(
+                splitter,
+                wxID_ANY,
+                wxDefaultPosition,
+                wxDefaultSize,
+                wxAUI_NB_TOP | wxAUI_NB_SCROLL_BUTTONS);
+
+        // TAB 1: Source Control
+        SourceControlPanel *gitPanel =
+            new SourceControlPanel(bottomTabs);
+
+        // TAB 2: Symbols
+        SymbolTablePanel *symbolsPanel =
+            new SymbolTablePanel(bottomTabs);
+
+        // TAB 3: (optional duplicate view or placeholder)
+        wxPanel *emptyPanel = new wxPanel(bottomTabs);
+        emptyPanel->SetBackgroundColour(wxColour(30, 30, 30));
+
+        // Add tabs
+        bottomTabs->AddPage(gitPanel, "SCM", true);
+        bottomTabs->AddPage(symbolsPanel, "Symbols", false);
+        bottomTabs->AddPage(emptyPanel, "Debug", false);
+
+        // ── SPLIT ──
+        splitter->SplitHorizontally(
+            m_tree,
+            bottomTabs,
+            300);
+
+        // ── LAYOUT ──
+        sideSizer->Add(splitter, 1, wxEXPAND);
+
+        sidePanel->SetSizer(sideSizer);
+        sidePanel->Layout();
     }
 
     // ── UI construction ──────────────────────────────────────────────────────
@@ -202,27 +201,7 @@ private:
 
         // ── Sidebar (tree) ──
         BuildFileTree();
-#if 0
-        auto* sidePanel = new wxPanel(m_splitter, wxID_ANY);
-        sidePanel->SetBackgroundColour(Colors::BG_PANEL);
-        auto* sideSizer = new wxBoxSizer(wxVERTICAL);
 
-        auto* sideHeader = new wxPanel(sidePanel, wxID_ANY, wxDefaultPosition, wxSize(-1,28));
-        sideHeader->SetBackgroundColour(wxColour(37, 37, 38));
-        auto* hs = new wxBoxSizer(wxHORIZONTAL);
-        auto* explorerLabel = new wxStaticText(sideHeader, wxID_ANY, "EXPLORER",
-                                               wxDefaultPosition, wxDefaultSize);
-        explorerLabel->SetForegroundColour(wxColour(187, 187, 187));
-        explorerLabel->SetFont(explorerLabel->GetFont().Scale(0.8));
-        hs->Add(explorerLabel, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 12);
-        sideHeader->SetSizer(hs);
-        sideSizer->Add(sideHeader, 0, wxEXPAND);
-
-        wxBoxSizer *sizerFileTree =  new wxBoxSizer(wxVERTICAL);
-        m_tree = new FileTreeCtrl(sidePanel);
-        sideSizer->Add(m_tree, 1, wxEXPAND);
-        sidePanel->SetSizer(sideSizer);
-#endif
         // ── Editor area ──
         m_editorPane = new wxPanel(m_splitter, wxID_ANY);
         m_editorPane->SetBackgroundColour(Colors::BG);
@@ -269,57 +248,69 @@ private:
 
     void BuildMenuBar()
     {
-        auto *mb = new wxMenuBar();
-        mb->SetBackgroundColour(Colors::BG_PANEL);
+        auto *mb = new DynamicMenuBar(this);
 
-        // File
-        auto *file = new wxMenu();
-        file->Append(ID_NEW_FILE, "&New\tCtrl+N");
-        file->Append(ID_OPEN_FILE, "&Open File...\tCtrl+O");
-        file->Append(ID_OPEN_FOLDER, "Open &Folder...\tCtrl+Shift+O");
-        file->AppendSeparator();
-        file->Append(ID_SAVE_FILE, "&Save\tCtrl+S");
-        file->Append(ID_SAVE_AS, "Save &As...\tCtrl+Shift+S");
-        file->Append(ID_SAVE_ALL, "Save A&ll\tCtrl+Alt+S");
-        file->AppendSeparator();
-        file->Append(ID_CLOSE_TAB, "&Close Tab\tCtrl+W");
-        file->Append(ID_CLOSE_ALL_TABS, "Close All Tabs");
-        file->AppendSeparator();
-        file->Append(wxID_EXIT, "E&xit\tAlt+F4");
-        mb->Append(file, "&File");
+        // ───────── FILE ─────────
+        mb->AddItem("File", "New", ID_NEW_FILE, [this]()
+                    { NewTab(); }, "Ctrl+N");
 
-        // Edit
-        auto *edit = new wxMenu();
-        edit->Append(wxID_UNDO, "&Undo\tCtrl+Z");
-        edit->Append(wxID_REDO, "&Redo\tCtrl+Y");
-        edit->AppendSeparator();
-        edit->Append(wxID_CUT, "Cu&t\tCtrl+X");
-        edit->Append(wxID_COPY, "&Copy\tCtrl+C");
-        edit->Append(wxID_PASTE, "&Paste\tCtrl+V");
-        edit->Append(wxID_SELECTALL, "Select &All\tCtrl+A");
-        edit->AppendSeparator();
-        edit->Append(ID_FIND, "&Find...\tCtrl+F");
-        edit->Append(ID_FIND_NEXT, "Find &Next\tF3");
-        edit->Append(ID_FIND_PREV, "Find &Previous\tShift+F3");
-        edit->Append(ID_GOTO_LINE, "Go to &Line...\tCtrl+G");
-        mb->Append(edit, "&Edit");
+        mb->AddItem("File", "Open File...", ID_OPEN_FILE, [this]()
+                    { OpenFile(); }, "Ctrl+O");
 
-        // View
-        auto *view = new wxMenu();
-        view->Append(ID_TOGGLE_SIDEBAR, "Toggle &Sidebar\tCtrl+B");
-        view->AppendSeparator();
-        view->AppendCheckItem(ID_TOGGLE_WORDWRAP, "&Word Wrap\tAlt+Z");
-        view->AppendCheckItem(ID_TOGGLE_WHITESPACE, "Show &Whitespace");
-        view->AppendSeparator();
-        view->Append(ID_ZOOM_IN, "Zoom &In\tCtrl+=");
-        view->Append(ID_ZOOM_OUT, "Zoom &Out\tCtrl+-");
-        view->Append(ID_ZOOM_RESET, "Reset &Zoom\tCtrl+0");
-        mb->Append(view, "&View");
+        mb->AddItem("File", "Open Folder...", ID_OPEN_FOLDER, [this]()
+                    { OpenFolder(); }, "Ctrl+Shift+O");
 
-        // Help
-        auto *help = new wxMenu();
-        help->Append(ID_ABOUT, "&About wxEditor");
-        mb->Append(help, "&Help");
+        mb->AddSeparator("File");
+
+        mb->AddItem("File", "Save", ID_SAVE_FILE, [this]()
+                    { SaveCurrentTab(); }, "Ctrl+S");
+
+        mb->AddItem("File", "Save As", ID_SAVE_AS, [this]()
+                    { SaveAs(); }, "Ctrl+Shift+S");
+
+        mb->AddItem("File", "Save All", ID_SAVE_ALL, [this]()
+                    { SaveAll(); }, "Ctrl+Alt+S");
+
+        mb->AddSeparator("File");
+
+        mb->AddItem("File", "Exit", wxID_EXIT, [this]()
+                    { Close(); }, "Alt+F4");
+
+        // ───────── EDIT ─────────
+        mb->AddItem("Edit", "Undo", wxID_UNDO, [this]()
+                    { DispatchEdit(wxID_UNDO); }, "Ctrl+Z");
+
+        mb->AddItem("Edit", "Redo", wxID_REDO, [this]()
+                    { DispatchEdit(wxID_REDO); }, "Ctrl+Y");
+
+        mb->AddSeparator("Edit");
+
+        mb->AddItem("Edit", "Cut", wxID_CUT, [this]()
+                    { DispatchEdit(wxID_CUT); }, "Ctrl+X");
+
+        mb->AddItem("Edit", "Copy", wxID_COPY, [this]()
+                    { DispatchEdit(wxID_COPY); }, "Ctrl+C");
+
+        mb->AddItem("Edit", "Paste", wxID_PASTE, [this]()
+                    { DispatchEdit(wxID_PASTE); }, "Ctrl+V");
+
+        mb->AddItem("Edit", "Select All", wxID_SELECTALL, [this]()
+                    { DispatchEdit(wxID_SELECTALL); }, "Ctrl+A");
+
+        // ───────── VIEW ─────────
+        mb->AddItem("View", "Toggle Sidebar", ID_TOGGLE_SIDEBAR, [this]()
+                    { ToggleSidebar(); }, "Ctrl+B");
+
+        mb->AddItem("View", "Word Wrap", ID_TOGGLE_WORDWRAP, [this]()
+                    { ToggleWordWrap(); }, "Alt+Z");
+
+        // ───────── HELP ─────────
+
+        mb->AddItem("Help", "About", ID_ABOUT,
+                    [this]()
+                    {
+                        ShowAbout();
+                    });
 
         SetMenuBar(mb);
 
