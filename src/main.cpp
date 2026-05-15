@@ -1,4 +1,6 @@
 
+
+ 
 #include <wx/wx.h>
 #include <wx/aui/aui.h>
 #include <wx/aui/auibook.h>
@@ -1092,3 +1094,28 @@ public:
 };
 
 wxIMPLEMENT_APP(EditorApp);
+
+#if 0 
+
+#include <iostream>
+#include "ShellProcess.h"
+
+int main()
+{
+    ShellProcess shell;
+
+    shell.write("echo Hello World");
+    shell.write("cd ~/Documents/project/DoDevEditor/build && cmake --build .");
+
+    while (true)
+    {
+        std::string out = shell.readOutput();
+
+        if (!out.empty())
+            std::cout << out << std::flush;
+
+        usleep(50 * 1000);
+    }
+}
+
+#endif

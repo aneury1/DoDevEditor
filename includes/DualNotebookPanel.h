@@ -6,6 +6,9 @@
 #include <unordered_map>
 #include <optional>
 
+#include "ShellTerminalPanel.h"
+#include "TermVTerm.h"
+
 class DualNotebookPanel : public wxPanel
 {
 public:
@@ -109,15 +112,23 @@ private:
 
         for (int i = 0; i < 5; i++)
         {
-            wxPanel *page = new wxPanel(m_bottomNotebook);
+            std::string currentTabToAdd;
+            currentTabToAdd = tabs[i].name;
+
+            wxPanel *page = nullptr;
+            if(currentTabToAdd == "Console")
+               page = new LibVTermPanel(m_bottomNotebook);///ShellTerminalPanel(m_bottomNotebook);
+            else
+               page = new wxPanel(m_bottomNotebook);
+
             page->SetBackgroundColour(wxColour(50, 50, 50));
 
-            auto *sizer = new wxBoxSizer(wxVERTICAL);
+            /*auto *sizer = new wxBoxSizer(wxVERTICAL);
             sizer->Add(new wxStaticText(page, wxID_ANY, tabs[i].name),
                        0, wxALL, 10);
 
             page->SetSizer(sizer);
-
+*/
             m_bottomNotebook->AddPage(page, tabs[i].name, i == 0);
             m_bottom_panels[tabs[i].name] = page;
         }
