@@ -1,19 +1,3 @@
-/**
- * wxEditor - A VSCode-like multi-tab text editor
- * Single-file implementation using wxWidgets + wxStyledTextCtrl
- *
- * Build (Linux):
- *   g++ wxEditor.cpp -o wxEditor $(wx-config --cxxflags --libs stc,aui,core,base) -std=c++17
- *
- * Build (Windows MSYS2/MinGW):
- *   g++ wxEditor.cpp -o wxEditor.exe $(wx-config --cxxflags --libs stc,aui,core,base) -std=c++17
- *
- * Build (macOS):
- *   g++ wxEditor.cpp -o wxEditor $(wx-config --cxxflags --libs stc,aui,core,base) -std=c++17
- *
- * CMake: See CMakeLists.txt
- * not auto completion....
- */
 
 #include <wx/wx.h>
 #include <wx/aui/aui.h>
@@ -41,6 +25,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include "CommanPalette.h"
 #include "constant.h"
 #include "EditorPage.h"
 #include "PathData.h"
@@ -51,6 +36,7 @@
 #include "SourceControlPanel.h"
 #include "SymbolTablePanel.h"
 #include "MenuBar.h"
+#include "DualNotebookPanel.h"
 
 Json::Value AppEditorConfig::config;
 
@@ -62,6 +48,17 @@ class MainFrame : public wxFrame
 {
 
     wxPanel *sidePanel = nullptr;
+    wxBoxSizer *edSizer;
+
+    /// @brief Editor Area.
+    wxSplitterWindow* m_editorSplitter = nullptr;
+    wxPanel *m_bottomPanel = nullptr;
+    wxPanel *m_bottomTabBar = nullptr;
+    wxPanel *m_bottomContent = nullptr;
+
+    int m_activeBottomTab = 0;
+    std::vector<wxPanel *> m_bottomPages;
+    std::vector<wxPanel *> m_bottomTabs;
 
     wxSplitterWindow *m_splitter = nullptr;
     FileTreeCtrl *m_tree = nullptr;
@@ -74,7 +71,7 @@ class MainFrame : public wxFrame
 
 public:
     MainFrame()
-        : wxFrame(nullptr, wxID_ANY, "wxEditor",
+        : wxFrame(nullptr, wxID_ANY, "DoDevEditor",
                   wxDefaultPosition, wxSize(1280, 780))
     {
         SetBackgroundColour(Colors::BG);
@@ -173,7 +170,7 @@ private:
         emptyPanel->SetBackgroundColour(wxColour(30, 30, 30));
 
         // Add tabs
-        bottomTabs->AddPage(gitPanel, "SCM", true);
+        bottomTabs->AddPage(gitPanel, "GIT", true);
         bottomTabs->AddPage(symbolsPanel, "Symbols", false);
         bottomTabs->AddPage(emptyPanel, "Debug", false);
 
@@ -190,6 +187,46 @@ private:
         sidePanel->Layout();
     }
 
+    void BuildEditorArea()
+    {
+ 
+        // ── Editor area ──
+ 
+        m_editorPane = new wxPanel(m_splitter, wxID_ANY);
+        m_editorPane->SetBackgroundColour(Colors::BG);
+
+        edSizer = new wxBoxSizer(wxVERTICAL);
+        // Notebook (tabs)
+        long nbStyle =
+            wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ALL_TABS |
+            wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS;
+       // m_notebook = new wxAuiNotebook(m_editorPane, ID_NOTEBOOK,
+        //                               wxDefaultPosition, wxDefaultSize, nbStyle);
+       // m_notebook->SetBackgroundColour(Colors::BG_ACTIVE);
+        
+        
+        
+
+        DualNotebookPanel *tpanel = new DualNotebookPanel(m_editorPane,  wxID_ANY);
+        m_notebook = tpanel->GetTopNotebook();
+        edSizer->Add(tpanel, 1, wxEXPAND);
+        /// edSizer->Add(m_notebook, 1, wxEXPAND);
+    }
+
+    void ShowBottomTab(int index)
+    {
+        if (index < 0 || index >= (int)m_bottomPages.size())
+            return;
+
+        for (int i = 0; i < (int)m_bottomPages.size(); i++)
+            m_bottomPages[i]->Hide();
+
+        m_bottomPages[index]->Show();
+        m_bottomContent->Layout();
+
+        m_activeBottomTab = index;
+    }
+
     // ── UI construction ──────────────────────────────────────────────────────
 
     void BuildUI()
@@ -202,6 +239,7 @@ private:
         // ── Sidebar (tree) ──
         BuildFileTree();
 
+#if 0        
         // ── Editor area ──
         m_editorPane = new wxPanel(m_splitter, wxID_ANY);
         m_editorPane->SetBackgroundColour(Colors::BG);
@@ -215,6 +253,9 @@ private:
                                        wxDefaultPosition, wxDefaultSize, nbStyle);
         m_notebook->SetBackgroundColour(Colors::BG_ACTIVE);
         edSizer->Add(m_notebook, 1, wxEXPAND);
+#endif
+
+        BuildEditorArea();
 
         // Find bar (hidden initially)
         m_findBar = new FindBar(m_editorPane);
@@ -369,6 +410,16 @@ private:
              { ShowAbout(); }, ID_ABOUT);
 
         Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnCloseWindow, this);
+
+        Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent &e)
+             {
+            if (e.ControlDown() && e.ShiftDown() && e.GetKeyCode() == 'P')
+            {
+                CommandPalette* cp = new CommandPalette(this /*, commands*/);
+                cp->Show();
+            }
+
+            e.Skip(); });
     }
 
     void BuildStatusBar()
@@ -770,7 +821,7 @@ private:
     void ShowAbout()
     {
         wxMessageBox(
-            "wxEditor  v1.0\n\n"
+            "DoDevEditor  v1.0\n\n"
             "A VSCode-inspired multi-tab code editor\n"
             "built with wxWidgets + wxStyledTextCtrl.\n\n"
             "Features:\n"
@@ -782,7 +833,7 @@ private:
             "  • Auto-indent & auto-close brackets\n"
             "  • Word-wrap, whitespace display\n"
             "  • Zoom in/out\n",
-            "About wxEditor", wxOK | wxICON_INFORMATION, this);
+            "About DoDevEditor", wxOK | wxICON_INFORMATION, this);
     }
 
     // ── Events ───────────────────────────────────────────────────────────────
@@ -834,6 +885,192 @@ private:
         }
         evt.Skip();
     }
+
+    void AddBottomTab(const wxString &title, wxPanel *page)
+    {
+        // tab button
+        wxPanel *tab = new wxPanel(m_bottomTabBar, wxID_ANY);
+        tab->SetBackgroundColour(wxColour(40, 40, 40));
+
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+        wxStaticText *txt = new wxStaticText(tab, wxID_ANY, title);
+        txt->SetForegroundColour(wxColour(220, 220, 220));
+
+        s->Add(txt, 1, wxALIGN_CENTER | wxALL, 6);
+        tab->SetSizer(s);
+
+        int index = m_bottomPages.size();
+
+        tab->Bind(wxEVT_LEFT_DOWN, [this, index](wxMouseEvent &)
+                  { ShowBottomTab(index); });
+
+        m_bottomTabBar->GetSizer()->Add(tab, 0, wxEXPAND | wxALL, 2);
+
+        // store
+        m_bottomTabs.push_back(tab);
+        m_bottomPages.push_back(page);
+
+        m_bottomContent->GetSizer()->Add(page, 1, wxEXPAND);
+
+        page->Hide();
+    }
+    wxPanel *CreateProblemsPanel(wxWindow *parent)
+    {
+        wxPanel *panel = new wxPanel(parent, wxID_ANY);
+        panel->SetBackgroundColour(wxColour(35, 20, 20));
+
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+
+        wxStaticText *title = new wxStaticText(panel, wxID_ANY, "Problems");
+        title->SetForegroundColour(wxColour(255, 200, 200));
+
+        wxListBox *list = new wxListBox(panel, wxID_ANY);
+
+        list->Append("Error: Undefined reference in main.cpp:120");
+        list->Append("Warning: unused variable 'tmp'");
+        list->Append("Error: segmentation fault possible in parser");
+
+        s->Add(title, 0, wxALL, 5);
+        s->Add(list, 1, wxEXPAND | wxALL, 5);
+
+        panel->SetSizer(s);
+        return panel;
+    }
+
+    wxPanel *CreateOutputPanel(wxWindow *parent)
+    {
+        wxPanel *panel = new wxPanel(parent, wxID_ANY);
+        panel->SetBackgroundColour(wxColour(20, 35, 20));
+
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+
+        wxStaticText *title = new wxStaticText(panel, wxID_ANY, "Output");
+        title->SetForegroundColour(wxColour(200, 255, 200));
+
+        wxTextCtrl *log = new wxTextCtrl(
+            panel,
+            wxID_ANY,
+            "",
+            wxDefaultPosition,
+            wxDefaultSize,
+            wxTE_MULTILINE | wxTE_READONLY);
+
+        log->SetBackgroundColour(wxColour(15, 15, 15));
+        log->SetForegroundColour(wxColour(180, 180, 180));
+
+        log->AppendText("[build] compiling project...\n");
+        log->AppendText("[build] linking...\n");
+        log->AppendText("[build] done.\n");
+
+        s->Add(title, 0, wxALL, 5);
+        s->Add(log, 1, wxEXPAND | wxALL, 5);
+
+        panel->SetSizer(s);
+        return panel;
+    }
+    wxPanel *CreateDebugPanel(wxWindow *parent)
+    {
+        wxPanel *panel = new wxPanel(parent, wxID_ANY);
+        panel->SetBackgroundColour(wxColour(20, 20, 40));
+
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+
+        wxStaticText *title = new wxStaticText(panel, wxID_ANY, "Debug Console");
+        title->SetForegroundColour(wxColour(200, 200, 255));
+
+        wxTextCtrl *console = new wxTextCtrl(
+            panel,
+            wxID_ANY,
+            "",
+            wxDefaultPosition,
+            wxDefaultSize,
+            wxTE_MULTILINE | wxTE_READONLY);
+
+        console->SetBackgroundColour(wxColour(10, 10, 25));
+        console->SetForegroundColour(wxColour(160, 160, 255));
+
+        console->AppendText("Debugger attached...\n");
+        console->AppendText("Breakpoint hit at main()\n");
+
+        s->Add(title, 0, wxALL, 5);
+        s->Add(console, 1, wxEXPAND | wxALL, 5);
+
+        panel->SetSizer(s);
+        return panel;
+    }
+
+    wxPanel *CreateTerminalPanel(wxWindow *parent)
+    {
+        wxPanel *panel = new wxPanel(parent, wxID_ANY);
+        panel->SetBackgroundColour(wxColour(30, 30, 30));
+
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+
+        wxStaticText *title = new wxStaticText(panel, wxID_ANY, "Terminal");
+        title->SetForegroundColour(wxColour(220, 220, 220));
+
+        wxTextCtrl *terminal = new wxTextCtrl(
+            panel,
+            wxID_ANY,
+            "$ ",
+            wxDefaultPosition,
+            wxDefaultSize,
+            wxTE_MULTILINE);
+
+        terminal->SetBackgroundColour(wxColour(10, 10, 10));
+        terminal->SetForegroundColour(wxColour(0, 255, 0));
+
+        s->Add(title, 0, wxALL, 5);
+        s->Add(terminal, 1, wxEXPAND | wxALL, 5);
+
+        panel->SetSizer(s);
+        return panel;
+    }
+
+    wxPanel *CreatePortsPanel(wxWindow *parent)
+    {
+        wxPanel *panel = new wxPanel(parent, wxID_ANY);
+        panel->SetBackgroundColour(wxColour(25, 25, 35));
+
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+
+        wxStaticText *title = new wxStaticText(panel, wxID_ANY, "Ports");
+        title->SetForegroundColour(wxColour(180, 220, 255));
+
+        wxListBox *list = new wxListBox(panel, wxID_ANY);
+
+        list->Append("8080 - HTTP Server");
+        list->Append("3000 - Dev Server");
+        list->Append("5432 - PostgreSQL");
+
+        s->Add(title, 0, wxALL, 5);
+        s->Add(list, 1, wxEXPAND | wxALL, 5);
+
+        panel->SetSizer(s);
+        return panel;
+    }
+    wxPanel *CreateExecutablesPanel(wxWindow *parent)
+    {
+        wxPanel *panel = new wxPanel(parent, wxID_ANY);
+        panel->SetBackgroundColour(wxColour(35, 25, 35));
+
+        wxBoxSizer *s = new wxBoxSizer(wxVERTICAL);
+
+        wxStaticText *title = new wxStaticText(panel, wxID_ANY, "Executables");
+        title->SetForegroundColour(wxColour(255, 200, 255));
+
+        wxListBox *list = new wxListBox(panel, wxID_ANY);
+
+        list->Append("./build/app");
+        list->Append("./build/server");
+        list->Append("./bin/tool");
+
+        s->Add(title, 0, wxALL, 5);
+        s->Add(list, 1, wxEXPAND | wxALL, 5);
+
+        panel->SetSizer(s);
+        return panel;
+    }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -845,7 +1082,7 @@ class EditorApp : public wxApp
 public:
     bool OnInit() override
     {
-        SetAppName("wxEditor");
+        SetAppName("DoDevEditor");
         wxInitAllImageHandlers();
         auto *frame = new MainFrame();
 

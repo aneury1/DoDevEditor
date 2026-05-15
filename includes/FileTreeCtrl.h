@@ -3,6 +3,8 @@
 #include <wx/treectrl.h>
 #include <wx/dir.h>
 #include <wx/filename.h>
+#include <string>
+#include <vector>
 #include "constant.h"
 #include "PathData.h"
 #include "Config.h"
@@ -48,10 +50,17 @@ public:
         return data ? data->GetPath() : wxString();
     }
 
+    inline std::vector<std::string> getFiles(){
+        return files;
+    }
+
 private:
+    std::vector<std::string> files;
+
     void PopulateDir(wxTreeItemId parent, const wxString& path) {
         wxDir dir(path);
         if (!dir.IsOpened()) return;
+        files.clear();
 
         // First: subdirectories
         wxString name;
@@ -74,6 +83,7 @@ private:
                 wxTreeItemId child = AppendItem(parent, name, 2, 2,
                                                 new PathData(full));
                 SetItemTextColour(child, Colors::SIDEBAR_TEXT);
+                files.emplace_back(full);
             } while (dir.GetNext(&name));
         }
     }
