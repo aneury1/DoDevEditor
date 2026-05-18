@@ -1,226 +1,147 @@
-cmake_minimum_required(VERSION 3.20.0)
+cmake_minimum_required(VERSION 3.20)
 
-# ==============================================================================
-# Project
-# ==============================================================================
-set(PROJECT_NAME DoDevEditor)
-project(${PROJECT_NAME} LANGUAGES CXX)
+option(BUILD_WINDOWS "Cross-compile for Windows using MinGW-w64" OFF)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
-
-# ==============================================================================
-# Options
-# ==============================================================================
-option(CMAKE_WIN32_MINGW64  "Cross-compile for Windows x86-64 (MinGW-w64)" FALSE)
-option(CMAKE_WIN32_MINGW    "Legacy MinGW32 build (32-bit)"                FALSE)
-option(ENABLE_CLANG_TIDY    "Enable clang-tidy"                            FALSE)
-option(ENABLE_COVERAGE      "Enable code coverage"                         FALSE)
-option(ENABLE_TESTING       "Enable unit tests"                            FALSE)
-option(FETCH_WXWIDGET       "Fetch wxWidgets via FetchContent"             FALSE)
-option(FETCH_JSON           "Fetch jsoncpp via FetchContent"               FALSE)
-option(ENABLE_THIRDPARTY    "Allow extra third-party libs"                 FALSE)
-option(USING_PLUGINS        "Enable plugin support"                        FALSE)
-
-# Path to the Windows wxWidgets bin/ directory (wx*.dll files)
-# Produced by:  ./scripts/build-wx-windows.sh --prefix /opt/wx-win
-# Pass on cmake command line: -DWX_WIN_BIN_DIR=/opt/wx-win/bin
-set(WX_WIN_BIN_DIR "" CACHE PATH
-    "Directory with wx*.dll files for Windows deployment (only needed with CMAKE_WIN32_MINGW64=ON)")
-
-# ==============================================================================
-# MinGW64 cross-compilation setup
-# Must come BEFORE the compiler is first used.
-# Two ways to activate:
-#   A) cmake -DCMAKE_WIN32_MINGW64=ON ...  (setup_mingw64_toolchain() runs here)
-#   B) cmake -DCMAKE_TOOLCHAIN_FILE=cmake/mingw64-toolchain.cmake ...
-#            (toolchain file is loaded by cmake before this file, no need to call setup)
-# ==============================================================================
-if(CMAKE_WIN32_MINGW64)
-    include(cmake/mingw64.cmake)
-    if(NOT CMAKE_CROSSCOMPILING)
-        # Not using the toolchain file – set compilers ourselves
-        setup_mingw64_toolchain()
-    else()
-        message(STATUS "[mingw64] Toolchain file in use – skipping setup_mingw64_toolchain()")
+if(BUILD_WINDOWS)
+    find_program(_MCC NAMES x86_64-w64-mingw32-gcc-posix x86_64-w64-mingw32-gcc REQUIRED)
+    find_program(_MCX NAMES x86_64-w64-mingw32-g++-posix x86_64-w64-mingw32-g++ REQUIRED)
+    find_program(_MRC NAMES x86_64-w64-mingw32-windres REQUIRED)
+    find_program(_MST NAMES x86_64-w64-mingw32-strip)
+    set(CMAKE_SYSTEM_NAME      Windows CACHE INTERNAL "")
+    set(CMAKE_SYSTEM_PROCESSOR x86_64  CACHE INTERNAL "")
+    set(CMAKE_C_COMPILER   "${_MCC}" CACHE FILEPATH "" FORCE)
+    set(CMAKE_CXX_COMPILER "${_MCX}" CACHE FILEPATH "" FORCE)
+    set(CMAKE_RC_COMPILER  "${_MRC}" CACHE FILEPATH "" FORCE)
+    if(_MST)
+        set(CMAKE_STRIP "${_MST}" CACHE FILEPATH "" FORCE)
     endif()
+    set(CMAKE_FIND_ROOT_PATH /usr/x86_64-w64-mingw32)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+else()
+  # add_compile_defintion(LINUX_PLATFORM)
 endif()
 
-# ==============================================================================
-# Legacy MinGW32 (unchanged)
-# ==============================================================================
-if(CMAKE_WIN32_MINGW)
-    include(cmake/mingw32.cmake)
-    setup_mingw_toolchain()
+project(DoDevEditor VERSION 1.0.0 LANGUAGES C CXX)
+
+if(BUILD_WINDOWS)
+    enable_language(RC)
 endif()
 
-# ==============================================================================
-# Optional tooling
-# ==============================================================================
-if(ENABLE_CLANG_TIDY)
-    set(CMAKE_CXX_CLANG_TIDY "clang-tidy;-checks=*")
+set(CMAKE_CXX_STANDARD          17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS        OFF)
+
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-if(ENABLE_COVERAGE)
-    message(STATUS "Code coverage enabled")
-    set(CMAKE_CXX_FLAGS    "${CMAKE_CXX_FLAGS} --coverage -O0 -g")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
-endif()
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
-# ==============================================================================
-# Third-party libraries
-# ==============================================================================
 include(FetchContent)
+set(FETCHCONTENT_QUIET               OFF)
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 
-# wxWidgets (optional fetch)
-if(FETCH_WXWIDGET)
-    message(STATUS "Fetching wxWidgets v3.2.4")
-    FetchContent_Declare(wxWidgets
-        GIT_REPOSITORY https://github.com/wxWidgets/wxWidgets.git
-        GIT_TAG v3.2.4)
-    FetchContent_MakeAvailable(wxWidgets)
-endif()
+set(wxBUILD_SHARED          OFF  CACHE BOOL   "" FORCE)
+set(wxBUILD_TESTS           OFF CACHE STRING "" FORCE)
+set(wxBUILD_SAMPLES         OFF  CACHE BOOL   "" FORCE)
+set(wxBUILD_DEMOS           OFF  CACHE BOOL   "" FORCE)
+set(wxBUILD_INSTALL         OFF  CACHE BOOL   "" FORCE)
+set(wxBUILD_MONOLITHIC      OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_STC               ON   CACHE BOOL   "" FORCE)
+set(wxUSE_AUI               ON   CACHE BOOL   "" FORCE)
+set(wxUSE_OPENGL            OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_WEBVIEW           OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_MEDIACTRL         OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_LIBLZMA           OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_EXPAT             builtin CACHE STRING "" FORCE)
+set(wxUSE_LIBJPEG           builtin CACHE STRING "" FORCE)
+set(wxUSE_LIBPNG            builtin CACHE STRING "" FORCE)
+set(wxUSE_LIBTIFF           builtin CACHE STRING "" FORCE)
+set(wxUSE_ZLIB              builtin CACHE STRING "" FORCE)
+set(wxUSE_REGEX             builtin CACHE STRING "" FORCE)
+set(wxUSE_NANOSVG           builtin CACHE STRING "" FORCE)
 
-# jsoncpp
+FetchContent_Declare(wxWidgets
+    URL https://github.com/wxWidgets/wxWidgets/releases/download/v3.2.4/wxWidgets-3.2.4.tar.bz2
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(wxWidgets)
+
+set(JSONCPP_WITH_TESTS               OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_PKGCONFIG_SUPPORT   OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_CMAKE_PACKAGE       OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_EXAMPLE             OFF CACHE BOOL "" FORCE)
+
 FetchContent_Declare(jsoncpp
     GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
-    GIT_TAG master)
+    GIT_TAG        1.9.5
+    GIT_SHALLOW    TRUE
+)
 FetchContent_MakeAvailable(jsoncpp)
 
-# libgit2 (Windows builds only)
-if(CMAKE_WIN32_MINGW OR CMAKE_WIN32_MINGW64)
-    FetchContent_Declare(libgit2
-        GIT_REPOSITORY https://github.com/libgit2/libgit2.git
-        GIT_TAG v1.7.1)
-    FetchContent_MakeAvailable(libgit2)
+file(GLOB_RECURSE SI_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/*.c")
+
+if(NOT SI_SOURCES)
+    message(FATAL_ERROR "No source files found in ${CMAKE_SOURCE_DIR}/src/")
 endif()
 
-# ==============================================================================
-# Common definitions (kept from original)
-# ==============================================================================
-add_definitions(
-    -D__STDC_CONSTANT_MACROS
-    -D__STDC_FORMAT_MACROS
-    -D__STDC_LIMIT_MACROS
-)
-
-# ==============================================================================
-# Sources
-# ==============================================================================
-file(GLOB_RECURSE SRCS src/*.cpp)
-
-# ==============================================================================
-# Executable
-# ==============================================================================
-if(CMAKE_WIN32_MINGW64)
-    add_executable(${PROJECT_NAME} WIN32 ${SRCS})   # WIN32 = WinMain, no console
+if(BUILD_WINDOWS)
+    add_executable(${PROJECT_NAME} WIN32 ${SI_SOURCES})
 else()
-    add_executable(${PROJECT_NAME} ${SRCS})
+    add_executable(${PROJECT_NAME} ${SI_SOURCES})
 endif()
 
-include_directories(includes PUBLIC)
 target_include_directories(${PROJECT_NAME} PRIVATE
-    includes
-    ${jsoncpp_SOURCE_DIR}/include
-)
-
-# ==============================================================================
-# Windows/MinGW64 target configuration
-# (compile definitions, flags, linker options, Win32 system libs)
-# ==============================================================================
-if(CMAKE_WIN32_MINGW64)
-    configure_target_mingw64(${PROJECT_NAME})
-
-    # Uncomment to embed version info + icon into the .exe:
-    # add_windows_resource(${PROJECT_NAME}
-    #     PRODUCT_NAME  "DoDevEditor"
-    #     VERSION       "1.0.0.0"
-    #     COMPANY       "YourName"
-    #     ICON          "${CMAKE_SOURCE_DIR}/resources/app.ico"
-    # )
-endif()
-
-# ==============================================================================
-# wxWidgets (system-installed)
-# ==============================================================================
-find_package(wxWidgets REQUIRED COMPONENTS core base stc aui)
-include(${wxWidgets_USE_FILE})
+    "${CMAKE_SOURCE_DIR}/includes")
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    ${wxWidgets_LIBRARIES}
-    jsoncpp_lib
-)
+    wx::stc
+    wx::aui
+    wx::adv
+    wx::core
+    wx::base
+    vterm
+    jsoncpp_static)
 
-# Linux-only libraries (not available when cross-compiling)
-if(NOT CMAKE_WIN32_MINGW64 AND NOT CMAKE_WIN32_MINGW)
+target_compile_options(${PROJECT_NAME} PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:
+        -Wall -Wextra
+        -Wno-unused-parameter
+        -Wno-deprecated-declarations>
+    $<$<CONFIG:Release>:        -O2>
+    $<$<CONFIG:MinSizeRel>:     -Os>
+    $<$<CONFIG:Debug>:          -g -O0>
+    $<$<CONFIG:RelWithDebInfo>: -O2 -g>)
+
+if(BUILD_WINDOWS)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        WINVER=0x0601
+        _WIN32_WINNT=0x0601
+        UNICODE
+        _UNICODE)
+    target_link_options(${PROJECT_NAME} PRIVATE
+        -static-libgcc
+        -static-libstdc++
+        -Wl,-subsystem,windows
+        -Wl,--gc-sections)
     target_link_libraries(${PROJECT_NAME} PRIVATE
-        vterm
-        wx_gtk3u_webview-3.2
-    )
+        comctl32 ole32 oleaut32 uuid winspool winmm
+        shell32 shlwapi gdi32 comdlg32 wsock32)
+else()
+    target_link_options(${PROJECT_NAME} PRIVATE -Wl,--gc-sections)
 endif()
 
-# ==============================================================================
-# Compiler warnings
-# ==============================================================================
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wwrite-strings)
+if(CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$" AND CMAKE_STRIP)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND "${CMAKE_STRIP}" --strip-all "$<TARGET_FILE:${PROJECT_NAME}>"
+        VERBATIM)
 endif()
-
-# ==============================================================================
-# Deploy (Windows MinGW64 only)
-#
-# Available targets after cmake configure:
-#   cmake --build <build_dir> --target deploy_DoDevEditor   <- stage all files
-#   cmake --build <build_dir> --target deploy               <- same (alias)
-#
-# Portable ZIP is created automatically as a POST_BUILD step.
-#
-# NSIS installer:
-#   cmake --build <build_dir> --target deploy_DoDevEditor
-#   cd <build_dir> && cpack -G NSIS
-# ==============================================================================
-if(CMAKE_WIN32_MINGW64)
-    include(cmake/deploy.cmake)
-
-    set(_DEPLOY_DIR "${CMAKE_BINARY_DIR}/deploy")
-
-    register_deploy_target(${PROJECT_NAME} "${_DEPLOY_DIR}"
-        WX_BIN_DIR  "${WX_WIN_BIN_DIR}"
-        EXTRA_FILES
-            "${CMAKE_SOURCE_DIR}/README.md"
-            # "${CMAKE_SOURCE_DIR}/LICENSE"
-        # EXTRA_DIRS
-        #    "${CMAKE_SOURCE_DIR}/resources"
-    )
-
-    create_portable_zip(${PROJECT_NAME} "${_DEPLOY_DIR}"
-        APP_NAME "DoDevEditor"
-        VERSION  "1.0.0"
-    )
-
-    create_nsis_installer(${PROJECT_NAME} "${_DEPLOY_DIR}"
-        APP_NAME "DoDevEditor"
-        VERSION  "1.0.0"
-        VENDOR   "YourName"
-        WEBSITE  "https://github.com/yourname/DoDevEditor"
-        # ICON   "${CMAKE_SOURCE_DIR}/resources/app.ico"
-        # LICENSE "${CMAKE_SOURCE_DIR}/LICENSE"
-    )
-endif()
-
-# ==============================================================================
-# Testing
-# ==============================================================================
-if(ENABLE_TESTING)
-    message(STATUS "Testing enabled")
-    enable_testing()
-    include(CTest)
-    add_subdirectory(test)
-endif()
-
-# ==============================================================================
-# Install / CPack
-# ==============================================================================
-include(CPack)
-install(TARGETS ${PROJECT_NAME} DESTINATION /usr/bin)

@@ -1,6 +1,3 @@
-
-
- 
 #include <wx/wx.h>
 #include <wx/aui/aui.h>
 #include <wx/aui/auibook.h>
@@ -48,7 +45,6 @@ Json::Value AppEditorConfig::config;
 static int inex = 0;
 class MainFrame : public wxFrame
 {
-
     wxPanel *sidePanel = nullptr;
     wxBoxSizer *edSizer;
 

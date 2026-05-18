@@ -93,3 +93,12 @@ sudo apt update
 sudo apt install python3-dev
 
 ```
+
+
+####  Todo:
+
+these working in progress feature must be implemented.
+- context menu
+- save history.
+- auto completion
+- GDB Integration

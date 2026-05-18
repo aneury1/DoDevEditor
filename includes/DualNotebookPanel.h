@@ -116,7 +116,7 @@ private:
             currentTabToAdd = tabs[i].name;
 
             wxPanel *page = nullptr;
-            if(currentTabToAdd == "Console")
+           if(currentTabToAdd == "Console")
                page = new LibVTermPanel(m_bottomNotebook);///ShellTerminalPanel(m_bottomNotebook);
             else
                page = new wxPanel(m_bottomNotebook);
