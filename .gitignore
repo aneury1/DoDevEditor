@@ -36,6 +36,7 @@
 *.user
 
 bin/
+_deps/
 build/
 config/
 obj/

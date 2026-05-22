@@ -1,68 +1,54 @@
-#pragma once
+
 #include <functional>
 #include <unordered_map>
 #include <string>
 #include <vector>
 
 #include "CommandSystem.h"
-struct MenuItemDef
+
+void CommandRegistry::Register(const std::string &id, Callback cb)
 {
-    std::string label;
-    std::string commandId;
-    std::string shortcut;
-    bool isSeparator = false;
-};
+    commands[id] = cb;
+}
 
-struct MenuDef
+void CommandRegistry::Execute(const std::string &id)
 {
-    std::string name;
-    std::vector<MenuItemDef> items;
-};
+    if (commands.count(id))
+        commands[id]();
+}
 
-class CommandRegistry
+bool CommandRegistry::Exists(const std::string &id) const
 {
-public:
- 
-    CommandRegistry() = default;
-    CommandRegistry(const CommandRegistry& oth) = default;
- 
-    using Callback = std::function<void()>;
+    return commands.count(id);
+}
 
-    void Register(const std::string& id, Callback cb);
-
-    void Execute(const std::string& id);
-    bool Exists(const std::string& id) const;
-
-    std::vector<MenuDef> GetTitles();
-
-private:
-    std::unordered_map<std::string, Callback> commands;
-};
-
-
-class MenuRegistry
+std::vector<MenuDef> CommandRegistry::GetTitles()
 {
-public:
-    void AddMenu(const std::string& name);
+    std::vector<MenuDef> ret;
+    for (auto it : commands)
+    {
+        MenuDef def;
+        def.name = it.first;
+        ret.emplace_back(def);
+    }
+    return ret;
+}
 
-    void AddItem(const std::string& menu,
-                 const MenuItemDef& item);
-
-    const std::unordered_map<std::string, std::vector<MenuItemDef>>& GetMenus() const;
-
-private:
-    std::unordered_map<std::string, std::vector<MenuItemDef>> menus;
-};
-
-
-class IPlugin
+void MenuRegistry::AddMenu(const std::string &name)
 {
-public:
-    virtual ~IPlugin() = default;
+    menus[name]; // create if not exists
+}
 
-    virtual void RegisterCommands(CommandRegistry& commands) = 0;
-    virtual void RegisterMenus(MenuRegistry& menus) = 0;
-};
+void MenuRegistry::AddItem(const std::string &menu,
+             const MenuItemDef &item)
+{
+    menus[menu].push_back(item);
+}
+
+const std::unordered_map<std::string, std::vector<MenuItemDef>> &MenuRegistry::GetMenus() const
+{
+    return menus;
+}
 
 /*
 EXAMPLE:

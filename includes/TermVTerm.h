@@ -1,23 +1,33 @@
+
+#if 0 
 #ifndef WX_LIBVTERM_PANEL_H
 #define WX_LIBVTERM_PANEL_H
-
 #include <wx/wx.h>
 #include <wx/dcbuffer.h>
 
+///#define LINUX_PLATFORM
+#ifdef  LINUX_PLATFORM
 #include <vterm.h>
 #include <pty.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
+#endif
 
 #include <cstring>
 #include <thread>
 #include <mutex>
 #include <atomic>
 
+#ifndef LINUX_PLATFORM
+struct VTermRect{};
+#endif
+
+
 class LibVTermPanel : public wxPanel
 {
+#ifdef  LINUX_PLATFORM
     // ── Static damage callback (function pointer – no capture) ────────────────
     static int s_Damage(VTermRect /*rect*/, void* user)
     {
@@ -26,7 +36,7 @@ class LibVTermPanel : public wxPanel
     }
 
     inline static VTermScreenCallbacks s_cbs{};
-
+#endif
 public:
     explicit LibVTermPanel(wxWindow* parent)
         : wxPanel(parent, wxID_ANY,
@@ -40,7 +50,7 @@ public:
         m_font = wxFont(12, wxFONTFAMILY_TELETYPE,
                         wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL,
                         false, "Monospace");
-
+#ifdef  LINUX_PLATFORM
         // Measure a single cell
         {
             wxClientDC dc(this);
@@ -54,6 +64,7 @@ public:
         wxSize panel = GetClientSize();
         m_cols = std::max(1, panel.x / m_cw);
         m_rows = std::max(1, panel.y / m_ch);
+
 
         // ── libvterm ──────────────────────────────────────────────────────────
         m_vt = vterm_new(m_rows, m_cols);
@@ -141,25 +152,32 @@ public:
                 Refresh(false);
         });
         m_timer.Start(16); // ~60 fps
+
+#endif
     }
 
     ~LibVTermPanel()
     {
+        #ifdef  LINUX_PLATFORM
         m_timer.Stop();
         m_running = false;
         if (m_thread.joinable()) m_thread.join();
         if (m_fd  >= 0) close(m_fd);
         if (m_vt)       vterm_free(m_vt);
+        #endif
     }
 
     // Write a command string to the shell (appends '\n')
     void Write(const std::string& cmd)
     {
+        #ifdef  LINUX_PLATFORM
         std::string s = cmd + "\n";
         ::write(m_fd, s.c_str(), s.size());
+        #endif
     }
 
 private:
+#ifdef  LINUX_PLATFORM
     // ── VTermColor → wxColour ─────────────────────────────────────────────────
     static wxColour ToWx(const VTermColor& c, bool fg)
     {
@@ -200,10 +218,11 @@ private:
 
         return fg ? wxColour{204, 204, 204} : wxColour{0, 0, 0};
     }
-
+#endif
     // ── Resize panel + vterm + PTY ────────────────────────────────────────────
     void OnSize(wxSizeEvent& evt)
     {
+#ifdef  LINUX_PLATFORM
         wxSize sz = GetClientSize();
         int nc = std::max(1, sz.x / m_cw);
         int nr = std::max(1, sz.y / m_ch);
@@ -228,12 +247,14 @@ private:
         }
 
         Refresh(false);
+#endif
         evt.Skip();
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
     void OnPaint(wxPaintEvent&)
     {
+#ifdef  LINUX_PLATFORM
         wxAutoBufferedPaintDC dc(this);
         dc.SetBackground(*wxBLACK_BRUSH);
         dc.Clear();
@@ -323,11 +344,13 @@ private:
                 col += w;
             }
         }
+#endif
     }
 
     // ── Special / function keys → escape sequences ────────────────────────────
     void OnKeyDown(wxKeyEvent& evt)
     {
+#ifdef  LINUX_PLATFORM
         struct Map { int key; const char* seq; } table[] = {
             { WXK_UP,       "\x1b[A"   }, { WXK_DOWN,     "\x1b[B"   },
             { WXK_RIGHT,    "\x1b[C"   }, { WXK_LEFT,     "\x1b[D"   },
@@ -345,13 +368,14 @@ private:
         int k = evt.GetKeyCode();
         for (auto& m : table)
             if (k == m.key) { ::write(m_fd, m.seq, std::strlen(m.seq)); return; }
-
+#endif
         evt.Skip(); // let OnChar handle everything else
     }
 
     // ── Printable + control characters ────────────────────────────────────────
     void OnChar(wxKeyEvent& evt)
     {
+#ifdef  LINUX_PLATFORM
         wxChar uni = evt.GetUnicodeKey();
         if (uni == WXK_NONE) { evt.Skip(); return; }
 
@@ -378,11 +402,12 @@ private:
         /// wxScopedCharBuffer  u8 = s.ToStdString();
         auto u8 = s.ToStdString();
         ::write(m_fd, u8.data(), u8.length());
-
+#endif
  
     }
 
 private:
+#ifdef  LINUX_PLATFORM
     VTerm*       m_vt  = nullptr;
     VTermScreen* m_scr = nullptr;
     int          m_fd  = -1;
@@ -399,6 +424,168 @@ private:
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_dirty{false};
     wxTimer           m_timer;
+#endif
 };
 
 #endif // WX_LIBVTERM_PANEL_H
+#endif 
+
+
+#ifndef WX_LIBVTERM_PANEL_H
+#define WX_LIBVTERM_PANEL_H
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Platform detection + PTY includes
+// ─────────────────────────────────────────────────────────────────────────────
+#ifdef _WIN32
+#   define WIN32_LEAN_AND_MEAN
+#   define NOMINMAX
+#   include <windows.h>
+#   include <memory>   // std::unique_ptr (attr-list buffer)
+
+    // ConPTY handle – defined in consoleapi.h from SDK 10.0.17763+.
+    // We typedef our own name so we compile with any MinGW SDK.
+    using HPCON_t = PVOID;
+
+    // Function-pointer types for dynamic loading
+    using PFN_CreatePseudoConsole = HRESULT (WINAPI*)(COORD, HANDLE, HANDLE, DWORD, HPCON_t*);
+    using PFN_ResizePseudoConsole = HRESULT (WINAPI*)(HPCON_t, COORD);
+    using PFN_ClosePseudoConsole  = VOID    (WINAPI*)(HPCON_t);
+#else
+#   include <pty.h>
+#   include <unistd.h>
+#   include <fcntl.h>
+#   include <sys/epoll.h>
+#   include <sys/ioctl.h>
+#endif
+
+#include <wx/wx.h>
+#include <wx/dcbuffer.h>
+#include <vterm.h>
+
+#include <algorithm>
+#include <atomic>
+#include <cstring>
+#include <mutex>
+#include <string>
+#include <thread>
+
+// ─────────────────────────────────────────────────────────────────────────────
+class LibVTermPanel : public wxPanel
+{
+    // ── Damage callback (must be a plain function pointer – no captures) ───────
+    static int s_Damage(VTermRect /*rect*/, void* user);
+    inline static VTermScreenCallbacks s_cbs{};
+
+public:
+    explicit LibVTermPanel(wxWindow* parent);
+
+    ~LibVTermPanel();
+    // Write a command string to the shell (appends '\n')
+    void Write(const std::string& cmd);
+
+
+private:
+    // ═════════════════════════════════════════════════════════════════════════
+    //  Platform-specific state
+    // ═════════════════════════════════════════════════════════════════════════
+#ifdef _WIN32
+    HPCON_t  m_hPC    = nullptr;
+    HANDLE   m_hRead  = INVALID_HANDLE_VALUE;  // app reads PTY output from here
+    HANDLE   m_hWrite = INVALID_HANDLE_VALUE;  // app writes keystrokes here
+    HANDLE   m_hProc  = INVALID_HANDLE_VALUE;  // child process handle
+
+    PFN_CreatePseudoConsole m_pfnCreate = nullptr;
+    PFN_ResizePseudoConsole m_pfnResize = nullptr;
+    PFN_ClosePseudoConsole  m_pfnClose  = nullptr;
+#else
+    int   m_fd  = -1;
+    pid_t m_pid = -1;
+#endif
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  SpawnShell  –  platform implementations
+    // ═════════════════════════════════════════════════════════════════════════
+    bool SpawnShell();
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  CleanupPTY
+    // ═════════════════════════════════════════════════════════════════════════
+    void CleanupPTY();
+
+
+
+  
+    // ═════════════════════════════════════════════════════════════════════════
+    //  WritePTY  –  send key data to the shell
+    // ═════════════════════════════════════════════════════════════════════════
+    void WritePTY(const char* buf, size_t len);
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  ReaderThread  –  pulls VT bytes from the PTY and feeds libvterm
+    // ═════════════════════════════════════════════════════════════════════════
+    void ReaderThread();
+
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  ResizePTY
+    // ═════════════════════════════════════════════════════════════════════════
+    void ResizePTY();
+
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  VTermColor → wxColour
+    // ═════════════════════════════════════════════════════════════════════════
+    static wxColour ToWx(const VTermColor& c, bool fg);
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  OnSize  –  resize vterm + PTY when the panel resizes
+    // ═════════════════════════════════════════════════════════════════════════
+    void OnSize(wxSizeEvent& evt);
+
+
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  OnPaint  –  render the vterm screen cell-by-cell
+    // ═════════════════════════════════════════════════════════════════════════
+    void OnPaint(wxPaintEvent&);
+
+
+
+ 
+    // ═════════════════════════════════════════════════════════════════════════
+    //  OnKeyDown  –  function / navigation keys → escape sequences
+    // ═════════════════════════════════════════════════════════════════════════
+    void OnKeyDown(wxKeyEvent& evt);
+
+  // ═════════════════════════════════════════════════════════════════════════
+    //  OnChar  –  printable characters, control sequences, UTF-8
+    // ═════════════════════════════════════════════════════════════════════════
+    void OnChar(wxKeyEvent& evt);
+  // ═════════════════════════════════════════════════════════════════════════
+    //  Members
+    // ═════════════════════════════════════════════════════════════════════════
+    VTerm*       m_vt  = nullptr;
+    VTermScreen* m_scr = nullptr;
+
+    int m_cols = 80;
+    int m_rows = 24;
+    int m_cw   = 8;
+    int m_ch   = 16;
+
+    wxFont  m_font;
+    wxTimer m_timer;
+
+    std::thread       m_thread;
+    std::mutex        m_mtx;
+    std::atomic<bool> m_running{false};
+    std::atomic<bool> m_dirty{false};
+};
+
+#endif // WX_LIBVTERM_PANEL_H
+
+

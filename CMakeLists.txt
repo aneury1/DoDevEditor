@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
 option(BUILD_WINDOWS "Cross-compile for Windows using MinGW-w64" OFF)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+
 
 if(BUILD_WINDOWS)
     find_program(_MCC NAMES x86_64-w64-mingw32-gcc-posix x86_64-w64-mingw32-gcc REQUIRED)
@@ -100,6 +103,10 @@ else()
     add_executable(${PROJECT_NAME} ${SI_SOURCES})
 endif()
 
+if(BUILD_WINDOWS)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+endif()
+
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/includes")
 
@@ -128,12 +135,26 @@ if(BUILD_WINDOWS)
         _WIN32_WINNT=0x0601
         UNICODE
         _UNICODE)
-    target_link_options(${PROJECT_NAME} PRIVATE
-        -static-libgcc
-        -static-libstdc++
-        -Wl,-subsystem,windows
-        -Wl,--gc-sections)
-    target_link_libraries(${PROJECT_NAME} PRIVATE
+   
+   # shared Settings
+   #     target_link_options(${PROJECT_NAME} PRIVATE
+   #     -static-libgcc
+   #     -static-libstdc++
+   #     -Wl,-subsystem,windows
+   #     -Wl,--gc-sections)
+   
+   target_link_options(${PROJECT_NAME} PRIVATE
+    -static
+    -static-libgcc
+    -static-libstdc++
+    -Wl,-subsystem,windows
+    -Wl,--gc-sections
+    -Wl,--as-needed
+)
+   
+   
+   
+        target_link_libraries(${PROJECT_NAME} PRIVATE
         comctl32 ole32 oleaut32 uuid winspool winmm
         shell32 shlwapi gdi32 comdlg32 wsock32)
 else()

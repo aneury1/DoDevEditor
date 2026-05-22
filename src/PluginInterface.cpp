@@ -1,15 +1,39 @@
-#pragma once
+
+#include "PluginInterface.h"
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
+
 #include <string>
 
-class PluginLoader
+void *PluginLoader::Load(const std::string &path)
 {
-public:
-    void* Load(const std::string& path);
+#ifdef _WIN32
+    return (void *)LoadLibraryA(path.c_str());
+#else
+    return dlopen(path.c_str(), RTLD_LAZY);
+#endif
+}
 
-    void* GetSymbol(void* handle, const std::string& name);
+void *PluginLoader::GetSymbol(void *handle, const std::string &name)
+{
+#ifdef _WIN32
+    return (void *)GetProcAddress((HMODULE)handle, name.c_str());
+#else
+    return dlsym(handle, name.c_str());
+#endif
+}
 
-    void Unload(void* handle);
-};
+void PluginLoader::Unload(void *handle)
+{
+#ifdef _WIN32
+    FreeLibrary((HMODULE)handle);
+#else
+    dlclose(handle);
+#endif
+}
 
 /*
 /// Sample>

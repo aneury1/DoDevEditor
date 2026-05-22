@@ -102,7 +102,7 @@ struct LangInfo {
     wxString    name;
 };
 
-static LangInfo DetectLanguage(const wxString& filename) {
+static inline LangInfo DetectLanguage(const wxString& filename) {
     wxString ext = wxFileName(filename).GetExt().Lower();
 
     // C / C++

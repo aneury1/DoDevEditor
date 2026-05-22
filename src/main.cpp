@@ -24,7 +24,7 @@
 #include <map>
 #include <vector>
 #include <string>
-#include "CommanPalette.h"
+#include "CommandPalette.h"
 #include "constant.h"
 #include "EditorPage.h"
 #include "PathData.h"

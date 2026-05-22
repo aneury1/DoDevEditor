@@ -10,21 +10,12 @@ class DynamicMenuBar : public wxMenuBar
 public:
     using Callback = std::function<void()>;
 
-    DynamicMenuBar(wxWindow* parent = nullptr)
-    {
-        m_parent = parent;
-    }
+    DynamicMenuBar(wxWindow* parent = nullptr);
 
     // ─────────────────────────────
     // Add Menu (File, Edit, View...)
     // ─────────────────────────────
-    wxMenu* AddMenu(const wxString& name)
-    {
-        wxMenu* menu = new wxMenu();
-        Append(menu, name);
-        m_menus[name] = menu;
-        return menu;
-    }
+    wxMenu* AddMenu(const wxString& name);
 
     // ─────────────────────────────
     // Add Item with Callback
@@ -33,41 +24,15 @@ public:
                  const wxString& label,
                  int id,
                  Callback cb,
-                 const wxString& shortcut = "")
-    {
-        wxMenu* menu = GetOrCreate(menuName);
-
-        wxString fullLabel = label;
-        if (!shortcut.empty())
-            fullLabel += "\t" + shortcut;
-
-        menu->Append(id, fullLabel);
-
-        Bind(wxEVT_MENU, [cb](wxCommandEvent&)
-        {
-            cb();
-        }, id);
-
-        m_callbacks[id] = cb;
-    }
+                 const wxString& shortcut = "");
 
     // ─────────────────────────────
     // Add Separator
     // ─────────────────────────────
-    void AddSeparator(const wxString& menuName)
-    {
-        wxMenu* menu = GetOrCreate(menuName);
-        menu->AppendSeparator();
-    }
+    void AddSeparator(const wxString& menuName);
 
 private:
-    wxMenu* GetOrCreate(const wxString& name)
-    {
-        if (m_menus.count(name))
-            return m_menus[name];
-
-        return AddMenu(name);
-    }
+    wxMenu* GetOrCreate(const wxString& name);
 
 private:
     wxWindow* m_parent = nullptr;
