@@ -6,6 +6,7 @@
 #include <wx/filepicker.h>
 
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 class wxCheckBox;
@@ -35,9 +36,11 @@ private:
     void BindEvents();
 
     void CompareFiles(bool showErrors = true);
+    void RenderCurrentView();
+    [[nodiscard]] jld::DiffResult BuildVisibleResult(const jld::DiffResult& result) const;
     void RenderResult(const jld::DiffResult& result);
     void RenderSide(wxStyledTextCtrl* editor, const jld::DiffResult& result, Side side);
-    void UpdateSummary(const jld::DiffResult& result);
+    void UpdateSummary(const jld::DiffResult& completeResult, const jld::DiffResult& visibleResult);
     void ClearEditors();
 
     void OpenFile(Side side);
@@ -64,12 +67,15 @@ private:
     wxCheckBox* m_ignoreTimestamp {nullptr};
     wxCheckBox* m_ignoreWhitespace {nullptr};
     wxCheckBox* m_ignoreCase {nullptr};
+    wxCheckBox* m_showDifferencesOnly {nullptr};
+    wxCheckBox* m_showNewestOnly {nullptr};
     wxCheckBox* m_autoCompare {nullptr};
     wxStyledTextCtrl* m_leftEditor {nullptr};
     wxStyledTextCtrl* m_rightEditor {nullptr};
     wxStaticText* m_summaryText {nullptr};
     wxSplitterWindow* m_splitter {nullptr};
 
+    std::optional<jld::DiffResult> m_lastResult;
     std::vector<std::size_t> m_differenceRows;
     std::size_t m_currentDifference {0};
     bool m_hasCurrentDifference {false};

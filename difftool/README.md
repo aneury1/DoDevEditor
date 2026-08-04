@@ -10,6 +10,8 @@ A wxWidgets C++17 desktop application for comparing two `journalctl` or syslog e
 - Checkbox to ignore journal timestamps while keeping the original timestamps visible.
 - Recognizes ISO, syslog, precise, monotonic, and bracketed timestamp prefixes.
 - Optional whitespace and case-insensitive comparison.
+- **Differences only** filter to hide unchanged rows.
+- **Newest only** filter to show only added or modified candidate lines and hide removed reference-only rows.
 - Synchronized vertical and horizontal scrolling.
 - Previous/next difference navigation with `F7` and `F8`.
 - Drag a file directly onto either comparison pane.
@@ -99,3 +101,9 @@ cmake --build build --config Release
 ```
 
 The exact wxWidgets configuration depends on whether the library was built with MSVC or MinGW.
+
+## View filters
+
+- **Differences only** removes equal rows from both panes while retaining added, removed, and modified rows.
+- **Newest only** shows candidate-side additions and modifications. Rows that exist only in the reference file are omitted.
+- The filters operate on the cached comparison result, so toggling them does not reread or recompute the files.

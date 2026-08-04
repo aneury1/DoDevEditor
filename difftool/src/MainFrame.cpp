@@ -42,6 +42,8 @@ enum ControlId
     IdIgnoreTimestamp,
     IdIgnoreWhitespace,
     IdIgnoreCase,
+    IdShowDifferencesOnly,
+    IdShowNewestOnly,
     IdAutoCompare,
     IdLeftPicker,
     IdRightPicker
@@ -279,6 +281,14 @@ void MainFrame::BuildInterface()
 
     m_ignoreWhitespace = new wxCheckBox(rootPanel, IdIgnoreWhitespace, "Ignore whitespace");
     m_ignoreCase = new wxCheckBox(rootPanel, IdIgnoreCase, "Ignore case");
+
+    m_showDifferencesOnly = new wxCheckBox(rootPanel, IdShowDifferencesOnly, "Differences only");
+    m_showDifferencesOnly->SetToolTip("Hide rows that are equal in both log files");
+
+    m_showNewestOnly = new wxCheckBox(rootPanel, IdShowNewestOnly, "Newest only");
+    m_showNewestOnly->SetToolTip(
+        "Show only candidate lines that are new or modified; removed reference-only lines are hidden");
+
     m_autoCompare = new wxCheckBox(rootPanel, IdAutoCompare, "Compare automatically");
     m_autoCompare->SetValue(true);
 
@@ -289,6 +299,8 @@ void MainFrame::BuildInterface()
     optionRow->Add(m_ignoreTimestamp, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
     optionRow->Add(m_ignoreWhitespace, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
     optionRow->Add(m_ignoreCase, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
+    optionRow->Add(m_showDifferencesOnly, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
+    optionRow->Add(m_showNewestOnly, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
     optionRow->Add(m_autoCompare, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
     optionRow->AddStretchSpacer();
     optionRow->Add(previousButton, 0, wxRIGHT, 6);
@@ -408,6 +420,8 @@ void MainFrame::BindEvents()
     Bind(wxEVT_CHECKBOX, &MainFrame::OnOptionChanged, this, IdIgnoreTimestamp);
     Bind(wxEVT_CHECKBOX, &MainFrame::OnOptionChanged, this, IdIgnoreWhitespace);
     Bind(wxEVT_CHECKBOX, &MainFrame::OnOptionChanged, this, IdIgnoreCase);
+    Bind(wxEVT_CHECKBOX, &MainFrame::OnOptionChanged, this, IdShowDifferencesOnly);
+    Bind(wxEVT_CHECKBOX, &MainFrame::OnOptionChanged, this, IdShowNewestOnly);
     Bind(wxEVT_CHECKBOX, &MainFrame::OnOptionChanged, this, IdAutoCompare);
 
     Bind(wxEVT_FILEPICKER_CHANGED, &MainFrame::OnFileChanged, this, IdLeftPicker);
@@ -444,9 +458,8 @@ void MainFrame::CompareFiles(bool showErrors)
         const auto rightLines = jld::LogNormalizer::loadFile(
             filesystemPath(m_rightPicker->GetPath()), options);
 
-        const jld::DiffResult result = jld::DiffEngine::compare(leftLines, rightLines);
-        RenderResult(result);
-        UpdateSummary(result);
+        m_lastResult = jld::DiffEngine::compare(leftLines, rightLines);
+        RenderCurrentView();
 
         SetTitle(
             wxString("Journal Log Diff - ") +
@@ -463,6 +476,77 @@ void MainFrame::CompareFiles(bool showErrors)
             wxMessageBox(wxString::FromUTF8(error.what()), "Comparison error", wxOK | wxICON_ERROR, this);
         }
     }
+}
+
+void MainFrame::RenderCurrentView()
+{
+    if (!m_lastResult)
+    {
+        return;
+    }
+
+    const jld::DiffResult visibleResult = BuildVisibleResult(*m_lastResult);
+    RenderResult(visibleResult);
+    UpdateSummary(*m_lastResult, visibleResult);
+}
+
+jld::DiffResult MainFrame::BuildVisibleResult(const jld::DiffResult& result) const
+{
+    const bool newestOnly = m_showNewestOnly->IsChecked();
+    const bool differencesOnly = m_showDifferencesOnly->IsChecked();
+
+    if (!newestOnly && !differencesOnly)
+    {
+        return result;
+    }
+
+    jld::DiffResult filtered;
+    filtered.rows.reserve(result.rows.size());
+
+    for (const auto& row : result.rows)
+    {
+        bool include = true;
+
+        if (newestOnly)
+        {
+            include = row.rightKind == jld::DiffSideKind::Added ||
+                      row.rightKind == jld::DiffSideKind::Modified;
+        }
+        else if (differencesOnly)
+        {
+            include = row.isDifferent();
+        }
+
+        if (!include)
+        {
+            continue;
+        }
+
+        filtered.rows.push_back(row);
+        switch (row.rightKind)
+        {
+            case jld::DiffSideKind::Equal:
+                ++filtered.summary.equalRows;
+                break;
+            case jld::DiffSideKind::Added:
+                ++filtered.summary.addedRows;
+                break;
+            case jld::DiffSideKind::Modified:
+                ++filtered.summary.modifiedRows;
+                break;
+            case jld::DiffSideKind::Placeholder:
+                if (row.leftKind == jld::DiffSideKind::Removed)
+                {
+                    ++filtered.summary.removedRows;
+                }
+                break;
+            case jld::DiffSideKind::Removed:
+                ++filtered.summary.removedRows;
+                break;
+        }
+    }
+
+    return filtered;
 }
 
 void MainFrame::RenderResult(const jld::DiffResult& result)
@@ -533,16 +617,30 @@ void MainFrame::RenderSide(wxStyledTextCtrl* editor, const jld::DiffResult& resu
     editor->SetReadOnly(true);
 }
 
-void MainFrame::UpdateSummary(const jld::DiffResult& result)
+void MainFrame::UpdateSummary(
+    const jld::DiffResult& completeResult,
+    const jld::DiffResult& visibleResult)
 {
-    const auto& summary = result.summary;
-    m_summaryText->SetLabel(wxString::Format(
+    const auto& summary = completeResult.summary;
+    const bool filtered = m_showDifferencesOnly->IsChecked() || m_showNewestOnly->IsChecked();
+
+    wxString label = wxString::Format(
         "Equal: %llu    Changed: %llu    Removed from reference: %llu    New in candidate: %llu    Total difference rows: %llu",
         static_cast<unsigned long long>(summary.equalRows),
         static_cast<unsigned long long>(summary.modifiedRows),
         static_cast<unsigned long long>(summary.removedRows),
         static_cast<unsigned long long>(summary.addedRows),
-        static_cast<unsigned long long>(summary.differenceRows())));
+        static_cast<unsigned long long>(summary.differenceRows()));
+
+    if (filtered)
+    {
+        label += wxString::Format(
+            "    Visible rows: %llu of %llu",
+            static_cast<unsigned long long>(visibleResult.rows.size()),
+            static_cast<unsigned long long>(completeResult.rows.size()));
+    }
+
+    m_summaryText->SetLabel(label);
 
     if (summary.differenceRows() == 0)
     {
@@ -550,7 +648,10 @@ void MainFrame::UpdateSummary(const jld::DiffResult& result)
     }
     else
     {
-        SetStatusText(wxString::Format("Comparison complete: %llu difference rows", static_cast<unsigned long long>(summary.differenceRows())));
+        SetStatusText(wxString::Format(
+            "Comparison complete: %llu difference rows, %llu currently visible",
+            static_cast<unsigned long long>(summary.differenceRows()),
+            static_cast<unsigned long long>(visibleResult.rows.size())));
     }
 }
 
@@ -564,6 +665,7 @@ void MainFrame::ClearEditors()
     }
     m_differenceRows.clear();
     m_hasCurrentDifference = false;
+    m_lastResult.reset();
     m_summaryText->SetLabel("No comparison loaded");
 }
 
@@ -683,6 +785,12 @@ void MainFrame::OnSwap(wxCommandEvent&)
 
 void MainFrame::OnOptionChanged(wxCommandEvent& event)
 {
+    if (event.GetId() == IdShowDifferencesOnly || event.GetId() == IdShowNewestOnly)
+    {
+        RenderCurrentView();
+        return;
+    }
+
     if (event.GetId() == IdAutoCompare)
     {
         if (m_autoCompare->IsChecked() && CanCompare())
@@ -731,10 +839,11 @@ void MainFrame::OnRightUpdateUi(wxStyledTextEvent& event)
 void MainFrame::OnAbout(wxCommandEvent&)
 {
     wxMessageBox(
-        "Journal Log Diff 1.0\n\n"
+        "Journal Log Diff 1.1\n\n"
         "Side-by-side comparison for journalctl and syslog exports.\n"
         "Red marks removed or changed reference lines.\n"
-        "Green marks new or changed candidate lines.",
+        "Green marks new or changed candidate lines.\n"
+        "Use Differences only or Newest only to filter visible rows.",
         "About Journal Log Diff",
         wxOK | wxICON_INFORMATION,
         this);

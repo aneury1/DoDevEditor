@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(JournalLogDiff
-    VERSION 1.0.0
+    VERSION 1.1.0
     DESCRIPTION "Side-by-side journal log comparison tool"
     LANGUAGES CXX
 )
