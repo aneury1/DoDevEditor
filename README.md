@@ -8,6 +8,7 @@ plugins, LSP Server and other nitty gritty details that would do "powerfull"
 it has the minimun I need in my days, probably in the far future I will improve it with 
 these feature but by now just enjoy this. 
 
+#this editor
 
 # Build 
 
@@ -92,3 +93,12 @@ sudo apt update
 sudo apt install python3-dev
 
 ```
+
+
+####  Todo:
+
+these working in progress feature must be implemented.
+- context menu
+- save history.
+- auto completion
+- GDB Integration

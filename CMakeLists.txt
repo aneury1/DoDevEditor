@@ -1,157 +1,168 @@
- 
-cmake_minimum_required(VERSION 3.20.0)
+cmake_minimum_required(VERSION 3.20)
 
-set(PROJECT_NAME DoDevEditor)
-project(${PROJECT_NAME} LANGUAGES CXX)
-# set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
-set(CMAKE_WIN32_MINGW FALSE)
+option(BUILD_WINDOWS "Cross-compile for Windows using MinGW-w64" OFF)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)
 
-
-if(CMAKE_WIN32_MINGW)
-    # Include the toolchain setup file
-    include(cmake/mingw32.cmake)
-    # Apply the toolchain settings
-    setup_mingw_toolchain()
+if(BUILD_WINDOWS)
+    find_program(_MCC NAMES x86_64-w64-mingw32-gcc-posix x86_64-w64-mingw32-gcc REQUIRED)
+    find_program(_MCX NAMES x86_64-w64-mingw32-g++-posix x86_64-w64-mingw32-g++ REQUIRED)
+    find_program(_MRC NAMES x86_64-w64-mingw32-windres REQUIRED)
+    find_program(_MST NAMES x86_64-w64-mingw32-strip)
+    set(CMAKE_SYSTEM_NAME      Windows CACHE INTERNAL "")
+    set(CMAKE_SYSTEM_PROCESSOR x86_64  CACHE INTERNAL "")
+    set(CMAKE_C_COMPILER   "${_MCC}" CACHE FILEPATH "" FORCE)
+    set(CMAKE_CXX_COMPILER "${_MCX}" CACHE FILEPATH "" FORCE)
+    set(CMAKE_RC_COMPILER  "${_MRC}" CACHE FILEPATH "" FORCE)
+    if(_MST)
+        set(CMAKE_STRIP "${_MST}" CACHE FILEPATH "" FORCE)
+    endif()
+    set(CMAKE_FIND_ROOT_PATH /usr/x86_64-w64-mingw32)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+else()
+  # add_compile_defintion(LINUX_PLATFORM)
 endif()
 
-set(FETCH_LIBGIT_DEFINITIONS TRUE)
-set(COMPILE_CLANG_DEFINITIONS FALSE)
+project(DoDevEditor VERSION 1.0.0 LANGUAGES C CXX)
 
-option(ENABLE_CLANG_TIDY "Enable clang-tidy" FALSE)
-option(ENABLE_COVERAGE "Enable code coverage" FALSE)
-option(ENABLE_TESTING "Enable code Testing" FALSE)
-option(ENABLE_THIRDPARTY "Allow Insta" FALSE)
-option(FETCH_WXWIDGET "Allow Insta" FALSE)
-option(FETCH_JSON "Allow JSON" FALSE)
-option(USING_PLUGINS "Allow Insta" FALSE)
-option(COMPILE_CLANG_DEFINITIONS, "Allow clang-dev for cpp" ${COMPILE_CLANG_DEFINITIONS})
-
-set (CMAKE_CXX_STANDARD 17)
-
-
-if(ENABLE_CLANG_TIDY)
-    set(CMAKE_CXX_CLANG_TIDY "clang-tidy;-checks=*")
+if(BUILD_WINDOWS)
+    enable_language(RC)
 endif()
 
-if (ENABLE_COVERAGE)
-    message(STATUS "Code Coverage enabled")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -O0 -g")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
-endif()
-
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD          17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS        OFF)
 
-
-# Include Tree-sitter module
-include(TreeSitter)
-
-if(FETCH_WXWIDGET)
-    message("Fetching wxWidget version v3.2.2")
-    include(FetchContent)
-    # Fetch wxWidgets
-    FetchContent_Declare(
-        wxWidgets
-        GIT_REPOSITORY https://github.com/wxWidgets/wxWidgets.git
-        GIT_TAG        v3.0.0  # Use the latest stable version
-    )
-    FetchContent_MakeAvailable(wxWidgets)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
-
-
-if(CMAKE_WIN32_MINGW)
-    include(FetchContent)
-    FetchContent_Declare(
-        libgit2
-        GIT_REPOSITORY https://github.com/libgit2/libgit2.git
-        GIT_TAG v1.7.1  # Change this to the latest version
-    )
-    # Fetch and add libgit2
-    FetchContent_MakeAvailable(libgit2)
-endif()
-
-
-
-
-add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS)
-
-file(GLOB_RECURSE SRCS src/*.cpp)
-
-include_directories(includes PUBLIC)
-
-
-
-### Try static Compilation only
-#set(wxWidgets_USE_STATIC ON)
-
-
-#find_package(wxWidgets REQUIRED COMPONENTS core base)
-
-#if(wxWidgets_FOUND)
-#    message(STATUS "wxWidgets encontrado: ${wxWidgets_INCLUDE_DIRS}")
-#else()
-#    message(FATAL_ERROR "wxWidgets no encontrado")
-#endif()
-### Try static Compilation only, Above
-
-
-if(CMAKE_WIN32_MINGW)
-    add_compile_definitions(__lib_git_2_defined)
-    # Include the toolchain setup file
-    include(cmake/mingw32.cmake)
-    # Apply the toolchain settings
-    setup_mingw_toolchain()
-endif()
-
-find_package(Python3 COMPONENTS Development REQUIRED)
-
-add_executable(${PROJECT_NAME} ${SRCS})
-#cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/mingw-toolchain.cmake  ~/Documents/projects/myprojects/DoDevEditor/
-
-target_include_directories(${PROJECT_NAME}  PRIVATE ${Python3_INCLUDE_DIRS})
  
-message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
-message(STATUS "Python library: ${Python3_LIBRARIES}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
-find_package(wxWidgets REQUIRED COMPONENTS core base stc aui) 
+include(FetchContent)
+set(FETCHCONTENT_QUIET               OFF)
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 
-include(${wxWidgets_USE_FILE})
+set(wxBUILD_SHARED          OFF  CACHE BOOL   "" FORCE)
+set(wxBUILD_TESTS           OFF CACHE STRING "" FORCE)
+set(wxBUILD_SAMPLES         OFF  CACHE BOOL   "" FORCE)
+set(wxBUILD_DEMOS           OFF  CACHE BOOL   "" FORCE)
+set(wxBUILD_INSTALL         OFF  CACHE BOOL   "" FORCE)
+set(wxBUILD_MONOLITHIC      OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_STC               ON   CACHE BOOL   "" FORCE)
+set(wxUSE_AUI               ON   CACHE BOOL   "" FORCE)
+set(wxUSE_OPENGL            OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_WEBVIEW           OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_MEDIACTRL         OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_LIBLZMA           OFF  CACHE BOOL   "" FORCE)
+set(wxUSE_EXPAT             builtin CACHE STRING "" FORCE)
+set(wxUSE_LIBJPEG           builtin CACHE STRING "" FORCE)
+set(wxUSE_LIBPNG            builtin CACHE STRING "" FORCE)
+set(wxUSE_LIBTIFF           builtin CACHE STRING "" FORCE)
+set(wxUSE_ZLIB              builtin CACHE STRING "" FORCE)
+set(wxUSE_REGEX             builtin CACHE STRING "" FORCE)
+set(wxUSE_NANOSVG           builtin CACHE STRING "" FORCE)
 
-find_package(wxWidgets REQUIRED COMPONENTS core base)
+FetchContent_Declare(wxWidgets
+    URL https://github.com/wxWidgets/wxWidgets/releases/download/v3.2.4/wxWidgets-3.2.4.tar.bz2
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(wxWidgets)
 
-include(${wxWidgets_USE_FILE})
- 
-#set(TREE_SITTER_LIBRARY TreeSitter::Core TreeSitter::Cpp)
+set(JSONCPP_WITH_TESTS               OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_PKGCONFIG_SUPPORT   OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_CMAKE_PACKAGE       OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_EXAMPLE             OFF CACHE BOOL "" FORCE)
 
-target_link_libraries(${PROJECT_NAME} ${wxWidgets_LIBRARIES} git2  ${Python3_LIBRARIES} dlt )# ${TREE_SITTER_LIBRARY}) 
+FetchContent_Declare(jsoncpp
+    GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
+    GIT_TAG        1.9.5
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(jsoncpp)
 
-# tinyxml2 git2 )
+file(GLOB_RECURSE SI_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/*.c")
 
-# If needed, pass compiler/linker flags
-
-target_compile_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_CFLAGS_OTHER})
-
-target_link_options(${PROJECT_NAME} PRIVATE ${LIBGIT2_LDFLAGS_OTHER})
-
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wwrite-strings")
-   target_compile_options(${PROJECT_NAME} PRIVATE -Wwrite-strings)
+if(NOT SI_SOURCES)
+    message(FATAL_ERROR "No source files found in ${CMAKE_SOURCE_DIR}/src/")
 endif()
 
-list(APPEND IncludesDirs PRIVATE includes)
-    
-
-target_include_directories(${PROJECT_NAME} BEFORE ${IncludesDirs} )#${TREE_SITTER_INCLUDE_DIRS})
-
-if(ENABLE_TESTING)
-    message("Testing is enabled")
-    enable_testing()
-    include(CTest)
-    add_subdirectory(test)
+if(BUILD_WINDOWS)
+    add_executable(${PROJECT_NAME} WIN32 ${SI_SOURCES})
+else()
+    add_executable(${PROJECT_NAME} ${SI_SOURCES})
 endif()
 
-include(CPack)
+if(BUILD_WINDOWS)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+endif()
 
-install(TARGETS ${PROJECT_NAME} DESTINATION /usr/bin)
+target_include_directories(${PROJECT_NAME} PRIVATE
+    "${CMAKE_SOURCE_DIR}/includes")
 
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    wx::stc
+    wx::aui
+    wx::adv
+    wx::core
+    wx::base
+    vterm
+    jsoncpp_static)
+
+target_compile_options(${PROJECT_NAME} PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:
+        -Wall -Wextra
+        -Wno-unused-parameter
+        -Wno-deprecated-declarations>
+    $<$<CONFIG:Release>:        -O2>
+    $<$<CONFIG:MinSizeRel>:     -Os>
+    $<$<CONFIG:Debug>:          -g -O0>
+    $<$<CONFIG:RelWithDebInfo>: -O2 -g>)
+
+if(BUILD_WINDOWS)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        WINVER=0x0601
+        _WIN32_WINNT=0x0601
+        UNICODE
+        _UNICODE)
+   
+   # shared Settings
+   #     target_link_options(${PROJECT_NAME} PRIVATE
+   #     -static-libgcc
+   #     -static-libstdc++
+   #     -Wl,-subsystem,windows
+   #     -Wl,--gc-sections)
+   
+   target_link_options(${PROJECT_NAME} PRIVATE
+    -static
+    -static-libgcc
+    -static-libstdc++
+    -Wl,-subsystem,windows
+    -Wl,--gc-sections
+    -Wl,--as-needed
+)
+   
+   
+   
+        target_link_libraries(${PROJECT_NAME} PRIVATE
+        comctl32 ole32 oleaut32 uuid winspool winmm
+        shell32 shlwapi gdi32 comdlg32 wsock32)
+else()
+    target_link_options(${PROJECT_NAME} PRIVATE -Wl,--gc-sections)
+endif()
+
+if(CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$" AND CMAKE_STRIP)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND "${CMAKE_STRIP}" --strip-all "$<TARGET_FILE:${PROJECT_NAME}>"
+        VERBATIM)
+endif()
