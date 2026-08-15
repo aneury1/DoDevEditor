@@ -29,6 +29,7 @@
 #include <string>
 
 #include "JsonStyledTextCtrl.h"
+#include <json/json.h>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EditorPage – one wxStyledTextCtrl per tab
@@ -50,11 +51,14 @@ public:
     // ── Save to disk ──
     bool SaveFile(const wxString& path = wxEmptyString);
 
-    // ── Apply VSCode dark theme + syntax ──
+    // ── Apply JSON-driven editor theme + syntax ──
     void ApplyTheme();
 
     void ApplySyntax();
+    const wxString& GetLanguageName() const { return m_languageName; }
 private:
+    Json::Value m_theme;
+    wxString m_languageName = "Plain Text";
     void OnChange(wxStyledTextEvent&);
 
     void OnUpdateUI(wxStyledTextEvent&);

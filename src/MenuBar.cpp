@@ -41,6 +41,30 @@
         m_callbacks[id] = cb;
     }
 
+    void DynamicMenuBar::AddCheckItem(const wxString& menuName,
+                                      const wxString& label,
+                                      int id,
+                                      Callback cb,
+                                      bool checked,
+                                      const wxString& shortcut)
+    {
+        wxMenu* menu = GetOrCreate(menuName);
+
+        wxString fullLabel = label;
+        if (!shortcut.empty())
+            fullLabel += "\t" + shortcut;
+
+        menu->AppendCheckItem(id, fullLabel);
+        menu->Check(id, checked);
+
+        Bind(wxEVT_MENU, [cb](wxCommandEvent&)
+        {
+            cb();
+        }, id);
+
+        m_callbacks[id] = cb;
+    }
+
     // ─────────────────────────────
     // Add Separator
     // ─────────────────────────────

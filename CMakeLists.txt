@@ -29,6 +29,90 @@ endif()
 
 project(DoDevEditor VERSION 1.0.0 LANGUAGES C CXX)
 
+find_package(Threads REQUIRED)
+
+# Optional LLVM/Clang source analysis. The editor remains fully buildable when
+# libclang is absent; only symbols/call-tree/go-to-definition are disabled.
+option(DODEV_ENABLE_LLVM "Enable optional libclang C/C++ analysis" ON)
+option(DODEV_REQUIRE_LLVM "Fail configuration when libclang is requested but missing" OFF)
+
+set(DODEV_HAS_LIBCLANG OFF)
+set(DODEV_LIBCLANG_TARGET "")
+
+if(DODEV_ENABLE_LLVM AND NOT BUILD_WINDOWS)
+    # Prefer Clang's CMake package when the distro exports it, then fall back
+    # to the stable clang-c/Index.h + libclang shared library pair.
+    find_package(Clang CONFIG QUIET)
+
+    if(TARGET libclang)
+        set(DODEV_HAS_LIBCLANG ON)
+        set(DODEV_LIBCLANG_TARGET libclang)
+    else()
+        set(_DODEV_CLANG_INCLUDE_HINTS ${CLANG_INCLUDE_DIRS})
+        set(_DODEV_CLANG_LIBRARY_HINTS "")
+        if(DEFINED LLVM_LIBRARY_DIRS)
+            list(APPEND _DODEV_CLANG_LIBRARY_HINTS ${LLVM_LIBRARY_DIRS})
+        endif()
+        if(DEFINED CLANG_LIBRARY_DIRS)
+            list(APPEND _DODEV_CLANG_LIBRARY_HINTS ${CLANG_LIBRARY_DIRS})
+        endif()
+
+        # llvm-config makes versioned distro layouts such as
+        # /usr/lib/llvm-20/include and /usr/lib/llvm-20/lib discoverable.
+        find_program(DODEV_LLVM_CONFIG
+            NAMES llvm-config llvm-config-22 llvm-config-21 llvm-config-20 llvm-config-19
+                  llvm-config-18 llvm-config-17 llvm-config-16 llvm-config-15 llvm-config-14)
+        if(DODEV_LLVM_CONFIG)
+            execute_process(
+                COMMAND "${DODEV_LLVM_CONFIG}" --includedir
+                OUTPUT_VARIABLE _DODEV_LLVM_CONFIG_INCLUDE
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET)
+            execute_process(
+                COMMAND "${DODEV_LLVM_CONFIG}" --libdir
+                OUTPUT_VARIABLE _DODEV_LLVM_CONFIG_LIB
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET)
+            if(_DODEV_LLVM_CONFIG_INCLUDE)
+                list(APPEND _DODEV_CLANG_INCLUDE_HINTS "${_DODEV_LLVM_CONFIG_INCLUDE}")
+            endif()
+            if(_DODEV_LLVM_CONFIG_LIB)
+                list(APPEND _DODEV_CLANG_LIBRARY_HINTS "${_DODEV_LLVM_CONFIG_LIB}")
+            endif()
+        endif()
+
+        find_path(DODEV_LIBCLANG_INCLUDE_DIR
+            NAMES clang-c/Index.h
+            HINTS ${_DODEV_CLANG_INCLUDE_HINTS}
+            PATH_SUFFIXES include llvm/include
+                lib/llvm14/include lib/llvm15/include lib/llvm16/include lib/llvm17/include
+                lib/llvm18/include lib/llvm19/include lib/llvm20/include lib/llvm21/include lib/llvm22/include
+                llvm14/include llvm15/include llvm16/include llvm17/include llvm18/include
+                llvm19/include llvm20/include llvm21/include llvm22/include)
+
+        find_library(DODEV_LIBCLANG_LIBRARY
+            NAMES clang libclang clang-22 clang-21 clang-20 clang-19 clang-18 clang-17 clang-16 clang-15 clang-14
+            HINTS ${_DODEV_CLANG_LIBRARY_HINTS}
+            PATH_SUFFIXES lib lib64 llvm/lib llvm14/lib llvm15/lib llvm16/lib llvm17/lib
+                llvm18/lib llvm19/lib llvm20/lib llvm21/lib llvm22/lib)
+
+        if(DODEV_LIBCLANG_INCLUDE_DIR AND DODEV_LIBCLANG_LIBRARY)
+            set(DODEV_HAS_LIBCLANG ON)
+        endif()
+    endif()
+
+    if(DODEV_HAS_LIBCLANG)
+        message(STATUS "DoDevEditor LLVM analysis: enabled")
+    elseif(DODEV_REQUIRE_LLVM)
+        message(FATAL_ERROR
+            "DODEV_REQUIRE_LLVM=ON but libclang was not found. Install Clang/LLVM development files or set DODEV_ENABLE_LLVM=OFF.")
+    else()
+        message(STATUS "DoDevEditor LLVM analysis: disabled (libclang not found; editor will still build)")
+    endif()
+elseif(DODEV_ENABLE_LLVM AND BUILD_WINDOWS)
+    message(STATUS "DoDevEditor LLVM analysis: disabled for the default MinGW cross-build; provide a target libclang integration to enable it")
+endif()
+
 if(BUILD_WINDOWS)
     enable_language(RC)
 endif()
@@ -36,6 +120,18 @@ endif()
 set(CMAKE_CXX_STANDARD          17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS        OFF)
+
+# Keep C dependencies on a known GNU C17 baseline. GCC 15 defaults to GNU C23,
+# which can expose additional compatibility problems in older third-party C
+# sources. This language-mode selection is intentionally separate from the
+# wxWidgets zlib fix below: missing POSIX declarations must be solved by using
+# the correct headers/library, not by changing the C standard.
+set(CMAKE_C_STANDARD          17)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS        ON)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:-std=gnu17>)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
@@ -66,15 +162,49 @@ set(wxUSE_EXPAT             builtin CACHE STRING "" FORCE)
 set(wxUSE_LIBJPEG           builtin CACHE STRING "" FORCE)
 set(wxUSE_LIBPNG            builtin CACHE STRING "" FORCE)
 set(wxUSE_LIBTIFF           builtin CACHE STRING "" FORCE)
-set(wxUSE_ZLIB              builtin CACHE STRING "" FORCE)
+# On Linux/Unix use the system zlib.  wxWidgets' bundled zlib is old enough
+# that modern GCC (14+) rejects its missing POSIX function declarations
+# (read/close/lseek) as errors.  Windows cross-builds keep the bundled copy so
+# the project remains self-contained for MinGW.
+if(BUILD_WINDOWS)
+    set(wxUSE_ZLIB          builtin CACHE STRING "" FORCE)
+else()
+    set(wxUSE_ZLIB          sys     CACHE STRING "" FORCE)
+endif()
 set(wxUSE_REGEX             builtin CACHE STRING "" FORCE)
 set(wxUSE_NANOSVG           builtin CACHE STRING "" FORCE)
 
 FetchContent_Declare(wxWidgets
-    URL https://github.com/wxWidgets/wxWidgets/releases/download/v3.2.4/wxWidgets-3.2.4.tar.bz2
+    URL https://github.com/wxWidgets/wxWidgets/releases/download/v3.2.11/wxWidgets-3.2.11.tar.bz2
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(wxWidgets)
+
+# Defensive fallback for custom configurations that explicitly switch zlib back
+# to "builtin" on POSIX.  zlib's gz*.c files require <unistd.h> declarations.
+if(TARGET wxzlib AND UNIX AND NOT WIN32)
+    target_compile_definitions(wxzlib PRIVATE HAVE_UNISTD_H=1)
+endif()
+
+# libvterm is built directly from source because the editor only needs the
+# library target and public headers. SOURCE_SUBDIR intentionally points to a
+# non-existent directory so FetchContent populates the repository without
+# trying to add libvterm's own build files.
+FetchContent_Declare(libvterm
+    GIT_REPOSITORY https://github.com/aneury1/libvterm.git
+    GIT_TAG        nvim
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  __dodeveditor_no_cmake_subdir__
+)
+FetchContent_MakeAvailable(libvterm)
+
+file(GLOB VTERM_SOURCES CONFIGURE_DEPENDS "${libvterm_SOURCE_DIR}/src/*.c")
+if(NOT VTERM_SOURCES)
+    message(FATAL_ERROR "libvterm: no C sources found in ${libvterm_SOURCE_DIR}/src")
+endif()
+
+add_library(vterm STATIC ${VTERM_SOURCES})
+target_include_directories(vterm PUBLIC "${libvterm_SOURCE_DIR}/include")
 
 set(JSONCPP_WITH_TESTS               OFF CACHE BOOL "" FORCE)
 set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL "" FORCE)
@@ -110,6 +240,18 @@ endif()
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/includes")
 
+if(DODEV_HAS_LIBCLANG)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_HAS_LIBCLANG=1)
+    if(DODEV_LIBCLANG_TARGET)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${DODEV_LIBCLANG_TARGET})
+    else()
+        target_include_directories(${PROJECT_NAME} PRIVATE "${DODEV_LIBCLANG_INCLUDE_DIR}")
+        target_link_libraries(${PROJECT_NAME} PRIVATE "${DODEV_LIBCLANG_LIBRARY}")
+    endif()
+else()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_HAS_LIBCLANG=0)
+endif()
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
     wx::stc
     wx::aui
@@ -117,7 +259,17 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     wx::core
     wx::base
     vterm
-    jsoncpp_static)
+    jsoncpp_static
+    Threads::Threads)
+
+# JSON-driven syntax highlighting and editor themes are runtime resources.
+# Keep a copy beside the executable so users can edit them without rebuilding.
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/config"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/config"
+    COMMENT "Copying syntax/theme JSON configuration"
+    VERBATIM)
 
 target_compile_options(${PROJECT_NAME} PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:

@@ -27,6 +27,16 @@ public:
                  const wxString& shortcut = "");
 
     // ─────────────────────────────
+    // Add runtime-toggleable check item
+    // ─────────────────────────────
+    void AddCheckItem(const wxString& menuName,
+                      const wxString& label,
+                      int id,
+                      Callback cb,
+                      bool checked = false,
+                      const wxString& shortcut = "");
+
+    // ─────────────────────────────
     // Add Separator
     // ─────────────────────────────
     void AddSeparator(const wxString& menuName);
