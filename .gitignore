@@ -36,8 +36,15 @@
 *.user
 
 bin/
+_deps/
 build/
 config/
 obj/
 .vs/
 build-mingw32/
+.ignored_doc
+# DoDevEditor optional LLVM compiler output
+.dodev/llvm-obj/
+
+# DoDevEditor local file-history cache
+.dodev/history/

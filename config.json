@@ -1,0 +1,25 @@
+{
+	"ai" : 
+	{
+		"base_url" : "http://192.168.1.136:11434",
+		"copilot_executable" : "copilot",
+		"enabled" : true,
+		"environment_variable" : "",
+		"include_current_file" : true,
+		"include_git_diff" : true,
+		"include_llvm" : true,
+		"include_selection" : true,
+		"keyring_id" : "ollama",
+		"max_output_tokens" : 4096,
+		"model" : "",
+		"ollama_context" : 32768,
+		"ollama_keep_alive" : "5m",
+		"ollama_stream" : true,
+		"ollama_temperature" : 0.20000000000000001,
+		"ollama_think" : false,
+		"provider" : 4,
+		"secret_source" : 4
+	},
+	"editor_theme" : "vscode",
+	"last_workspace_folders" : null
+}
