@@ -84,14 +84,14 @@ AIChatPage::AIChatPage(wxWindow* parent)
     m_includeCurrentFile = new wxCheckBox(contextBar, wxID_ANY, "Current file");
     m_includeSelection = new wxCheckBox(contextBar, wxID_ANY, "Selection");
     m_includeGitDiff = new wxCheckBox(contextBar, wxID_ANY, "Git diff");
-    m_includeLLVM = new wxCheckBox(contextBar, wxID_ANY, "LLVM");
-    for (wxCheckBox* checkbox : {m_includeCurrentFile, m_includeSelection, m_includeGitDiff, m_includeLLVM})
+    m_includeCodeAnalysis = new wxCheckBox(contextBar, wxID_ANY, "Code Analysis");
+    for (wxCheckBox* checkbox : {m_includeCurrentFile, m_includeSelection, m_includeGitDiff, m_includeCodeAnalysis})
         checkbox->SetForegroundColour(wxColour(205, 205, 205));
     contextSizer->Add(contextLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 8);
     contextSizer->Add(m_includeCurrentFile, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
     contextSizer->Add(m_includeSelection, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
     contextSizer->Add(m_includeGitDiff, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
-    contextSizer->Add(m_includeLLVM, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    contextSizer->Add(m_includeCodeAnalysis, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
     contextBar->SetSizer(contextSizer);
     root->Add(contextBar, 0, wxEXPAND | wxTOP, 6);
 
@@ -174,7 +174,7 @@ void AIChatPage::ReloadSettings()
     m_includeCurrentFile->SetValue(m_settings.includeCurrentFile);
     m_includeSelection->SetValue(m_settings.includeSelection);
     m_includeGitDiff->SetValue(m_settings.includeGitDiff);
-    m_includeLLVM->SetValue(m_settings.includeLLVM);
+    m_includeCodeAnalysis->SetValue(m_settings.includeCodeAnalysis);
     UpdateProviderDisplay();
 }
 
@@ -370,8 +370,8 @@ wxString AIChatPage::BuildSystemPrompt() const
     if (m_includeGitDiff->GetValue() && !context.gitDiff.IsEmpty())
         system += "\n\nACTIVE GIT DIFF:\n```diff\n" + LimitText(context.gitDiff, 50000) + "\n```";
 
-    if (m_includeLLVM->GetValue() && !context.llvmContext.IsEmpty())
-        system += "\n\nLLVM SYMBOLS / CALL TREE:\n" + LimitText(context.llvmContext, 30000);
+    if (m_includeCodeAnalysis->GetValue() && !context.codeAnalysisContext.IsEmpty())
+        system += "\n\nCODE SYMBOLS / CALL HIERARCHY:\n" + LimitText(context.codeAnalysisContext, 30000);
 
     return system;
 }
@@ -412,7 +412,7 @@ void AIChatPage::SendPrompt()
     request.settings.includeCurrentFile = m_includeCurrentFile->GetValue();
     request.settings.includeSelection = m_includeSelection->GetValue();
     request.settings.includeGitDiff = m_includeGitDiff->GetValue();
-    request.settings.includeLLVM = m_includeLLVM->GetValue();
+    request.settings.includeCodeAnalysis = m_includeCodeAnalysis->GetValue();
     request.messages = m_messages;
     request.systemPrompt = BuildSystemPrompt();
     if (m_contextProvider)

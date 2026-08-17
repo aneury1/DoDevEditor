@@ -13,7 +13,7 @@ struct AIEditorContext
     wxString currentFileText;
     wxString selection;
     wxString gitDiff;
-    wxString llvmContext;
+    wxString codeAnalysisContext;
 };
 
 class AIChatPage : public wxPanel
@@ -35,7 +35,7 @@ private:
     wxCheckBox* m_includeCurrentFile = nullptr;
     wxCheckBox* m_includeSelection = nullptr;
     wxCheckBox* m_includeGitDiff = nullptr;
-    wxCheckBox* m_includeLLVM = nullptr;
+    wxCheckBox* m_includeCodeAnalysis = nullptr;
     wxTextCtrl* m_streamingText = nullptr;
     wxString m_streamingBuffer;
 

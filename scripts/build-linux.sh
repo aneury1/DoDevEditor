@@ -14,11 +14,16 @@ else
 fi
 GENERATOR=""
 VERBOSE=0
-LLVM_MODE="auto"
 JOURNAL_LOGS="on"
 FILE_COMPARE="on"
+HEX_VIEWER="on"
 MANUAL_SYMBOLS="on"
 PLUGINS="on"
+BUNDLED_PLUGINS="on"
+EXAMPLE_PLUGIN="auto"
+HTTP_EDITOR_SERVER_PLUGIN="auto"
+PLUGIN_DIR_ARG="${DODEV_PLUGIN_OUTPUT_DIR:-}"
+USING_DEFAULT_PLUGIN_DIR=0
 
 usage() {
     cat <<USAGE
@@ -30,16 +35,23 @@ Options:
   --ninja            Use Ninja when installed
   --make              Force Unix Makefiles
   --verbose           Show every compiler/linker command
-  --llvm              Require optional libclang symbols/call-tree support
-  --no-llvm           Build without linking libclang
   --journal-logs       Enable SSH journal log inspector (default)
   --no-journal-logs    Disable journal log inspector at compile time
   --file-compare       Enable side-by-side file comparison (default)
   --no-file-compare    Disable file comparison at compile time
+  --hex-viewer          Enable binary/hex viewer tab (default)
+  --no-hex-viewer       Disable binary/hex viewer tab at compile time
   --manual-symbols     Enable built-in C/C++/Kotlin symbol/call parser (default)
   --no-manual-symbols  Disable built-in symbol/call parser at compile time
-  --plugins            Enable runtime plugin system (default)
-  --no-plugins         Disable runtime plugin system
+  --plugins            Enable runtime plugin system and bundled plugins (default)
+  --no-plugins         Disable runtime plugin system and bundled plugin builds
+  --bundled-plugins    Build/copy all plugins shipped under plugins/ (default)
+  --no-bundled-plugins Keep runtime plugin support but do not build bundled plugins
+  --example-plugin     Build/copy the SDK example plugin
+  --no-example-plugin  Do not build the SDK example plugin
+  --http-editor-server-plugin     Build/copy bundled HTTP editor server plugin
+  --no-http-editor-server-plugin  Do not build bundled HTTP server plugin
+  --plugin-dir PATH    Deploy built plugins here. Relative paths are under build/bin/
   -h, --help          Show this help
 
 Examples:
@@ -47,7 +59,7 @@ Examples:
   ./scripts/build-linux.sh debug
   ./scripts/build-linux.sh release --clean
   ./scripts/build-linux.sh relwithdebinfo --jobs 8 --ninja
-  ./scripts/build-linux.sh release --clean --llvm
+  ./scripts/build-linux.sh release --clean --plugins
 USAGE
 }
 
@@ -80,21 +92,48 @@ while (($#)); do
         --ninja) GENERATOR="Ninja" ;;
         --make) GENERATOR="Unix Makefiles" ;;
         --verbose) VERBOSE=1 ;;
-        --llvm) LLVM_MODE="required" ;;
-        --no-llvm) LLVM_MODE="off" ;;
         --journal-logs) JOURNAL_LOGS="on" ;;
         --no-journal-logs) JOURNAL_LOGS="off" ;;
         --file-compare) FILE_COMPARE="on" ;;
         --no-file-compare) FILE_COMPARE="off" ;;
+        --hex-viewer) HEX_VIEWER="on" ;;
+        --no-hex-viewer) HEX_VIEWER="off" ;;
         --manual-symbols) MANUAL_SYMBOLS="on" ;;
         --no-manual-symbols) MANUAL_SYMBOLS="off" ;;
         --plugins) PLUGINS="on" ;;
         --no-plugins) PLUGINS="off" ;;
+        --bundled-plugins) BUNDLED_PLUGINS="on" ;;
+        --no-bundled-plugins) BUNDLED_PLUGINS="off" ;;
+        --example-plugin) EXAMPLE_PLUGIN="on" ;;
+        --no-example-plugin) EXAMPLE_PLUGIN="off" ;;
+        --http-editor-server-plugin) HTTP_EDITOR_SERVER_PLUGIN="on" ;;
+        --no-http-editor-server-plugin) HTTP_EDITOR_SERVER_PLUGIN="off" ;;
+        --plugin-dir)
+            shift
+            [[ $# -gt 0 ]] || fail "--plugin-dir requires a path"
+            PLUGIN_DIR_ARG="$1"
+            ;;
         -h|--help) usage; exit 0 ;;
         *) fail "Unknown argument: $1. Run with --help." ;;
     esac
     shift
 done
+
+if [[ "$PLUGINS" != "on" ]]; then
+    BUNDLED_PLUGINS="off"
+fi
+
+# Resolve per-plugin build switches. Explicit per-plugin switches override the
+# aggregate bundled setting.
+if [[ "$EXAMPLE_PLUGIN" == "auto" ]]; then
+    EXAMPLE_PLUGIN="$BUNDLED_PLUGINS"
+fi
+if [[ "$HTTP_EDITOR_SERVER_PLUGIN" == "auto" ]]; then
+    HTTP_EDITOR_SERVER_PLUGIN="$BUNDLED_PLUGINS"
+fi
+if [[ "$PLUGINS" != "on" && ( "$EXAMPLE_PLUGIN" == "on" || "$HTTP_EDITOR_SERVER_PLUGIN" == "on" ) ]]; then
+    fail "Bundled plugins require --plugins"
+fi
 
 command -v cmake >/dev/null 2>&1 || fail "cmake is not installed"
 command -v git >/dev/null 2>&1 || fail "git is not installed"
@@ -109,9 +148,6 @@ if ! command -v secret-tool >/dev/null 2>&1; then
 fi
 if [[ "$JOURNAL_LOGS" == "on" ]] && ! command -v ssh >/dev/null 2>&1; then
     printf '\033[33m[WARN]\033[0m ssh is not installed; SSH Journal Logs will still compile but live collection will be unavailable at runtime.\n' >&2
-fi
-if ! command -v clang-format >/dev/null 2>&1; then
-    printf '\033[33m[WARN]\033[0m clang-format is not installed; C/C++ Format Document/Selection will be unavailable at runtime.\n' >&2
 fi
 
 if ! pkg-config --exists zlib; then
@@ -151,10 +187,27 @@ fi
 
 build_slug="$(printf '%s' "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')"
 BUILD_DIR="$ROOT_DIR/build/linux-$build_slug"
+if [[ -z "$PLUGIN_DIR_ARG" ]]; then
+    PLUGIN_OUTPUT_DIR="$BUILD_DIR/bin/plugins"
+    USING_DEFAULT_PLUGIN_DIR=1
+elif [[ "$PLUGIN_DIR_ARG" = /* ]]; then
+    PLUGIN_OUTPUT_DIR="$PLUGIN_DIR_ARG"
+else
+    PLUGIN_OUTPUT_DIR="$BUILD_DIR/bin/$PLUGIN_DIR_ARG"
+fi
 
 if (( CLEAN )); then
     info "Removing $BUILD_DIR"
     rm -rf "$BUILD_DIR"
+fi
+
+# The default plugin deployment directory belongs to the build output. Remove
+# previously deployed DoDevEditor libraries so deleted bundled plugins cannot
+# survive an incremental rebuild. A custom plugin directory is never cleaned.
+if [[ "$PLUGINS" == "on" && "$USING_DEFAULT_PLUGIN_DIR" == "1" && -d "$PLUGIN_OUTPUT_DIR" ]]; then
+    find "$PLUGIN_OUTPUT_DIR" -maxdepth 1 -type f \
+        \( -name 'dodev_*.so' -o -name 'dodev_*.dll' -o -name 'dodev_*.dylib' \) \
+        -delete 2>/dev/null || true
 fi
 
 mkdir -p "$BUILD_DIR"
@@ -182,6 +235,12 @@ else
     CMAKE_ARGS+=( -DDODEV_ENABLE_FILE_COMPARE=OFF )
 fi
 
+if [[ "$HEX_VIEWER" == "on" ]]; then
+    CMAKE_ARGS+=( -DDODEV_ENABLE_HEX_VIEWER=ON )
+else
+    CMAKE_ARGS+=( -DDODEV_ENABLE_HEX_VIEWER=OFF )
+fi
+
 if [[ "$MANUAL_SYMBOLS" == "on" ]]; then
     CMAKE_ARGS+=( -DDODEV_ENABLE_MANUAL_SYMBOLS=ON )
 else
@@ -193,18 +252,21 @@ if [[ "$PLUGINS" == "on" ]]; then
 else
     CMAKE_ARGS+=( -DDODEV_ENABLE_PLUGINS=OFF )
 fi
-
-case "$LLVM_MODE" in
-    required)
-        CMAKE_ARGS+=( -DDODEV_ENABLE_LLVM=ON -DDODEV_REQUIRE_LLVM=ON )
-        ;;
-    off)
-        CMAKE_ARGS+=( -DDODEV_ENABLE_LLVM=OFF -DDODEV_REQUIRE_LLVM=OFF )
-        ;;
-    auto)
-        CMAKE_ARGS+=( -DDODEV_ENABLE_LLVM=ON -DDODEV_REQUIRE_LLVM=OFF )
-        ;;
-esac
+# The wrapper resolves the aggregate switch itself so explicit per-plugin
+# overrides remain meaningful. Direct CMake users can use
+# DODEV_BUILD_BUNDLED_PLUGINS=ON.
+CMAKE_ARGS+=( -DDODEV_BUILD_BUNDLED_PLUGINS=OFF )
+if [[ "$EXAMPLE_PLUGIN" == "on" ]]; then
+    CMAKE_ARGS+=( -DDODEV_BUILD_EXAMPLE_PLUGIN=ON )
+else
+    CMAKE_ARGS+=( -DDODEV_BUILD_EXAMPLE_PLUGIN=OFF )
+fi
+if [[ "$HTTP_EDITOR_SERVER_PLUGIN" == "on" ]]; then
+    CMAKE_ARGS+=( -DDODEV_BUILD_HTTP_EDITOR_SERVER_PLUGIN=ON )
+else
+    CMAKE_ARGS+=( -DDODEV_BUILD_HTTP_EDITOR_SERVER_PLUGIN=OFF )
+fi
+CMAKE_ARGS+=( "-DDODEV_PLUGIN_OUTPUT_DIR=$PLUGIN_OUTPUT_DIR" )
 
 # CMake 4 removed compatibility with policy versions older than 3.5.  This
 # cache option is intentionally supplied by the build wrapper (rather than set
@@ -219,25 +281,14 @@ info "Build:      $BUILD_DIR"
 info "Type:       $BUILD_TYPE"
 info "Generator:  $GENERATOR"
 info "Jobs:       $JOBS"
-info "LLVM:       $LLVM_MODE"
 info "Journal logs: $JOURNAL_LOGS"
 info "File compare: $FILE_COMPARE"
 info "Manual symbols: $MANUAL_SYMBOLS"
 info "Plugins:    $PLUGINS"
-
-if [[ "$LLVM_MODE" == "required" ]]; then
-    command -v clang >/dev/null 2>&1 || {
-        printf '\nOptional LLVM analysis was requested but clang is missing.\n' >&2
-        if command -v pacman >/dev/null 2>&1; then
-            printf 'Arch Linux: sudo pacman -S --needed llvm clang\n' >&2
-        elif command -v apt-get >/dev/null 2>&1; then
-            printf 'Debian/Ubuntu: sudo apt install llvm-dev libclang-dev clang\n' >&2
-        elif command -v dnf >/dev/null 2>&1; then
-            printf 'Fedora: sudo dnf install llvm-devel clang-devel clang\n' >&2
-        fi
-        fail "clang/libclang development files are required by --llvm"
-    }
-fi
+info "Bundled plugins: $BUNDLED_PLUGINS"
+info "Example plugin: $EXAMPLE_PLUGIN"
+info "HTTP editor server plugin: $HTTP_EDITOR_SERVER_PLUGIN"
+info "Plugin output: $PLUGIN_OUTPUT_DIR"
 
 info "Configuring..."
 cmake "${CMAKE_ARGS[@]}"
@@ -272,4 +323,10 @@ if [[ -x "$BIN" ]]; then
 else
     ok "Build completed"
     printf 'Check build output under: %s\n' "$BUILD_DIR"
+fi
+
+if [[ "$PLUGINS" == "on" && -d "$PLUGIN_OUTPUT_DIR" ]]; then
+    ok "Plugin deployment directory: $PLUGIN_OUTPUT_DIR"
+    find "$PLUGIN_OUTPUT_DIR" -maxdepth 1 -type f \
+        \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) -printf '  %f\n' 2>/dev/null || true
 fi

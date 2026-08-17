@@ -31,105 +31,23 @@ project(DoDevEditor VERSION 1.0.0 LANGUAGES C CXX)
 
 find_package(Threads REQUIRED)
 
-# Optional LLVM/Clang source analysis. The editor remains fully buildable when
-# libclang is absent; only symbols/call-tree/go-to-definition are disabled.
-option(DODEV_ENABLE_LLVM "Enable optional libclang C/C++ analysis" ON)
-option(DODEV_REQUIRE_LLVM "Fail configuration when libclang is requested but missing" OFF)
-
-# Optional SSH/systemd journal inspector. This module has no compile-time SSH
-# dependency: at runtime it uses an installed OpenSSH client to reach a Linux
-# host and runs journalctl there. Import/export/filtering remain cross-platform.
+# Optional SSH/systemd journal inspector.
 option(DODEV_ENABLE_JOURNAL_LOGS "Enable SSH journal log inspector and log importer" ON)
 
-# Optional standalone file comparison editor. The implementation is entirely
-# wxWidgets/C++ and supports text and binary files on Linux and Windows.
+# Optional side-by-side file comparison.
 option(DODEV_ENABLE_FILE_COMPARE "Enable side-by-side text/binary file comparison editor" ON)
 
+# Optional paged binary/hex file viewer.
+option(DODEV_ENABLE_HEX_VIEWER "Enable read-only binary/hex file viewer tab" ON)
+
 # Optional dependency-free source symbol/call parser for C, C++ and Kotlin.
-# This deliberately uses no LLVM/tree-sitter/third-party parsing library.
 option(DODEV_ENABLE_MANUAL_SYMBOLS "Enable built-in C/C++/Kotlin symbol and call parser" ON)
 
-# Optional runtime plugin system. Plugins use a small C ABI and may be built
-# independently as .so/.dll files.
+# Runtime dynamic plugin system.
 option(DODEV_ENABLE_PLUGINS "Enable runtime dynamic plugin system" ON)
-option(DODEV_BUILD_EXAMPLE_PLUGIN "Build and copy the SDK example plugin" OFF)
-
-set(DODEV_HAS_LIBCLANG OFF)
-set(DODEV_LIBCLANG_TARGET "")
-
-if(DODEV_ENABLE_LLVM AND NOT BUILD_WINDOWS)
-    # Prefer Clang's CMake package when the distro exports it, then fall back
-    # to the stable clang-c/Index.h + libclang shared library pair.
-    find_package(Clang CONFIG QUIET)
-
-    if(TARGET libclang)
-        set(DODEV_HAS_LIBCLANG ON)
-        set(DODEV_LIBCLANG_TARGET libclang)
-    else()
-        set(_DODEV_CLANG_INCLUDE_HINTS ${CLANG_INCLUDE_DIRS})
-        set(_DODEV_CLANG_LIBRARY_HINTS "")
-        if(DEFINED LLVM_LIBRARY_DIRS)
-            list(APPEND _DODEV_CLANG_LIBRARY_HINTS ${LLVM_LIBRARY_DIRS})
-        endif()
-        if(DEFINED CLANG_LIBRARY_DIRS)
-            list(APPEND _DODEV_CLANG_LIBRARY_HINTS ${CLANG_LIBRARY_DIRS})
-        endif()
-
-        # llvm-config makes versioned distro layouts such as
-        # /usr/lib/llvm-20/include and /usr/lib/llvm-20/lib discoverable.
-        find_program(DODEV_LLVM_CONFIG
-            NAMES llvm-config llvm-config-22 llvm-config-21 llvm-config-20 llvm-config-19
-                  llvm-config-18 llvm-config-17 llvm-config-16 llvm-config-15 llvm-config-14)
-        if(DODEV_LLVM_CONFIG)
-            execute_process(
-                COMMAND "${DODEV_LLVM_CONFIG}" --includedir
-                OUTPUT_VARIABLE _DODEV_LLVM_CONFIG_INCLUDE
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                ERROR_QUIET)
-            execute_process(
-                COMMAND "${DODEV_LLVM_CONFIG}" --libdir
-                OUTPUT_VARIABLE _DODEV_LLVM_CONFIG_LIB
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                ERROR_QUIET)
-            if(_DODEV_LLVM_CONFIG_INCLUDE)
-                list(APPEND _DODEV_CLANG_INCLUDE_HINTS "${_DODEV_LLVM_CONFIG_INCLUDE}")
-            endif()
-            if(_DODEV_LLVM_CONFIG_LIB)
-                list(APPEND _DODEV_CLANG_LIBRARY_HINTS "${_DODEV_LLVM_CONFIG_LIB}")
-            endif()
-        endif()
-
-        find_path(DODEV_LIBCLANG_INCLUDE_DIR
-            NAMES clang-c/Index.h
-            HINTS ${_DODEV_CLANG_INCLUDE_HINTS}
-            PATH_SUFFIXES include llvm/include
-                lib/llvm14/include lib/llvm15/include lib/llvm16/include lib/llvm17/include
-                lib/llvm18/include lib/llvm19/include lib/llvm20/include lib/llvm21/include lib/llvm22/include
-                llvm14/include llvm15/include llvm16/include llvm17/include llvm18/include
-                llvm19/include llvm20/include llvm21/include llvm22/include)
-
-        find_library(DODEV_LIBCLANG_LIBRARY
-            NAMES clang libclang clang-22 clang-21 clang-20 clang-19 clang-18 clang-17 clang-16 clang-15 clang-14
-            HINTS ${_DODEV_CLANG_LIBRARY_HINTS}
-            PATH_SUFFIXES lib lib64 llvm/lib llvm14/lib llvm15/lib llvm16/lib llvm17/lib
-                llvm18/lib llvm19/lib llvm20/lib llvm21/lib llvm22/lib)
-
-        if(DODEV_LIBCLANG_INCLUDE_DIR AND DODEV_LIBCLANG_LIBRARY)
-            set(DODEV_HAS_LIBCLANG ON)
-        endif()
-    endif()
-
-    if(DODEV_HAS_LIBCLANG)
-        message(STATUS "DoDevEditor LLVM analysis: enabled")
-    elseif(DODEV_REQUIRE_LLVM)
-        message(FATAL_ERROR
-            "DODEV_REQUIRE_LLVM=ON but libclang was not found. Install Clang/LLVM development files or set DODEV_ENABLE_LLVM=OFF.")
-    else()
-        message(STATUS "DoDevEditor LLVM analysis: disabled (libclang not found; editor will still build)")
-    endif()
-elseif(DODEV_ENABLE_LLVM AND BUILD_WINDOWS)
-    message(STATUS "DoDevEditor LLVM analysis: disabled for the default MinGW cross-build; provide a target libclang integration to enable it")
-endif()
+option(DODEV_BUILD_BUNDLED_PLUGINS "Build and deploy all bundled DoDevEditor plugins" ON)
+option(DODEV_BUILD_EXAMPLE_PLUGIN "Build and deploy the SDK example plugin" OFF)
+option(DODEV_BUILD_HTTP_EDITOR_SERVER_PLUGIN "Build and deploy the HTTP editor server plugin" OFF)
 
 if(BUILD_WINDOWS)
     enable_language(RC)
@@ -147,7 +65,7 @@ set(CMAKE_CXX_EXTENSIONS        OFF)
 set(CMAKE_C_STANDARD          17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS        ON)
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+if(NOT MSVC)
     add_compile_options($<$<COMPILE_LANGUAGE:C>:-std=gnu17>)
 endif()
 
@@ -158,6 +76,8 @@ endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(DODEV_PLUGIN_OUTPUT_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/plugins" CACHE PATH
+    "Directory receiving built runtime plugin .so/.dll files")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
 include(FetchContent)
@@ -245,6 +165,9 @@ file(GLOB_RECURSE SI_SOURCES CONFIGURE_DEPENDS
 if(NOT DODEV_ENABLE_FILE_COMPARE)
     list(FILTER SI_SOURCES EXCLUDE REGEX ".*/FileComparePage\\.cpp$")
 endif()
+if(NOT DODEV_ENABLE_HEX_VIEWER)
+    list(FILTER SI_SOURCES EXCLUDE REGEX ".*/HexViewerPage\\.cpp$")
+endif()
 if(NOT DODEV_ENABLE_MANUAL_SYMBOLS)
     list(FILTER SI_SOURCES EXCLUDE REGEX ".*/symbols/ManualSymbolParser\\.cpp$")
 endif()
@@ -282,6 +205,14 @@ else()
     message(STATUS "DoDevEditor File Compare: disabled")
 endif()
 
+if(DODEV_ENABLE_HEX_VIEWER)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_HEX_VIEWER=1)
+    message(STATUS "DoDevEditor Hex Viewer: enabled")
+else()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_HEX_VIEWER=0)
+    message(STATUS "DoDevEditor Hex Viewer: disabled")
+endif()
+
 if(DODEV_ENABLE_MANUAL_SYMBOLS)
     target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_MANUAL_SYMBOLS=1)
     message(STATUS "DoDevEditor Manual Symbols: enabled (C/C++/Kotlin, no external parser library)")
@@ -297,18 +228,6 @@ if(DODEV_ENABLE_PLUGINS)
 else()
     target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_PLUGINS=0)
     message(STATUS "DoDevEditor Plugins: disabled")
-endif()
-
-if(DODEV_HAS_LIBCLANG)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_HAS_LIBCLANG=1)
-    if(DODEV_LIBCLANG_TARGET)
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${DODEV_LIBCLANG_TARGET})
-    else()
-        target_include_directories(${PROJECT_NAME} PRIVATE "${DODEV_LIBCLANG_INCLUDE_DIR}")
-        target_link_libraries(${PROJECT_NAME} PRIVATE "${DODEV_LIBCLANG_LIBRARY}")
-    endif()
-else()
-    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_HAS_LIBCLANG=0)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -331,14 +250,16 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     VERBATIM)
 
 if(DODEV_ENABLE_PLUGINS)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins"
-        COMMENT "Creating runtime plugins directory"
-        VERBATIM)
+    if(NOT IS_ABSOLUTE "${DODEV_PLUGIN_OUTPUT_DIR}")
+        get_filename_component(DODEV_PLUGIN_OUTPUT_DIR
+            "${DODEV_PLUGIN_OUTPUT_DIR}" ABSOLUTE BASE_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    endif()
+    file(MAKE_DIRECTORY "${DODEV_PLUGIN_OUTPUT_DIR}")
+    message(STATUS "DoDevEditor plugin output directory: ${DODEV_PLUGIN_OUTPUT_DIR}")
 endif()
 
 target_compile_options(${PROJECT_NAME} PRIVATE
-    $<$<CXX_COMPILER_ID:GNU,Clang>:
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:
         -Wall -Wextra
         -Wno-unused-parameter
         -Wno-deprecated-declarations>
@@ -379,15 +300,40 @@ else()
     target_link_options(${PROJECT_NAME} PRIVATE -Wl,--gc-sections)
 endif()
 
-if(DODEV_ENABLE_PLUGINS AND DODEV_BUILD_EXAMPLE_PLUGIN)
-    add_subdirectory(plugins/example_plugin)
-    add_dependencies(${PROJECT_NAME} dodev_example_plugin)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<TARGET_FILE:dodev_example_plugin>"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins/$<TARGET_FILE_NAME:dodev_example_plugin>"
-        COMMENT "Copying example DoDevEditor plugin"
-        VERBATIM)
+# Bundled plugins are normal build dependencies when requested.  They are
+# copied to one deployment directory so a standard editor build produces a
+# ready-to-run plugin layout.
+if(DODEV_ENABLE_PLUGINS)
+    set(_DODEV_BUILD_EXAMPLE_PLUGIN ${DODEV_BUILD_EXAMPLE_PLUGIN})
+    set(_DODEV_BUILD_HTTP_PLUGIN ${DODEV_BUILD_HTTP_EDITOR_SERVER_PLUGIN})
+    if(DODEV_BUILD_BUNDLED_PLUGINS)
+        set(_DODEV_BUILD_EXAMPLE_PLUGIN ON)
+        set(_DODEV_BUILD_HTTP_PLUGIN ON)
+    endif()
+
+    function(dodev_deploy_plugin target_name display_name)
+        set(deploy_target "${target_name}_deploy")
+        add_custom_target(${deploy_target}
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${DODEV_PLUGIN_OUTPUT_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "$<TARGET_FILE:${target_name}>"
+                    "${DODEV_PLUGIN_OUTPUT_DIR}/$<TARGET_FILE_NAME:${target_name}>"
+            DEPENDS ${target_name}
+            COMMENT "Deploying ${display_name} to ${DODEV_PLUGIN_OUTPUT_DIR}"
+            VERBATIM)
+        add_dependencies(${PROJECT_NAME} ${deploy_target})
+    endfunction()
+
+    if(_DODEV_BUILD_EXAMPLE_PLUGIN)
+        add_subdirectory(plugins/example_plugin)
+        dodev_deploy_plugin(dodev_example_plugin "example DoDevEditor plugin")
+    endif()
+
+    if(_DODEV_BUILD_HTTP_PLUGIN)
+        add_subdirectory(plugins/http_editor_server)
+        dodev_deploy_plugin(dodev_http_editor_server "HTTP Editor Server plugin")
+    endif()
+
 endif()
 
 if(CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$" AND CMAKE_STRIP)

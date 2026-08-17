@@ -76,7 +76,7 @@ AIProviderSettings AISettings::Load()
     settings.includeCurrentFile = ai.get("include_current_file", true).asBool();
     settings.includeSelection = ai.get("include_selection", true).asBool();
     settings.includeGitDiff = ai.get("include_git_diff", true).asBool();
-    settings.includeLLVM = ai.get("include_llvm", true).asBool();
+    settings.includeCodeAnalysis = ai.get("include_code_analysis", true).asBool();
     return settings;
 }
 
@@ -103,7 +103,7 @@ void AISettings::Save(const AIProviderSettings& settings)
     ai["include_current_file"] = settings.includeCurrentFile;
     ai["include_selection"] = settings.includeSelection;
     ai["include_git_diff"] = settings.includeGitDiff;
-    ai["include_llvm"] = settings.includeLLVM;
+    ai["include_code_analysis"] = settings.includeCodeAnalysis;
     AppEditorConfig::config["ai"] = ai;
     AppEditorConfig::Save();
 }

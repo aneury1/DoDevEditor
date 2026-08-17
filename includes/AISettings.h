@@ -53,7 +53,7 @@ struct AIProviderSettings
     bool includeCurrentFile = true;
     bool includeSelection = true;
     bool includeGitDiff = true;
-    bool includeLLVM = true;
+    bool includeCodeAnalysis = true;
 };
 
 class AISettings

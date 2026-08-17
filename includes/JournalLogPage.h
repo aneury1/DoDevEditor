@@ -14,6 +14,7 @@
 
 class wxButton;
 class wxCheckBox;
+class wxChoice;
 class wxFilePickerCtrl;
 class wxInputStream;
 class wxListCtrl;
@@ -21,6 +22,7 @@ class wxStaticText;
 class wxSizer;
 class wxTextCtrl;
 class JournalSshProcess;
+struct wxExecuteEnv;
 
 struct JournalLogEntry
 {
@@ -57,6 +59,20 @@ private:
         Json
     };
 
+    enum class SshAuthMode
+    {
+        AgentOrConfig = 0,
+        PrivateKey = 1,
+        Password = 2
+    };
+
+    enum class ProcessPurpose
+    {
+        None,
+        TestConnection,
+        JournalCollection
+    };
+
     Mode m_mode;
     wxString m_importedPath;
 
@@ -64,13 +80,18 @@ private:
     wxTextCtrl* m_hostCtrl = nullptr;
     wxTextCtrl* m_portCtrl = nullptr;
     wxTextCtrl* m_userCtrl = nullptr;
+    wxChoice* m_authChoice = nullptr;
     wxFilePickerCtrl* m_identityCtrl = nullptr;
+    wxTextCtrl* m_passwordCtrl = nullptr;
+    wxCheckBox* m_acceptNewHostKeyCheck = nullptr;
     wxTextCtrl* m_unitCtrl = nullptr;
     wxTextCtrl* m_sinceCtrl = nullptr;
     wxCheckBox* m_followCheck = nullptr;
     wxCheckBox* m_bootCheck = nullptr;
+    wxButton* m_testButton = nullptr;
     wxButton* m_connectButton = nullptr;
     wxButton* m_stopButton = nullptr;
+    wxTextCtrl* m_diagnosticsCtrl = nullptr;
 
     wxTextCtrl* m_appRegexCtrl = nullptr;
     wxTextCtrl* m_payloadRegexCtrl = nullptr;
@@ -84,6 +105,12 @@ private:
     JournalSshProcess* m_process = nullptr;
     long m_pid = 0;
     bool m_running = false;
+    bool m_connectionEstablished = false;
+    bool m_testSshOk = false;
+    bool m_testJournalctlOk = false;
+    ProcessPurpose m_processPurpose = ProcessPurpose::None;
+    wxString m_lastSshError;
+    wxString m_askpassPath;
     wxTimer m_pollTimer;
     std::string m_stdoutBytes;
     std::string m_stderrBytes;
@@ -95,8 +122,15 @@ private:
     void BuildExportControls(wxSizer* parentSizer);
 
     void StartSshCollection();
+    void StartSshTest();
+    bool StartSshProcess(ProcessPurpose purpose);
     void StopSshCollection();
-    wxString BuildSshCommand() const;
+    SshAuthMode GetSshAuthMode() const;
+    std::vector<wxString> BuildSshArguments(ProcessPurpose purpose) const;
+    bool PrepareSshEnvironment(wxExecuteEnv& environment, wxString* error);
+    void CleanupAskpass();
+    void UpdateAuthenticationControls();
+    void AppendDiagnostic(const wxString& line, bool error = false);
     void PollProcessStreams();
     void ConsumeStream(wxInputStream* stream, std::string& pending, bool stderrStream);
     void ConsumeCompleteLines(std::string& pending, bool stderrStream, bool flushAll = false);
@@ -132,7 +166,6 @@ private:
     static wxString FormatJournalTimestamp(const Json::Value& value);
     static wxString JsonValueToString(const Json::Value& value);
     static std::string ToUtf8(const wxString& value);
-    static wxString QuoteLocalArgument(const wxString& value);
     static wxString QuoteRemoteArgument(const wxString& value);
 };
 

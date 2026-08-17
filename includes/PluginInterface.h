@@ -73,9 +73,11 @@ public:
     ~PluginManager();
 
     bool LoadPlugin(const std::string& path, std::string* error = nullptr);
-    size_t LoadDirectory(const std::string& directory, std::vector<std::string>* errors = nullptr);
+    size_t LoadDirectory(const std::string& directory, std::vector<std::string>* errors = nullptr,
+                         const std::vector<std::string>& disabledFiles = {});
     void UnloadAll();
-    bool ReloadDirectory(const std::string& directory, std::vector<std::string>* errors = nullptr);
+    bool ReloadDirectory(const std::string& directory, std::vector<std::string>* errors = nullptr,
+                         const std::vector<std::string>& disabledFiles = {});
 
     void DispatchEvent(DoDevEventType type, void* object, int index, const std::string& pathUtf8 = std::string());
     std::vector<PluginSummary> GetPlugins() const;

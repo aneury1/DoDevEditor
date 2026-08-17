@@ -21,6 +21,7 @@
 #include <wx/config.h>
 #include <wx/log.h>
 #include <wx/choicdlg.h>
+#include <wx/thread.h>
 
 #include <map>
 #include <vector>
@@ -33,6 +34,9 @@
 #include <cstdint>
 #include <unordered_set>
 #include <memory>
+#include <utility>
+#include <regex>
+#include <sstream>
 #include "CommandPalette.h"
 #include "QuickOpenDialog.h"
 #include "constant.h"
@@ -42,6 +46,7 @@
 #include "FileTreeCtrl.h"
 #include "FolderListView.h"
 #include "Findbar.h"
+#include "ReplaceDialog.h"
 #include "Config.h"
 #include "SourceControlPanel.h"
 #include "GitDiffPage.h"
@@ -61,6 +66,9 @@
 #if DODEV_ENABLE_FILE_COMPARE
 #include "FileComparePage.h"
 #endif
+#if DODEV_ENABLE_HEX_VIEWER
+#include "HexViewerPage.h"
+#endif
 #if DODEV_ENABLE_PLUGINS
 #include "PluginInterface.h"
 #endif
@@ -70,7 +78,6 @@ Json::Value AppEditorConfig::config;
 // ─────────────────────────────────────────────────────────────────────────────
 // MainFrame
 // ─────────────────────────────────────────────────────────────────────────────
-static int inex = 0;
 class MainFrame : public wxFrame
 {
     wxPanel *sidePanel = nullptr;
@@ -109,6 +116,7 @@ class MainFrame : public wxFrame
 #if DODEV_ENABLE_PLUGINS
     std::unique_ptr<PluginManager> m_pluginManager;
     std::map<wxWindow*, wxTextCtrl*> m_pluginTextPanels;
+    wxTextCtrl* m_pluginLogText = nullptr;
     int m_nextPluginMenuId = wxID_HIGHEST + 5000;
 #endif
 
@@ -300,15 +308,11 @@ private:
             OpenGitCommitDiff(repositoryRoot, commitHash, oldPath, newPath, status);
         });
 
-        // TAB 2: manual C/C++/Kotlin symbols/calls + optional LLVM analysis
+        // TAB 2: dependency-free manual C/C++/Kotlin symbols and calls
         m_symbolsPanel = new SymbolTablePanel(bottomTabs);
         m_symbolsPanel->SetOpenLocationCallback([this](const wxString& path, unsigned line, unsigned column)
         {
             OpenLocation(path, line, column);
-        });
-        m_symbolsPanel->SetSaveCurrentFileCallback([this]()
-        {
-            return SaveCurrentTab();
         });
 
         // TAB 3: (optional duplicate view or placeholder)
@@ -343,10 +347,7 @@ private:
 
         edSizer = new wxBoxSizer(wxVERTICAL);
         // Notebook (tabs)
-        long nbStyle =
-            wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ALL_TABS |
-            wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS;
-        DualNotebookPanel *tpanel = new DualNotebookPanel(m_editorPane,  wxID_ANY);
+        DualNotebookPanel *tpanel = new DualNotebookPanel(m_editorPane, wxID_ANY);
         m_notebook = tpanel->GetTopNotebook();
         m_bottomNotebook = tpanel->GetBottomNotebook();
         edSizer->Add(tpanel, 1, wxEXPAND);
@@ -685,6 +686,10 @@ private:
 
         mb->AddItem("File", "Open File...", ID_OPEN_FILE, [this]()
                     { OpenFile(); }, "Ctrl+O");
+#if DODEV_ENABLE_HEX_VIEWER
+        mb->AddItem("File", "Open File as Hex...", ID_OPEN_HEX_FILE, [this]()
+                    { OpenHexFileDialog(); });
+#endif
 
         mb->AddItem("File", "Open Folder...", ID_OPEN_FOLDER, [this]()
                     { OpenFolder(); }, "Ctrl+Shift+O");
@@ -755,6 +760,11 @@ private:
         mb->AddItem("Search", "Find in All Documents", ID_FIND_ALL, [this]()
                     { ShowFindBar(FindBar::Scope::AllDocuments); }, "Ctrl+Shift+F");
         mb->AddSeparator("Search");
+        mb->AddItem("Search", "Replace in Current Document...", ID_REPLACE_CURRENT, [this]()
+                    { ShowReplaceDialog(ReplaceRequest::Scope::CurrentDocument); }, "Ctrl+H");
+        mb->AddItem("Search", "Replace in Workspace Folders...", ID_REPLACE_FOLDERS, [this]()
+                    { ShowReplaceDialog(ReplaceRequest::Scope::WorkspaceFolders); }, "Ctrl+Shift+R");
+        mb->AddSeparator("Search");
         mb->AddItem("Search", "Find Next", ID_FIND_NEXT, [this]()
                     { ExecuteFind(true); }, "F3");
         mb->AddItem("Search", "Find Previous", ID_FIND_PREV, [this]()
@@ -766,7 +776,7 @@ private:
         mb->AddItem("Go", "Go to Line/Column...", ID_GOTO_LINE, [this]()
                     { GoToLine(); }, "Ctrl+G");
 
-        // ───────── C/C++ / LLVM ─────────
+        // ───────── CODE ANALYSIS ─────────
         mb->AddItem("Code", "Go to Definition", ID_GOTO_DEFINITION, [this]()
                     { GoToDefinition(); }, "F12");
         mb->AddSeparator("Code");
@@ -774,14 +784,10 @@ private:
                     { RefreshCppAnalysis(); });
         mb->AddItem("Code", "Show Call Hierarchy", ID_SHOW_CALL_HIERARCHY, [this]()
                     { ShowCallHierarchy(); }, "Ctrl+Shift+H");
-        mb->AddItem("Code", "LLVM Syntax Check", ID_CPP_SYNTAX_CHECK, [this]()
-                    { CompileCurrentWithLLVM(true); });
-        mb->AddItem("Code", "Compile Current Source with LLVM", ID_CPP_COMPILE, [this]()
-                    { CompileCurrentWithLLVM(false); }, "Ctrl+F7");
 
 #if DODEV_ENABLE_JOURNAL_LOGS
         // ───────── TOOLS / JOURNAL LOGS ─────────
-        mb->AddItem("Tools", "SSH Journal Logs...", ID_SSH_JOURNAL_LOGS, [this]()
+        mb->AddItem("Tools", "Remote SSH Journal Logs...", ID_SSH_JOURNAL_LOGS, [this]()
                     { OpenSshJournalLogs(); });
         mb->AddItem("Tools", "Import Journal Logs...", ID_IMPORT_JOURNAL_LOGS, [this]()
                     { ImportJournalLogs(); });
@@ -798,6 +804,16 @@ private:
 
         mb->AddItem("View", "Word Wrap", ID_TOGGLE_WORDWRAP, [this]()
                     { ToggleWordWrap(); }, "Alt+Z");
+        mb->AddSeparator("View");
+        const EditorViewRuntimeConfig viewSettings = AppEditorConfig::GetEditorViewRuntimeConfig();
+        mb->AddCheckItem("View", "Show Spaces and Tabs", ID_TOGGLE_WHITESPACE, [this]()
+                         { ToggleWhitespace(); }, viewSettings.whitespaceVisible);
+        mb->AddCheckItem("View", "Show End of Line", ID_TOGGLE_EOL, [this]()
+                         { ToggleEOL(); }, viewSettings.eolVisible);
+        mb->AddCheckItem("View", "Show Control Characters", ID_TOGGLE_CONTROL_CHARS, [this]()
+                         { ToggleControlCharacters(); }, viewSettings.controlCharactersVisible);
+        mb->AddCheckItem("View", "Show All Non-Printable Characters", ID_TOGGLE_ALL_INVISIBLES, [this]()
+                         { ToggleAllNonPrintable(); }, viewSettings.whitespaceVisible && viewSettings.eolVisible && viewSettings.controlCharactersVisible);
 
         mb->AddSeparator("View");
         mb->AddCheckItem("View", "Docker Inspector", ID_TOGGLE_DOCKER, [this]()
@@ -907,6 +923,10 @@ private:
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { ExecuteFind(false); }, ID_FIND_PREV);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
+             { ShowReplaceDialog(ReplaceRequest::Scope::CurrentDocument); }, ID_REPLACE_CURRENT);
+        Bind(wxEVT_MENU, [this](wxCommandEvent &)
+             { ShowReplaceDialog(ReplaceRequest::Scope::WorkspaceFolders); }, ID_REPLACE_FOLDERS);
+        Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { GoToLine(); }, ID_GOTO_LINE);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { GoToDefinition(); }, ID_GOTO_DEFINITION);
@@ -914,10 +934,6 @@ private:
              { RefreshCppAnalysis(); }, ID_CPP_PARSE_SYMBOLS);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { ShowCallHierarchy(); }, ID_SHOW_CALL_HIERARCHY);
-        Bind(wxEVT_MENU, [this](wxCommandEvent &)
-             { CompileCurrentWithLLVM(true); }, ID_CPP_SYNTAX_CHECK);
-        Bind(wxEVT_MENU, [this](wxCommandEvent &)
-             { CompileCurrentWithLLVM(false); }, ID_CPP_COMPILE);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { ToggleSidebar(); }, ID_TOGGLE_SIDEBAR);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
@@ -938,6 +954,12 @@ private:
              { ToggleWordWrap(); }, ID_TOGGLE_WORDWRAP);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { ToggleWhitespace(); }, ID_TOGGLE_WHITESPACE);
+        Bind(wxEVT_MENU, [this](wxCommandEvent &)
+             { ToggleEOL(); }, ID_TOGGLE_EOL);
+        Bind(wxEVT_MENU, [this](wxCommandEvent &)
+             { ToggleControlCharacters(); }, ID_TOGGLE_CONTROL_CHARS);
+        Bind(wxEVT_MENU, [this](wxCommandEvent &)
+             { ToggleAllNonPrintable(); }, ID_TOGGLE_ALL_INVISIBLES);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { ZoomEditor(+1); }, ID_ZOOM_IN);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
@@ -983,12 +1005,13 @@ private:
             wxAcceleratorEntry(wxACCEL_CTRL, WXK_NUMPAD_SUBTRACT, ID_ZOOM_OUT),
             wxAcceleratorEntry(wxACCEL_CTRL, (int)'F', ID_FIND),
             wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_SHIFT, (int)'F', ID_FIND_ALL),
+            wxAcceleratorEntry(wxACCEL_CTRL, (int)'H', ID_REPLACE_CURRENT),
+            wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_SHIFT, (int)'R', ID_REPLACE_FOLDERS),
             wxAcceleratorEntry(wxACCEL_CTRL, (int)'P', ID_QUICK_OPEN),
             wxAcceleratorEntry(wxACCEL_CTRL, (int)'G', ID_GOTO_LINE),
             wxAcceleratorEntry(wxACCEL_NORMAL, WXK_F3, ID_FIND_NEXT),
             wxAcceleratorEntry(wxACCEL_SHIFT, WXK_F3, ID_FIND_PREV),
             wxAcceleratorEntry(wxACCEL_NORMAL, WXK_F12, ID_GOTO_DEFINITION),
-            wxAcceleratorEntry(wxACCEL_CTRL, WXK_F7, ID_CPP_COMPILE),
             wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_SHIFT, (int)'H', ID_SHOW_CALL_HIERARCHY),
             wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_ALT, (int)'I', ID_OPEN_AI_CHAT),
             wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_ALT, (int)'H', ID_FILE_HISTORY),
@@ -1009,6 +1032,7 @@ private:
     void NewTab(const wxString &filepath = wxEmptyString)
     {
         auto *page = new EditorPage(m_notebook, filepath);
+        ApplyEditorViewSettings(page);
         wxString title = filepath.IsEmpty()
                              ? wxString::Format("Untitled-%d", ++m_untitledCount)
                              : wxFileName(filepath).GetFullName();
@@ -1168,6 +1192,45 @@ private:
     }
 #endif
 
+#if DODEV_ENABLE_HEX_VIEWER
+    void OpenPathAsHex(const wxString& path)
+    {
+        if (!m_notebook || path.IsEmpty() || !wxFileExists(path))
+            return;
+
+        for (size_t i = 0; i < m_notebook->GetPageCount(); ++i)
+        {
+            auto* hex = dynamic_cast<HexViewerPage*>(m_notebook->GetPage(i));
+            if (hex && hex->GetFilePath() == path)
+            {
+                m_notebook->SetSelection(i);
+                return;
+            }
+        }
+
+        auto* page = new HexViewerPage(m_notebook);
+        wxString error;
+        if (!page->OpenFile(path, &error))
+        {
+            page->Destroy();
+            wxMessageBox(error, "Hex Viewer", wxOK | wxICON_ERROR, this);
+            return;
+        }
+        m_notebook->AddPage(page, page->GetTabTitle(), true);
+        RememberRecentFile(path);
+        if (m_statusBar)
+            m_statusBar->SetStatusText(wxString("Hex: ") + path, 0);
+    }
+
+    void OpenHexFileDialog()
+    {
+        wxFileDialog dialog(this, "Open file as hexadecimal", wxString(), wxString(),
+                            "All files (*.*)|*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dialog.ShowModal() == wxID_OK)
+            OpenPathAsHex(dialog.GetPath());
+    }
+#endif
+
     AIEditorContext BuildAIEditorContext() const
     {
         AIEditorContext context;
@@ -1202,7 +1265,7 @@ private:
             context.filePath = path;
         }
         if (m_symbolsPanel)
-            context.llvmContext = m_symbolsPanel->BuildAIContext();
+            context.codeAnalysisContext = m_symbolsPanel->BuildAIContext();
         return context;
     }
 
@@ -1264,7 +1327,25 @@ private:
 
     void ShowGeneralSettings()
     {
-        GeneralSettingsDialog dialog(this);
+        GeneralSettingsDialog::LoadedPluginPathsProvider loadedPluginPaths;
+        GeneralSettingsDialog::ApplyPluginsCallback applyPlugins;
+#if DODEV_ENABLE_PLUGINS
+        loadedPluginPaths = [this]()
+        {
+            std::vector<std::string> paths;
+            if (!m_pluginManager)
+                return paths;
+            for (const auto& plugin : m_pluginManager->GetPlugins())
+                paths.push_back(plugin.path);
+            return paths;
+        };
+        applyPlugins = [this]()
+        {
+            if (m_pluginManager)
+                ReloadPlugins(false);
+        };
+#endif
+        GeneralSettingsDialog dialog(this, std::move(loadedPluginPaths), std::move(applyPlugins));
         if (dialog.ShowModal() == wxID_OK && dialog.SettingsChanged())
         {
             ApplyEditorThemeToOpenPages();
@@ -1272,6 +1353,10 @@ private:
                 m_symbolsPanel->ReloadRuntimeSettings();
             if (m_aiChatPage)
                 m_aiChatPage->ReloadSettings();
+#if DODEV_ENABLE_PLUGINS
+            if (m_pluginManager)
+                ReloadPlugins(false);
+#endif
             if (m_statusBar)
                 m_statusBar->SetStatusText("Settings saved", 0);
         }
@@ -1319,17 +1404,6 @@ private:
             m_sideNotebook->SetSelection(1);
         m_symbolsPanel->SetCurrentDocument(page->filepath, page->GetText(), false);
         m_symbolsPanel->ShowCallHierarchy();
-    }
-
-    void CompileCurrentWithLLVM(bool syntaxOnly)
-    {
-        auto* page = CurrentPage();
-        if (!page || !m_symbolsPanel)
-            return;
-        if (m_sideNotebook && m_sideNotebook->GetPageCount() > 1)
-            m_sideNotebook->SetSelection(1);
-        m_symbolsPanel->SetCurrentDocument(page->filepath, page->GetText(), false);
-        m_symbolsPanel->CompileCurrent(syntaxOnly);
     }
 
     void GoToDefinition()
@@ -1464,10 +1538,33 @@ private:
     wxString PluginsDirectory() const
     {
         wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
-        wxString directory = executable.GetPath();
-        directory += wxFileName::GetPathSeparator();
-        directory += "plugins";
-        return directory;
+        const wxString executableDirectory = executable.GetPath();
+        const PluginRuntimeConfig settings = AppEditorConfig::GetPluginRuntimeConfig();
+
+        if (settings.directory.empty())
+        {
+            wxString directory = executableDirectory;
+            directory += wxFileName::GetPathSeparator();
+            directory += "plugins";
+            return directory;
+        }
+
+        wxFileName configured(wxString::FromUTF8(settings.directory.c_str()), wxEmptyString);
+        if (configured.IsRelative())
+            configured.MakeAbsolute(executableDirectory);
+        configured.Normalize(wxPATH_NORM_DOTS | wxPATH_NORM_ABSOLUTE);
+        return configured.GetPath();
+    }
+
+    void ApplyHttpEditorServerPluginSettings() const
+    {
+        const PluginRuntimeConfig settings = AppEditorConfig::GetPluginRuntimeConfig();
+        const wxString bind = wxString::FromUTF8(settings.httpBindAddress.c_str());
+        wxSetEnv("DODEV_HTTP_BIND", bind.IsEmpty() ? wxString("0.0.0.0") : bind);
+        wxSetEnv("DODEV_HTTP_PORT", wxString::Format("%d", settings.httpPort));
+        wxSetEnv("DODEV_HTTP_TOKEN", wxString::FromUTF8(settings.httpAuthToken.c_str()));
+        wxSetEnv("DODEV_HTTP_MAX_TEXT_BYTES",
+                 wxString::Format("%llu", static_cast<unsigned long long>(settings.httpMaxTextBytes)));
     }
 
     wxAuiNotebook* PluginNotebookForLocation(DoDevPanelLocation location) const
@@ -1634,18 +1731,73 @@ private:
         return m_notebook->DeletePage(index);
     }
 
+    wxTextCtrl* EnsurePluginLogControl()
+    {
+        if (m_pluginLogText)
+            return m_pluginLogText;
+
+        auto* logsPanel = static_cast<wxPanel*>(PluginPanelById(DODEV_PANEL_BOTTOM_LOGS));
+        if (!logsPanel)
+            return nullptr;
+
+        auto* sizer = logsPanel->GetSizer();
+        if (!sizer)
+        {
+            sizer = new wxBoxSizer(wxVERTICAL);
+            logsPanel->SetSizer(sizer);
+        }
+
+        m_pluginLogText = new wxTextCtrl(logsPanel, wxID_ANY, wxEmptyString,
+                                         wxDefaultPosition, wxDefaultSize,
+                                         wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
+        m_pluginLogText->SetBackgroundColour(wxColour(30, 30, 30));
+        m_pluginLogText->SetForegroundColour(wxColour(220, 220, 220));
+        sizer->Add(m_pluginLogText, 1, wxEXPAND);
+        logsPanel->Layout();
+        return m_pluginLogText;
+    }
+
+    void AppendPluginLog(DoDevLogLevel level, const wxString& text)
+    {
+        wxString levelText = "INFO";
+        if (level == DODEV_LOG_DEBUG) levelText = "DEBUG";
+        else if (level == DODEV_LOG_WARNING) levelText = "WARN";
+        else if (level == DODEV_LOG_ERROR) levelText = "ERROR";
+
+        if (wxTextCtrl* log = EnsurePluginLogControl())
+        {
+            wxString line = "[";
+            line += wxDateTime::Now().FormatISOTime();
+            line += "] [";
+            line += levelText;
+            line += "] [plugin] ";
+            line += text;
+            line += "\n";
+            log->AppendText(line);
+            log->ShowPosition(log->GetLastPosition());
+        }
+    }
+
     void InitializePlugins()
     {
         PluginManager::HostBindings host;
-        host.log = [](DoDevLogLevel level, const std::string& message)
+        host.log = [this](DoDevLogLevel level, const std::string& message)
         {
-            const wxString text = wxString::FromUTF8(message.c_str());
-            if (level == DODEV_LOG_ERROR)
-                wxLogError("[plugin] %s", text);
-            else if (level == DODEV_LOG_WARNING)
-                wxLogWarning("[plugin] %s", text);
+            const auto deliver = [this, level, message]()
+            {
+                const wxString text = wxString::FromUTF8(message.c_str());
+                AppendPluginLog(level, text);
+                if (level == DODEV_LOG_ERROR)
+                    wxLogError("[plugin] %s", text);
+                else if (level == DODEV_LOG_WARNING)
+                    wxLogWarning("[plugin] %s", text);
+                else
+                    wxLogMessage("[plugin] %s", text);
+            };
+            if (wxIsMainThread())
+                deliver();
             else
-                wxLogMessage("[plugin] %s", text);
+                CallAfter(deliver);
         };
         host.getPanel = [this](DoDevPanelId id) -> void*
         {
@@ -1848,22 +2000,31 @@ private:
         };
 
         m_pluginManager = std::make_unique<PluginManager>(std::move(host));
+        ApplyHttpEditorServerPluginSettings();
         const wxString directory = PluginsDirectory();
         wxFileName::Mkdir(directory, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
         std::vector<std::string> errors;
-        const size_t loaded = m_pluginManager->LoadDirectory(PluginUtf8(directory), &errors);
+        const PluginRuntimeConfig pluginSettings = AppEditorConfig::GetPluginRuntimeConfig();
+        const size_t loaded = m_pluginManager->LoadDirectory(PluginUtf8(directory), &errors, pluginSettings.disabledPlugins);
         wxLogMessage("Plugin system: %zu plugin(s) loaded from %s", loaded, directory);
         for (const std::string& error : errors)
             wxLogWarning("Plugin load: %s", wxString::FromUTF8(error.c_str()));
     }
 
-    void ReloadPlugins()
+    void ReloadPlugins(bool showMessage = true)
     {
         if (!m_pluginManager)
             return;
+
+        ApplyHttpEditorServerPluginSettings();
+        const wxString directory = PluginsDirectory();
+        wxFileName::Mkdir(directory, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+
         std::vector<std::string> errors;
-        m_pluginManager->ReloadDirectory(PluginUtf8(PluginsDirectory()), &errors);
-        wxString message = wxString::Format("Loaded %zu plugin(s).", m_pluginManager->GetPlugins().size());
+        const PluginRuntimeConfig pluginSettings = AppEditorConfig::GetPluginRuntimeConfig();
+        m_pluginManager->ReloadDirectory(PluginUtf8(directory), &errors, pluginSettings.disabledPlugins);
+        wxString message = wxString::Format("Loaded %zu plugin(s) from %s.",
+                                            m_pluginManager->GetPlugins().size(), directory);
         if (!errors.empty())
         {
             message += "\n\nErrors:\n";
@@ -1873,7 +2034,15 @@ private:
                 message += "\n";
             }
         }
-        wxMessageBox(message, "Plugins", wxOK | (errors.empty() ? wxICON_INFORMATION : wxICON_WARNING), this);
+
+        if (showMessage)
+            wxMessageBox(message, "Plugins", wxOK | (errors.empty() ? wxICON_INFORMATION : wxICON_WARNING), this);
+        else
+        {
+            wxLogMessage("Plugin settings reload: %s", message);
+            for (const std::string& error : errors)
+                wxLogWarning("Plugin reload: %s", wxString::FromUTF8(error.c_str()));
+        }
     }
 
     void ShowLoadedPlugins()
@@ -2322,6 +2491,11 @@ private:
         }
 
         AfterSuccessfulSave(page);
+#if DODEV_ENABLE_PLUGINS
+        if (m_pluginManager)
+            m_pluginManager->DispatchEvent(DODEV_EVENT_EDITOR_CHANGED, page,
+                                           m_notebook->GetPageIndex(page), PluginUtf8(page->filepath));
+#endif
         return true;
     }
 
@@ -2501,6 +2675,563 @@ private:
             page->SelectAll();
             break;
         }
+    }
+
+    // ── Replace ─────────────────────────────────────────────────────────────
+
+    struct ReplaceMatch
+    {
+        size_t position = 0;
+        size_t length = 0;
+        std::string replacement;
+    };
+
+    struct PlannedReplaceChange
+    {
+        wxString filepath;
+        EditorPage* openEditor = nullptr;
+        std::string replacementText;
+        size_t replacementCount = 0;
+    };
+
+    static std::string WxToUtf8String(const wxString& value)
+    {
+        const wxScopedCharBuffer buffer = value.ToUTF8();
+        return buffer.data() ? std::string(buffer.data()) : std::string();
+    }
+
+    bool BuildReplaceMatches(const std::string& source,
+                             const ReplaceRequest& request,
+                             std::vector<ReplaceMatch>& matches,
+                             wxString& error) const
+    {
+        matches.clear();
+        const std::string needleOriginal = WxToUtf8String(request.findText);
+        const std::string replacement = WxToUtf8String(request.replaceText);
+        if (needleOriginal.empty())
+            return true;
+
+        if (request.useRegex)
+        {
+            try
+            {
+                auto flags = std::regex_constants::ECMAScript;
+                if (!request.matchCase)
+                    flags |= std::regex_constants::icase;
+                const std::regex expression(needleOriginal, flags);
+                for (std::sregex_iterator it(source.begin(), source.end(), expression), end;
+                     it != end; ++it)
+                {
+                    ReplaceMatch match;
+                    match.position = static_cast<size_t>(it->position());
+                    match.length = static_cast<size_t>(it->length());
+                    match.replacement = it->format(replacement);
+                    matches.push_back(std::move(match));
+                }
+            }
+            catch (const std::regex_error& ex)
+            {
+                error = "Invalid regular expression: ";
+                error += wxString::FromUTF8(ex.what());
+                return false;
+            }
+            return true;
+        }
+
+        std::string haystack = source;
+        std::string needle = needleOriginal;
+        if (!request.matchCase)
+        {
+            std::transform(haystack.begin(), haystack.end(), haystack.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            std::transform(needle.begin(), needle.end(), needle.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        }
+
+        size_t from = 0;
+        while (from <= haystack.size())
+        {
+            const size_t pos = haystack.find(needle, from);
+            if (pos == std::string::npos)
+                break;
+            if (!request.wholeWord || MatchWholeWord(haystack, pos, needle.size()))
+            {
+                ReplaceMatch match;
+                match.position = pos;
+                match.length = needleOriginal.size();
+                match.replacement = replacement;
+                matches.push_back(std::move(match));
+            }
+            from = pos + std::max<size_t>(needle.size(), 1);
+        }
+        return true;
+    }
+
+    static std::string ApplyReplaceMatches(const std::string& source,
+                                           const std::vector<ReplaceMatch>& matches)
+    {
+        if (matches.empty())
+            return source;
+
+        std::string result;
+        result.reserve(source.size());
+        size_t cursor = 0;
+        for (const ReplaceMatch& match : matches)
+        {
+            if (match.position < cursor || match.position > source.size())
+                continue;
+            result.append(source, cursor, match.position - cursor);
+            result += match.replacement;
+            const size_t end = std::min(source.size(), match.position + match.length);
+            cursor = end;
+        }
+        result.append(source, cursor, source.size() - cursor);
+        return result;
+    }
+
+    static std::vector<size_t> BuildLineStarts(const std::string& source)
+    {
+        std::vector<size_t> starts;
+        starts.reserve(128);
+        starts.push_back(0);
+        for (size_t i = 0; i < source.size(); ++i)
+        {
+            if (source[i] == '\n' && i + 1 <= source.size())
+                starts.push_back(i + 1);
+        }
+        return starts;
+    }
+
+    static void LineColumnForOffset(const std::string& source,
+                                    const std::vector<size_t>& lineStarts,
+                                    size_t offset,
+                                    int& line,
+                                    int& column,
+                                    wxString& preview)
+    {
+        offset = std::min(offset, source.size());
+        auto it = std::upper_bound(lineStarts.begin(), lineStarts.end(), offset);
+        size_t index = 0;
+        if (it != lineStarts.begin())
+            index = static_cast<size_t>(std::distance(lineStarts.begin(), it) - 1);
+        const size_t lineStart = lineStarts.empty() ? 0 : lineStarts[index];
+        size_t lineEnd = source.find('\n', offset);
+        if (lineEnd == std::string::npos)
+            lineEnd = source.size();
+
+        line = static_cast<int>(index + 1);
+        column = static_cast<int>(offset - lineStart) + 1;
+
+        std::string lineText = source.substr(lineStart, lineEnd - lineStart);
+        if (!lineText.empty() && lineText.back() == '\r')
+            lineText.pop_back();
+        if (lineText.size() > 500)
+            lineText.resize(500);
+        preview = wxString::FromUTF8(lineText.c_str(), lineText.size());
+        if (preview.IsEmpty() && !lineText.empty())
+            preview = wxString::From8BitData(lineText.c_str(), lineText.size());
+        preview.Trim(true).Trim(false);
+    }
+
+    EditorPage* FindOpenEditor(const wxString& path) const
+    {
+        if (!m_notebook || path.IsEmpty())
+            return nullptr;
+        for (size_t i = 0; i < m_notebook->GetPageCount(); ++i)
+        {
+            auto* page = dynamic_cast<EditorPage*>(m_notebook->GetPage(i));
+            if (page && page->filepath == path)
+                return page;
+        }
+        return nullptr;
+    }
+
+    static bool LooksLikeReplaceableText(const std::string& source)
+    {
+        if (source.find('\0') != std::string::npos)
+            return false;
+        if (source.empty())
+            return true;
+
+        size_t suspicious = 0;
+        const size_t sample = std::min<size_t>(source.size(), 64u * 1024u);
+        for (size_t i = 0; i < sample; ++i)
+        {
+            const unsigned char c = static_cast<unsigned char>(source[i]);
+            if (c < 32 && c != '\t' && c != '\r' && c != '\n' && c != '\f' && c != '\b')
+                ++suspicious;
+        }
+        return suspicious * 100u <= sample;
+    }
+
+    bool ReadReplaceSource(const wxString& path,
+                           EditorPage* openEditor,
+                           std::string& source) const
+    {
+        source.clear();
+        if (openEditor)
+        {
+            source = WxToUtf8String(openEditor->GetText());
+            return LooksLikeReplaceableText(source);
+        }
+
+        const std::string pathUtf8 = WxToUtf8String(path);
+        if (pathUtf8.empty())
+            return false;
+        std::ifstream input(std::filesystem::u8path(pathUtf8), std::ios::binary);
+        if (!input)
+            return false;
+        source.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+        return LooksLikeReplaceableText(source);
+    }
+
+    std::vector<wxString> ReplaceWorkspaceFiles() const
+    {
+        std::vector<wxString> files;
+        std::unordered_set<std::string> unique;
+        constexpr std::uintmax_t kMaxFileSize = 4u * 1024u * 1024u;
+
+        for (const wxString& rootWx : m_workspace.GetFolderPaths())
+        {
+            if (!wxDirExists(rootWx))
+                continue;
+            const std::string rootUtf8 = WxToUtf8String(rootWx);
+            if (rootUtf8.empty())
+                continue;
+
+            std::error_code ec;
+            std::filesystem::recursive_directory_iterator it(
+                std::filesystem::u8path(rootUtf8),
+                std::filesystem::directory_options::skip_permission_denied, ec);
+            const std::filesystem::recursive_directory_iterator end;
+            for (; it != end; it.increment(ec))
+            {
+                if (ec)
+                {
+                    ec.clear();
+                    continue;
+                }
+                const auto& entry = *it;
+                if (entry.is_directory(ec))
+                {
+                    if (ShouldSkipSearchDirectory(entry.path()))
+                        it.disable_recursion_pending();
+                    continue;
+                }
+                if (!entry.is_regular_file(ec))
+                    continue;
+                const std::uintmax_t size = entry.file_size(ec);
+                if (ec || size > kMaxFileSize)
+                {
+                    ec.clear();
+                    continue;
+                }
+                const std::string key = entry.path().u8string();
+                if (!unique.insert(key).second)
+                    continue;
+                files.push_back(wxString::FromUTF8(key.c_str()));
+            }
+        }
+        return files;
+    }
+
+    std::vector<ReplacePreviewItem> PreviewReplace(const ReplaceRequest& request,
+                                                   wxString& error)
+    {
+        std::vector<ReplacePreviewItem> results;
+        constexpr size_t kMaxPreviewResults = 5000;
+
+        auto collect = [&](const wxString& path, EditorPage* editor, const wxString& display)
+        {
+            if (results.size() >= kMaxPreviewResults)
+                return;
+            std::string source;
+            if (!ReadReplaceSource(path, editor, source))
+                return;
+            std::vector<ReplaceMatch> matches;
+            if (!BuildReplaceMatches(source, request, matches, error))
+                return;
+            const std::vector<size_t> lineStarts = BuildLineStarts(source);
+            for (const ReplaceMatch& match : matches)
+            {
+                if (results.size() >= kMaxPreviewResults)
+                    break;
+                ReplacePreviewItem item;
+                item.filepath = display;
+                LineColumnForOffset(source, lineStarts, match.position, item.line, item.column, item.preview);
+                results.push_back(std::move(item));
+            }
+        };
+
+        if (request.scope == ReplaceRequest::Scope::CurrentDocument)
+        {
+            EditorPage* page = CurrentPage();
+            if (!page)
+            {
+                error = "No active editor document.";
+                return results;
+            }
+            const wxString display = page->filepath.IsEmpty() ? wxString("Current document") : page->filepath;
+            collect(page->filepath, page, display);
+            return results;
+        }
+
+        const auto files = ReplaceWorkspaceFiles();
+        if (files.empty())
+        {
+            error = "Open a folder or workspace before replacing in folders.";
+            return results;
+        }
+        for (const wxString& path : files)
+        {
+            collect(path, FindOpenEditor(path), path);
+            if (!error.IsEmpty() || results.size() >= kMaxPreviewResults)
+                break;
+        }
+        return results;
+    }
+
+    bool ReplaceOneCurrent(const ReplaceRequest& request, wxString& error)
+    {
+        EditorPage* page = CurrentPage();
+        if (!page)
+        {
+            error = "No active editor document.";
+            return false;
+        }
+
+        const std::string source = WxToUtf8String(page->GetText());
+        std::vector<ReplaceMatch> matches;
+        if (!BuildReplaceMatches(source, request, matches, error) || matches.empty())
+            return false;
+
+        const size_t caret = static_cast<size_t>(std::max(0, page->GetSelectionStart()));
+        const ReplaceMatch* chosen = nullptr;
+        for (const ReplaceMatch& match : matches)
+        {
+            if (match.position >= caret)
+            {
+                chosen = &match;
+                break;
+            }
+        }
+        if (!chosen)
+            chosen = &matches.front();
+
+        const wxString replacement = wxString::FromUTF8(chosen->replacement.c_str(), chosen->replacement.size());
+        page->BeginUndoAction();
+        page->SetTargetStart(static_cast<int>(chosen->position));
+        page->SetTargetEnd(static_cast<int>(chosen->position + chosen->length));
+        page->ReplaceTarget(replacement);
+        page->EndUndoAction();
+        const int start = static_cast<int>(chosen->position);
+        const std::string replacementUtf8 = WxToUtf8String(replacement);
+        page->SetSelection(start, start + static_cast<int>(replacementUtf8.size()));
+        page->EnsureCaretVisible();
+        page->SetFocus();
+        return true;
+    }
+
+    static wxString ReplaceBackupStamp()
+    {
+        return wxDateTime::Now().Format("%Y%m%d_%H%M%S");
+    }
+
+    bool BackupClosedReplaceFile(const wxString& path,
+                                 const wxString& stamp,
+                                 wxString& error) const
+    {
+        const wxString rootWx = m_workspace.FindContainingFolder(path);
+        if (rootWx.IsEmpty())
+        {
+            error = wxString("Cannot determine workspace root for backup: ") + path;
+            return false;
+        }
+
+        const std::string pathUtf8 = WxToUtf8String(path);
+        const std::string rootUtf8 = WxToUtf8String(rootWx);
+        if (pathUtf8.empty() || rootUtf8.empty())
+            return false;
+
+        std::error_code ec;
+        const std::filesystem::path source = std::filesystem::u8path(pathUtf8);
+        const std::filesystem::path root = std::filesystem::u8path(rootUtf8);
+        std::filesystem::path relative = std::filesystem::relative(source, root, ec);
+        if (ec)
+        {
+            error = wxString("Cannot build backup path for: ") + path;
+            return false;
+        }
+
+        std::filesystem::path backup = root / ".dodev" / "replace-backups" /
+            std::filesystem::u8path(WxToUtf8String(stamp)) / relative;
+        std::filesystem::create_directories(backup.parent_path(), ec);
+        if (ec)
+        {
+            error = "Cannot create replace backup directory.";
+            return false;
+        }
+        std::filesystem::copy_file(source, backup,
+                                   std::filesystem::copy_options::overwrite_existing, ec);
+        if (ec)
+        {
+            error = wxString("Cannot back up file before replacement: ") + path;
+            return false;
+        }
+        return true;
+    }
+
+    size_t ReplaceAllMatches(const ReplaceRequest& request, wxString& error)
+    {
+        std::vector<PlannedReplaceChange> changes;
+        size_t total = 0;
+
+        auto plan = [&](const wxString& path, EditorPage* editor)
+        {
+            std::string source;
+            if (!ReadReplaceSource(path, editor, source))
+                return true;
+            std::vector<ReplaceMatch> matches;
+            if (!BuildReplaceMatches(source, request, matches, error))
+                return false;
+            if (matches.empty())
+                return true;
+            PlannedReplaceChange change;
+            change.filepath = path;
+            change.openEditor = editor;
+            change.replacementText = ApplyReplaceMatches(source, matches);
+            change.replacementCount = matches.size();
+            total += matches.size();
+            changes.push_back(std::move(change));
+            return true;
+        };
+
+        if (request.scope == ReplaceRequest::Scope::CurrentDocument)
+        {
+            EditorPage* page = CurrentPage();
+            if (!page)
+            {
+                error = "No active editor document.";
+                return 0;
+            }
+            if (!plan(page->filepath, page))
+                return 0;
+        }
+        else
+        {
+            const auto files = ReplaceWorkspaceFiles();
+            if (files.empty())
+            {
+                error = "Open a folder or workspace before replacing in folders.";
+                return 0;
+            }
+            for (const wxString& path : files)
+            {
+                if (!plan(path, FindOpenEditor(path)))
+                    return 0;
+            }
+        }
+
+        if (changes.empty())
+            return 0;
+
+        // Preflight backups for every closed file before modifying any file.
+        const wxString stamp = ReplaceBackupStamp();
+        if (request.scope == ReplaceRequest::Scope::WorkspaceFolders)
+        {
+            for (const PlannedReplaceChange& change : changes)
+            {
+                if (!change.openEditor && !BackupClosedReplaceFile(change.filepath, stamp, error))
+                    return 0;
+            }
+        }
+
+        for (PlannedReplaceChange& change : changes)
+        {
+            if (change.openEditor)
+            {
+                const wxString value = wxString::FromUTF8(change.replacementText.c_str(),
+                                                          change.replacementText.size());
+                change.openEditor->BeginUndoAction();
+                change.openEditor->SetTargetStart(0);
+                change.openEditor->SetTargetEnd(change.openEditor->GetTextLength());
+                change.openEditor->ReplaceTarget(value);
+                change.openEditor->EndUndoAction();
+                change.openEditor->SetFocus();
+                continue;
+            }
+
+            const std::string pathUtf8 = WxToUtf8String(change.filepath);
+            std::ofstream output(std::filesystem::u8path(pathUtf8),
+                                 std::ios::binary | std::ios::trunc);
+            if (!output)
+            {
+                error = wxString("Failed to write: ") + change.filepath;
+                return 0;
+            }
+            output.write(change.replacementText.data(),
+                         static_cast<std::streamsize>(change.replacementText.size()));
+            if (!output.good())
+            {
+                error = wxString("Failed while writing: ") + change.filepath;
+                return 0;
+            }
+        }
+
+        if (request.scope == ReplaceRequest::Scope::WorkspaceFolders && m_statusBar)
+        {
+            m_statusBar->SetStatusText(
+                wxString("Replace in folders completed; closed-file backups saved under .dodev/replace-backups/") + stamp,
+                0);
+        }
+        return total;
+    }
+
+    void OpenReplacePreviewResult(const ReplacePreviewItem& item)
+    {
+        if (wxFileExists(item.filepath))
+            OpenFileInTab(item.filepath);
+        EditorPage* page = CurrentPage();
+        if (!page)
+            return;
+        const int lineIndex = std::max(0, item.line - 1);
+        page->GotoLine(lineIndex);
+        int position = page->PositionFromLine(lineIndex) + std::max(0, item.column - 1);
+        position = std::min(position, page->GetLength());
+        page->SetCurrentPos(position);
+        page->SetSelection(position, position);
+        page->EnsureCaretVisible();
+        page->SetFocus();
+    }
+
+    void ShowReplaceDialog(ReplaceRequest::Scope scope)
+    {
+        wxString initialFind;
+        if (EditorPage* page = CurrentPage())
+        {
+            initialFind = page->GetSelectedText();
+            if (initialFind.Find('\n') != wxNOT_FOUND || initialFind.Find('\r') != wxNOT_FOUND)
+                initialFind.clear();
+        }
+
+        ReplaceDialog dialog(this, scope, initialFind);
+        dialog.SetPreviewCallback([this](const ReplaceRequest& request, wxString& error)
+        {
+            return PreviewReplace(request, error);
+        });
+        dialog.SetReplaceOneCallback([this](const ReplaceRequest& request, wxString& error)
+        {
+            return ReplaceOneCurrent(request, error);
+        });
+        dialog.SetReplaceAllCallback([this](const ReplaceRequest& request, wxString& error)
+        {
+            return ReplaceAllMatches(request, error);
+        });
+        dialog.SetOpenResultCallback([this](const ReplacePreviewItem& item)
+        {
+            OpenReplacePreviewResult(item);
+        });
+        dialog.ShowModal();
     }
 
     // ── Find ────────────────────────────────────────────────────────────────
@@ -2888,17 +3619,82 @@ private:
         }
     }
 
-    void ToggleWhitespace()
+    void ApplyEditorViewSettings(EditorPage* page)
     {
+        if (!page)
+            return;
+        const EditorViewRuntimeConfig settings = AppEditorConfig::GetEditorViewRuntimeConfig();
+        page->SetViewWhiteSpace(settings.whitespaceVisible
+                                    ? wxSTC_WS_VISIBLEALWAYS
+                                    : wxSTC_WS_INVISIBLE);
+        page->SetViewEOL(settings.eolVisible);
+        // Scintilla draws control-character mnemonics when symbol < 32. A
+        // normal space hides the glyph while preserving the byte in the file.
+        page->SetControlCharSymbol(settings.controlCharactersVisible ? 0 : 32);
+    }
+
+    void ApplyEditorViewSettingsToOpenPages()
+    {
+        if (!m_notebook)
+            return;
         for (size_t i = 0; i < m_notebook->GetPageCount(); ++i)
         {
-            auto *p = dynamic_cast<EditorPage *>(m_notebook->GetPage(i));
-            if (!p)
-                continue;
-            p->SetViewWhiteSpace(p->GetViewWhiteSpace() == wxSTC_WS_INVISIBLE
-                                     ? wxSTC_WS_VISIBLEALWAYS
-                                     : wxSTC_WS_INVISIBLE);
+            auto* page = dynamic_cast<EditorPage*>(m_notebook->GetPage(i));
+            if (page)
+                ApplyEditorViewSettings(page);
         }
+    }
+
+    void SyncInvisibleMenuChecks(const EditorViewRuntimeConfig& settings)
+    {
+        wxMenuBar* menu = GetMenuBar();
+        if (!menu)
+            return;
+        menu->Check(ID_TOGGLE_WHITESPACE, settings.whitespaceVisible);
+        menu->Check(ID_TOGGLE_EOL, settings.eolVisible);
+        menu->Check(ID_TOGGLE_CONTROL_CHARS, settings.controlCharactersVisible);
+        menu->Check(ID_TOGGLE_ALL_INVISIBLES,
+                    settings.whitespaceVisible && settings.eolVisible &&
+                    settings.controlCharactersVisible);
+    }
+
+    void SaveAndApplyEditorViewSettings(const EditorViewRuntimeConfig& settings)
+    {
+        AppEditorConfig::SetEditorViewRuntimeConfig(settings);
+        ApplyEditorViewSettingsToOpenPages();
+        SyncInvisibleMenuChecks(settings);
+    }
+
+    void ToggleWhitespace()
+    {
+        EditorViewRuntimeConfig settings = AppEditorConfig::GetEditorViewRuntimeConfig();
+        settings.whitespaceVisible = !settings.whitespaceVisible;
+        SaveAndApplyEditorViewSettings(settings);
+    }
+
+    void ToggleEOL()
+    {
+        EditorViewRuntimeConfig settings = AppEditorConfig::GetEditorViewRuntimeConfig();
+        settings.eolVisible = !settings.eolVisible;
+        SaveAndApplyEditorViewSettings(settings);
+    }
+
+    void ToggleControlCharacters()
+    {
+        EditorViewRuntimeConfig settings = AppEditorConfig::GetEditorViewRuntimeConfig();
+        settings.controlCharactersVisible = !settings.controlCharactersVisible;
+        SaveAndApplyEditorViewSettings(settings);
+    }
+
+    void ToggleAllNonPrintable()
+    {
+        EditorViewRuntimeConfig settings = AppEditorConfig::GetEditorViewRuntimeConfig();
+        const bool allVisible = settings.whitespaceVisible && settings.eolVisible &&
+                                settings.controlCharactersVisible;
+        settings.whitespaceVisible = !allVisible;
+        settings.eolVisible = !allVisible;
+        settings.controlCharactersVisible = !allVisible;
+        SaveAndApplyEditorViewSettings(settings);
     }
 
     void ZoomEditor(int delta)
@@ -2991,8 +3787,6 @@ private:
 #if DODEV_ENABLE_MANUAL_SYMBOLS
             "  • Dependency-free C/C++/Kotlin symbols plus callers/callees call hierarchy\n"
 #endif
-            "  • Optional LLVM/libclang diagnostics and semantic C/C++ definition lookup\n"
-            "  • Clang syntax check / object compilation with project defines/includes\n"
             "  • Runtime-toggleable Docker inspector (containers, images, logs, stats, inspect)\n"
             "  • AI Chat tab with OpenAI, Claude, OpenAI-compatible, GitHub Copilot CLI, Ollama, llama.cpp and Gemini providers\n"
 #if DODEV_ENABLE_JOURNAL_LOGS

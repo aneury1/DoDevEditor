@@ -8,9 +8,22 @@
 #include <wx/notebook.h>
 #include <wx/statline.h>
 #include <wx/scrolwin.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
+
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <map>
+#include <set>
+#include <utility>
 
 #ifndef DODEV_ENABLE_MANUAL_SYMBOLS
 #define DODEV_ENABLE_MANUAL_SYMBOLS 0
+#endif
+
+#ifndef DODEV_ENABLE_PLUGINS
+#define DODEV_ENABLE_PLUGINS 0
 #endif
 
 namespace
@@ -30,9 +43,13 @@ AISecretSource SecretSourceFromSelection(int selection)
 }
 }
 
-GeneralSettingsDialog::GeneralSettingsDialog(wxWindow* parent)
-    : wxDialog(parent, wxID_ANY, "General Settings", wxDefaultPosition, wxSize(780, 760),
-               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+GeneralSettingsDialog::GeneralSettingsDialog(wxWindow* parent,
+                                             LoadedPluginPathsProvider loadedPluginPaths,
+                                             ApplyPluginsCallback applyPlugins)
+    : wxDialog(parent, wxID_ANY, "General Settings", wxDefaultPosition, wxSize(860, 820),
+               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+      m_loadedPluginPaths(std::move(loadedPluginPaths)),
+      m_applyPlugins(std::move(applyPlugins))
 {
     SetBackgroundColour(wxColour(37, 37, 38));
     auto* root = new wxBoxSizer(wxVERTICAL);
@@ -93,14 +110,14 @@ GeneralSettingsDialog::GeneralSettingsDialog(wxWindow* parent)
     m_includeCurrentFile = new wxCheckBox(generalPage, wxID_ANY, "Include current file when sending a prompt");
     m_includeSelection = new wxCheckBox(generalPage, wxID_ANY, "Include selected text when available");
     m_includeGitDiff = new wxCheckBox(generalPage, wxID_ANY, "Include the active Git diff when a diff tab is selected");
-    m_includeLLVM = new wxCheckBox(generalPage, wxID_ANY,
-        "Include code symbols/call hierarchy context (manual parser and LLVM when available)");
-    for (wxCheckBox* checkbox : {m_includeCurrentFile, m_includeSelection, m_includeGitDiff, m_includeLLVM})
+    m_includeCodeAnalysis = new wxCheckBox(generalPage, wxID_ANY,
+        "Include dependency-free code symbols/call hierarchy context");
+    for (wxCheckBox* checkbox : {m_includeCurrentFile, m_includeSelection, m_includeGitDiff, m_includeCodeAnalysis})
         checkbox->SetForegroundColour(wxColour(220, 220, 220));
     contextBox->Add(m_includeCurrentFile, 0, wxALL, 6);
     contextBox->Add(m_includeSelection, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6);
     contextBox->Add(m_includeGitDiff, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6);
-    contextBox->Add(m_includeLLVM, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    contextBox->Add(m_includeCodeAnalysis, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6);
     generalSizer->Add(contextBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
     auto* note = new wxStaticText(generalPage, wxID_ANY,
@@ -159,8 +176,8 @@ GeneralSettingsDialog::GeneralSettingsDialog(wxWindow* parent)
 
     auto* analysisNote = new wxStaticText(analysisPage, wxID_ANY,
 #if DODEV_ENABLE_MANUAL_SYMBOLS
-        "This parser is built into DoDevEditor and uses only C++17. It does not require LLVM, "
-        "libclang, tree-sitter, or another parsing library. Runtime-disabled languages are not tokenized or parsed."
+        "This parser is built into DoDevEditor and uses only C++17. It does not require an external parser library. "
+        "Runtime-disabled languages are not tokenized or parsed."
 #else
         "Manual source parsing was disabled at compile time. Rebuild with -DDODEV_ENABLE_MANUAL_SYMBOLS=ON "
         "or use --manual-symbols with the build script."
@@ -372,8 +389,125 @@ GeneralSettingsDialog::GeneralSettingsDialog(wxWindow* parent)
     aiPage->SetSizer(aiSizer);
     aiPage->FitInside();
 
+    // ---------------------------------------------------------------------
+    // Plugins / HTTP + WebSocket Editor Server
+    // ---------------------------------------------------------------------
+    auto* pluginsPage = new wxPanel(notebook);
+    pluginsPage->SetBackgroundColour(wxColour(37, 37, 38));
+    auto* pluginsSizer = new wxBoxSizer(wxVERTICAL);
+
+    auto* pluginsTitle = new wxStaticText(pluginsPage, wxID_ANY, "Plugins");
+    pluginsTitle->SetForegroundColour(wxColour(230, 230, 230));
+    wxFont pluginsTitleFont = pluginsTitle->GetFont();
+    pluginsTitleFont.SetWeight(wxFONTWEIGHT_BOLD);
+    pluginsTitle->SetFont(pluginsTitleFont);
+    pluginsSizer->Add(pluginsTitle, 0, wxALL, 12);
+
+    auto* folderLabel = new wxStaticText(pluginsPage, wxID_ANY, "Plugin folder");
+    folderLabel->SetForegroundColour(wxColour(205, 205, 205));
+    pluginsSizer->Add(folderLabel, 0, wxLEFT | wxRIGHT | wxTOP, 12);
+    m_pluginsDirectory = new wxDirPickerCtrl(pluginsPage, wxID_ANY, wxEmptyString,
+                                             "Select plugin directory",
+                                             wxDefaultPosition, wxDefaultSize,
+                                             wxDIRP_USE_TEXTCTRL);
+    pluginsSizer->Add(m_pluginsDirectory, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+    auto* folderHelp = new wxStaticText(pluginsPage, wxID_ANY,
+        "DoDevEditor scans this directory for native .so/.dll plugins. Relative paths are resolved against the executable directory. "
+        "Changing this value takes effect when settings are saved; loaded plugins are unloaded and reloaded from the new directory.");
+    folderHelp->SetForegroundColour(wxColour(160, 160, 160));
+    folderHelp->Wrap(680);
+    pluginsSizer->Add(folderHelp, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+    auto* runtimeBox = new wxStaticBoxSizer(wxVERTICAL, pluginsPage, "Runtime plugins");
+    auto* runtimeHelp = new wxStaticText(pluginsPage, wxID_ANY,
+        "Uncheck a plugin to keep the native library installed but prevent DoDevEditor from loading it. "
+        "Use Apply Plugin Changes to unload/reload the plugin set immediately without restarting the editor.");
+    runtimeHelp->SetForegroundColour(wxColour(160, 160, 160));
+    runtimeHelp->Wrap(720);
+    runtimeBox->Add(runtimeHelp, 0, wxEXPAND | wxALL, 8);
+
+    m_pluginList = new wxDataViewListCtrl(pluginsPage, wxID_ANY, wxDefaultPosition, wxSize(-1, 190),
+                                          wxDV_ROW_LINES | wxDV_VERT_RULES);
+    m_pluginList->AppendToggleColumn("Enabled", wxDATAVIEW_CELL_ACTIVATABLE, 75, wxALIGN_CENTER);
+    m_pluginList->AppendTextColumn("Plugin", wxDATAVIEW_CELL_INERT, 205, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+    m_pluginList->AppendTextColumn("Runtime status", wxDATAVIEW_CELL_INERT, 135, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+    m_pluginList->AppendTextColumn("Library file", wxDATAVIEW_CELL_INERT, 300, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+    runtimeBox->Add(m_pluginList, 1, wxEXPAND | wxLEFT | wxRIGHT, 8);
+
+    auto* pluginButtons = new wxBoxSizer(wxHORIZONTAL);
+    m_pluginRefresh = new wxButton(pluginsPage, wxID_ANY, "Refresh List");
+    m_pluginApply = new wxButton(pluginsPage, wxID_ANY, "Apply Plugin Changes");
+    m_pluginRuntimeStatus = new wxStaticText(pluginsPage, wxID_ANY, wxEmptyString);
+    m_pluginRuntimeStatus->SetForegroundColour(wxColour(170, 200, 170));
+    pluginButtons->Add(m_pluginRefresh, 0, wxRIGHT, 8);
+    pluginButtons->Add(m_pluginApply, 0, wxRIGHT, 12);
+    pluginButtons->Add(m_pluginRuntimeStatus, 1, wxALIGN_CENTER_VERTICAL);
+    runtimeBox->Add(pluginButtons, 0, wxEXPAND | wxALL, 8);
+    pluginsSizer->Add(runtimeBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+    auto* httpBox = new wxStaticBoxSizer(wxVERTICAL, pluginsPage, "HTTP / WebSocket Editor Server plugin");
+    auto* httpGrid = new wxFlexGridSizer(2, 8, 12);
+    httpGrid->AddGrowableCol(1, 1);
+    auto addHttpLabel = [pluginsPage, httpGrid](const wxString& text)
+    {
+        auto* label = new wxStaticText(pluginsPage, wxID_ANY, text);
+        label->SetForegroundColour(wxColour(205, 205, 205));
+        httpGrid->Add(label, 0, wxALIGN_CENTER_VERTICAL);
+    };
+
+    addHttpLabel("Bind address");
+    m_httpBindAddress = new wxTextCtrl(pluginsPage, wxID_ANY);
+    m_httpBindAddress->SetHint("0.0.0.0");
+    httpGrid->Add(m_httpBindAddress, 1, wxEXPAND);
+
+    addHttpLabel("Port");
+    m_httpPort = new wxSpinCtrl(pluginsPage, wxID_ANY);
+    m_httpPort->SetRange(1, 65535);
+    httpGrid->Add(m_httpPort, 0, wxEXPAND);
+
+    addHttpLabel("Authentication token");
+    m_httpAuthToken = new wxTextCtrl(pluginsPage, wxID_ANY, wxEmptyString,
+                                     wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
+    m_httpAuthToken->SetHint("Blank disables HTTP/WebSocket authentication");
+    httpGrid->Add(m_httpAuthToken, 1, wxEXPAND);
+
+    addHttpLabel("Maximum editor text (MiB)");
+    m_httpMaxTextMiB = new wxSpinCtrl(pluginsPage, wxID_ANY);
+    m_httpMaxTextMiB->SetRange(1, 256);
+    httpGrid->Add(m_httpMaxTextMiB, 0, wxEXPAND);
+
+    httpBox->Add(httpGrid, 0, wxEXPAND | wxALL, 8);
+    auto* httpHelp = new wxStaticText(pluginsPage, wxID_ANY,
+        "The host applies these values to dodev_http_editor_server through DODEV_HTTP_* runtime overrides. "
+        "HTTP, SSE, and WebSocket endpoints share the same listener. The default is 0.0.0.0:9934. "
+        "A blank token permits unauthenticated clients, so set a token when binding beyond localhost.");
+    httpHelp->SetForegroundColour(wxColour(160, 160, 160));
+    httpHelp->Wrap(680);
+    httpBox->Add(httpHelp, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+    pluginsSizer->Add(httpBox, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+#if !DODEV_ENABLE_PLUGINS
+    auto* disabledNote = new wxStaticText(pluginsPage, wxID_ANY,
+        "Plugin support is compiled out of this build (DODEV_ENABLE_PLUGINS=OFF). Settings are preserved but inactive.");
+    disabledNote->SetForegroundColour(wxColour(220, 160, 120));
+    pluginsSizer->Add(disabledNote, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+    m_pluginsDirectory->Enable(false);
+    m_httpBindAddress->Enable(false);
+    m_httpPort->Enable(false);
+    m_httpAuthToken->Enable(false);
+    m_httpMaxTextMiB->Enable(false);
+    m_pluginList->Enable(false);
+    m_pluginRefresh->Enable(false);
+    m_pluginApply->Enable(false);
+#endif
+
+    pluginsSizer->AddStretchSpacer(1);
+    pluginsPage->SetSizer(pluginsSizer);
+
     notebook->AddPage(editorPage, "Editor", true);
     notebook->AddPage(analysisPage, "Code Analysis", false);
+    notebook->AddPage(pluginsPage, "Plugins", false);
     notebook->AddPage(generalPage, "AI General", false);
     notebook->AddPage(aiPage, "Provider && Secrets", false);
     root->Add(notebook, 1, wxEXPAND | wxALL, 8);
@@ -415,6 +549,25 @@ GeneralSettingsDialog::GeneralSettingsDialog(wxWindow* parent)
     m_providerRefreshModels->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { RefreshProviderModels(true); });
     m_providerTest->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { TestProviderConnection(); });
 
+    m_pluginsDirectory->Bind(wxEVT_DIRPICKER_CHANGED, [this](wxFileDirPickerEvent&)
+    {
+        RefreshPluginList();
+    });
+    m_pluginRefresh->Bind(wxEVT_BUTTON, [this](wxCommandEvent&)
+    {
+        RefreshPluginList();
+    });
+    m_pluginApply->Bind(wxEVT_BUTTON, [this](wxCommandEvent&)
+    {
+        SavePluginSettingsOnly();
+        if (m_applyPlugins)
+            m_applyPlugins();
+        m_saved = true;
+        RefreshPluginList();
+        if (m_pluginRuntimeStatus)
+            m_pluginRuntimeStatus->SetLabel("Applied without restart");
+    });
+
     Bind(wxEVT_BUTTON, [this](wxCommandEvent& event)
     {
         if (event.GetId() != wxID_OK)
@@ -449,7 +602,7 @@ AIProviderSettings GeneralSettingsDialog::SettingsFromControls() const
     settings.includeCurrentFile = m_includeCurrentFile->GetValue();
     settings.includeSelection = m_includeSelection->GetValue();
     settings.includeGitDiff = m_includeGitDiff->GetValue();
-    settings.includeLLVM = m_includeLLVM->GetValue();
+    settings.includeCodeAnalysis = m_includeCodeAnalysis->GetValue();
 
     if (settings.provider == AIProviderKind::GitHubCopilotCLI)
         settings.secretSource = AISecretSource::ExistingLogin;
@@ -474,6 +627,23 @@ void GeneralSettingsDialog::LoadValues()
         themeSelection = 0;
     if (m_editorTheme && themeSelection != wxNOT_FOUND)
         m_editorTheme->SetSelection(themeSelection);
+
+    const PluginRuntimeConfig plugins = AppEditorConfig::GetPluginRuntimeConfig();
+    wxString pluginDirectory = wxString::FromUTF8(plugins.directory.c_str());
+    if (pluginDirectory.IsEmpty())
+    {
+        wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
+        pluginDirectory = executable.GetPath();
+        pluginDirectory += wxFileName::GetPathSeparator();
+        pluginDirectory += "plugins";
+    }
+    m_pluginsDirectory->SetPath(pluginDirectory);
+    m_httpBindAddress->SetValue(wxString::FromUTF8(plugins.httpBindAddress.c_str()));
+    m_httpPort->SetValue(plugins.httpPort);
+    m_httpAuthToken->SetValue(wxString::FromUTF8(plugins.httpAuthToken.c_str()));
+    const size_t mib = std::max<size_t>(1, (plugins.httpMaxTextBytes + (1024u * 1024u - 1)) / (1024u * 1024u));
+    m_httpMaxTextMiB->SetValue(static_cast<int>(std::min<size_t>(256, mib)));
+    RefreshPluginList();
 
     const ManualSymbolRuntimeConfig manual = AppEditorConfig::GetManualSymbolRuntimeConfig();
     m_manualEnabled->SetValue(manual.enabled);
@@ -508,7 +678,7 @@ void GeneralSettingsDialog::LoadValues()
     m_includeCurrentFile->SetValue(settings.includeCurrentFile);
     m_includeSelection->SetValue(settings.includeSelection);
     m_includeGitDiff->SetValue(settings.includeGitDiff);
-    m_includeLLVM->SetValue(settings.includeLLVM);
+    m_includeCodeAnalysis->SetValue(settings.includeCodeAnalysis);
     UpdateSecretControls();
     UpdateOllamaControls();
     UpdateProviderDiscoveryControls();
@@ -856,6 +1026,193 @@ void GeneralSettingsDialog::TestOllamaConnection()
     RefreshOllamaModels(false);
 }
 
+namespace
+{
+std::string NormalizePluginFilename(std::string value)
+{
+    value = std::filesystem::path(value).filename().string();
+#ifdef _WIN32
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+    {
+        return static_cast<char>(std::tolower(ch));
+    });
+#endif
+    return value;
+}
+
+std::string NormalizePluginPath(const std::string& value)
+{
+    std::error_code ec;
+    std::filesystem::path path(value);
+    path = std::filesystem::absolute(path, ec).lexically_normal();
+    std::string result = path.string();
+#ifdef _WIN32
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char ch)
+    {
+        return static_cast<char>(std::tolower(ch));
+    });
+#endif
+    return result;
+}
+}
+
+void GeneralSettingsDialog::RefreshPluginList()
+{
+    if (!m_pluginList || !m_pluginsDirectory)
+        return;
+
+    namespace fs = std::filesystem;
+    PluginRuntimeConfig current = AppEditorConfig::GetPluginRuntimeConfig();
+    std::set<std::string> disabled;
+    for (const std::string& item : current.disabledPlugins)
+        disabled.insert(NormalizePluginFilename(item));
+
+    std::set<std::string> loadedPaths;
+    if (m_loadedPluginPaths)
+    {
+        for (const std::string& path : m_loadedPluginPaths())
+            loadedPaths.insert(NormalizePluginPath(path));
+    }
+
+    // Preserve checkbox edits while Refresh is pressed before Apply/OK.
+    std::map<std::string, bool> editedState;
+    for (unsigned row = 0; row < m_pluginList->GetItemCount(); ++row)
+    {
+        wxVariant enabledValue;
+        m_pluginList->GetValue(enabledValue, row, 0);
+        const wxString file = m_pluginList->GetTextValue(row, 3);
+        const wxScopedCharBuffer utf8 = file.utf8_str();
+        if (utf8.data())
+            editedState[NormalizePluginFilename(utf8.data())] = enabledValue.GetBool();
+    }
+
+    m_pluginList->DeleteAllItems();
+
+    wxString directoryValue = m_pluginsDirectory->GetPath();
+    if (directoryValue.IsEmpty())
+    {
+        wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
+        directoryValue = executable.GetPath();
+        directoryValue += wxFileName::GetPathSeparator();
+        directoryValue += "plugins";
+    }
+
+    const wxScopedCharBuffer dirUtf8 = directoryValue.utf8_str();
+    fs::path directory(dirUtf8.data() ? dirUtf8.data() : "");
+    if (directory.is_relative())
+    {
+        wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
+        const wxScopedCharBuffer exeDirUtf8 = executable.GetPath().utf8_str();
+        directory = fs::path(exeDirUtf8.data() ? exeDirUtf8.data() : "") / directory;
+    }
+
+    std::error_code ec;
+    std::vector<fs::path> libraries;
+    if (fs::exists(directory, ec))
+    {
+        for (const auto& entry : fs::directory_iterator(directory, ec))
+        {
+            if (!entry.is_regular_file(ec))
+                continue;
+            std::string ext = entry.path().extension().string();
+#ifdef _WIN32
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            if (ext != ".dll")
+                continue;
+#else
+            if (ext != ".so" && ext != ".dylib")
+                continue;
+#endif
+            libraries.push_back(entry.path());
+        }
+    }
+    std::sort(libraries.begin(), libraries.end());
+
+    for (const fs::path& library : libraries)
+    {
+        const std::string filename = library.filename().string();
+        const std::string key = NormalizePluginFilename(filename);
+        bool enabled = disabled.find(key) == disabled.end();
+        if (const auto it = editedState.find(key); it != editedState.end())
+            enabled = it->second;
+
+        const bool loaded = loadedPaths.find(NormalizePluginPath(library.string())) != loadedPaths.end();
+        wxString status;
+        if (!enabled)
+            status = "Disabled";
+        else if (loaded)
+            status = "Loaded";
+        else
+            status = "Available / not loaded";
+
+        std::string display = library.stem().string();
+        const std::string prefix = "dodev_";
+        if (display.rfind(prefix, 0) == 0)
+            display.erase(0, prefix.size());
+        std::replace(display.begin(), display.end(), '_', ' ');
+
+        wxVector<wxVariant> values;
+        values.push_back(wxVariant(enabled));
+        values.push_back(wxVariant(wxString::FromUTF8(display.c_str())));
+        values.push_back(wxVariant(status));
+        values.push_back(wxVariant(wxString::FromUTF8(filename.c_str())));
+        m_pluginList->AppendItem(values);
+    }
+
+    if (m_pluginRuntimeStatus)
+    {
+        if (libraries.empty())
+            m_pluginRuntimeStatus->SetLabel("No native plugins found");
+        else
+            m_pluginRuntimeStatus->SetLabel(wxString::Format("%zu plugin file(s)", libraries.size()));
+    }
+}
+
+PluginRuntimeConfig GeneralSettingsDialog::PluginSettingsFromControls() const
+{
+    PluginRuntimeConfig plugins = AppEditorConfig::GetPluginRuntimeConfig();
+    const wxString selectedPluginDirectory = m_pluginsDirectory ? m_pluginsDirectory->GetPath() : wxString();
+    const wxScopedCharBuffer pluginDirUtf8 = selectedPluginDirectory.utf8_str();
+    plugins.directory = pluginDirUtf8.data() ? std::string(pluginDirUtf8.data()) : std::string();
+
+    const wxScopedCharBuffer bindUtf8 = m_httpBindAddress->GetValue().utf8_str();
+    plugins.httpBindAddress = bindUtf8.data() ? std::string(bindUtf8.data()) : std::string("0.0.0.0");
+    plugins.httpPort = m_httpPort->GetValue();
+    const wxScopedCharBuffer tokenUtf8 = m_httpAuthToken->GetValue().utf8_str();
+    plugins.httpAuthToken = tokenUtf8.data() ? std::string(tokenUtf8.data()) : std::string();
+    plugins.httpMaxTextBytes = static_cast<size_t>(m_httpMaxTextMiB->GetValue()) * 1024u * 1024u;
+
+    std::set<std::string> disabled;
+    for (const std::string& item : plugins.disabledPlugins)
+        disabled.insert(NormalizePluginFilename(item));
+
+    if (m_pluginList)
+    {
+        for (unsigned row = 0; row < m_pluginList->GetItemCount(); ++row)
+        {
+            wxVariant enabledValue;
+            m_pluginList->GetValue(enabledValue, row, 0);
+            const wxString file = m_pluginList->GetTextValue(row, 3);
+            const wxScopedCharBuffer utf8 = file.utf8_str();
+            if (!utf8.data())
+                continue;
+            const std::string key = NormalizePluginFilename(utf8.data());
+            if (enabledValue.GetBool())
+                disabled.erase(key);
+            else
+                disabled.insert(key);
+        }
+    }
+
+    plugins.disabledPlugins.assign(disabled.begin(), disabled.end());
+    return plugins;
+}
+
+void GeneralSettingsDialog::SavePluginSettingsOnly()
+{
+    AppEditorConfig::SetPluginRuntimeConfig(PluginSettingsFromControls());
+}
+
 void GeneralSettingsDialog::SaveValues()
 {
     wxString selectedEditorTheme = "vscode";
@@ -896,8 +1253,11 @@ void GeneralSettingsDialog::SaveValues()
     manual.variablesEnabled = m_manualVariables->GetValue();
     manual.macrosEnabled = m_manualMacros->GetValue();
 
+    const PluginRuntimeConfig plugins = PluginSettingsFromControls();
+
     const wxScopedCharBuffer themeUtf8 = selectedEditorTheme.utf8_str();
     AppEditorConfig::SetEditorTheme(themeUtf8.data() ? std::string(themeUtf8.data()) : std::string("vscode"));
+    AppEditorConfig::SetPluginRuntimeConfig(plugins);
     AppEditorConfig::SetManualSymbolRuntimeConfig(manual);
     AISettings::Save(settings);
     m_saved = true;

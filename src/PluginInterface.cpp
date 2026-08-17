@@ -7,6 +7,7 @@
 #endif
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <sstream>
@@ -250,7 +251,8 @@ bool PluginManager::LoadPlugin(const std::string& path, std::string* error)
     return true;
 }
 
-size_t PluginManager::LoadDirectory(const std::string& directory, std::vector<std::string>* errors)
+size_t PluginManager::LoadDirectory(const std::string& directory, std::vector<std::string>* errors,
+                                    const std::vector<std::string>& disabledFiles)
 {
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -274,9 +276,33 @@ size_t PluginManager::LoadDirectory(const std::string& directory, std::vector<st
     }
     std::sort(files.begin(), files.end());
 
+    auto normalizeName = [](std::string name)
+    {
+#ifdef _WIN32
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch)
+        {
+            return static_cast<char>(std::tolower(ch));
+        });
+#endif
+        return name;
+    };
+
+    std::vector<std::string> disabled;
+    disabled.reserve(disabledFiles.size());
+    for (const std::string& value : disabledFiles)
+        disabled.push_back(normalizeName(fs::path(value).filename().string()));
+
     size_t loaded = 0;
     for (const fs::path& file : files)
     {
+        const std::string basename = normalizeName(file.filename().string());
+        if (std::find(disabled.begin(), disabled.end(), basename) != disabled.end())
+        {
+            if (m_bindings.log)
+                m_bindings.log(DODEV_LOG_INFO, "Plugin disabled by settings: " + file.filename().string());
+            continue;
+        }
+
         std::string err;
         if (LoadPlugin(file.string(), &err))
             ++loaded;
@@ -318,10 +344,11 @@ void PluginManager::UnloadAll()
     m_plugins.clear();
 }
 
-bool PluginManager::ReloadDirectory(const std::string& directory, std::vector<std::string>* errors)
+bool PluginManager::ReloadDirectory(const std::string& directory, std::vector<std::string>* errors,
+                                    const std::vector<std::string>& disabledFiles)
 {
     UnloadAll();
-    LoadDirectory(directory, errors);
+    LoadDirectory(directory, errors, disabledFiles);
     return !errors || errors->empty();
 }
 

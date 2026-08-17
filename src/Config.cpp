@@ -65,6 +65,15 @@ void AppEditorConfig::CreateDefaultConfig()
     defaultConfig["editor_theme"] = "vscode";
     defaultConfig["recent_files"] = Json::Value(Json::arrayValue);
     defaultConfig["recent_folders"] = Json::Value(Json::arrayValue);
+    defaultConfig["editor_view"]["whitespace"] = false;
+    defaultConfig["editor_view"]["eol"] = false;
+    defaultConfig["editor_view"]["control_characters"] = false;
+    defaultConfig["plugins"]["directory"] = "";
+    defaultConfig["plugins"]["http_editor_server"]["bind_address"] = "0.0.0.0";
+    defaultConfig["plugins"]["http_editor_server"]["port"] = 9934;
+    defaultConfig["plugins"]["http_editor_server"]["auth_token"] = "";
+    defaultConfig["plugins"]["http_editor_server"]["max_text_bytes"] = Json::UInt64(4u * 1024u * 1024u);
+    defaultConfig["plugins"]["disabled"] = Json::Value(Json::arrayValue);
     Json::Value manual(Json::objectValue);
     manual["enabled"] = true;
     manual["auto_parse"] = true;
@@ -163,6 +172,26 @@ void AppEditorConfig::SetEditorTheme(const std::string& themeId)
     Save();
 }
 
+EditorViewRuntimeConfig AppEditorConfig::GetEditorViewRuntimeConfig()
+{
+    EditorViewRuntimeConfig settings;
+    const Json::Value& root = config["editor_view"];
+    if (!root.isObject())
+        return settings;
+    settings.whitespaceVisible = root.get("whitespace", false).asBool();
+    settings.eolVisible = root.get("eol", false).asBool();
+    settings.controlCharactersVisible = root.get("control_characters", false).asBool();
+    return settings;
+}
+
+void AppEditorConfig::SetEditorViewRuntimeConfig(const EditorViewRuntimeConfig& settings)
+{
+    config["editor_view"]["whitespace"] = settings.whitespaceVisible;
+    config["editor_view"]["eol"] = settings.eolVisible;
+    config["editor_view"]["control_characters"] = settings.controlCharactersVisible;
+    Save();
+}
+
 std::vector<std::string> AppEditorConfig::GetRecentFiles()
 {
     return ReadStringArray(config["recent_files"]);
@@ -209,6 +238,57 @@ void AppEditorConfig::ClearRecentFolders()
     Save();
 }
 
+
+PluginRuntimeConfig AppEditorConfig::GetPluginRuntimeConfig()
+{
+    PluginRuntimeConfig settings;
+    const Json::Value& root = config["plugins"];
+    if (!root.isObject())
+        return settings;
+
+    settings.directory = root.get("directory", "").asString();
+    const Json::Value& http = root["http_editor_server"];
+    if (http.isObject())
+    {
+        settings.httpBindAddress = http.get("bind_address", "0.0.0.0").asString();
+        if (settings.httpBindAddress.empty())
+            settings.httpBindAddress = "0.0.0.0";
+        const int port = http.get("port", 9934).asInt();
+        settings.httpPort = (port >= 1 && port <= 65535) ? port : 9934;
+        settings.httpAuthToken = http.get("auth_token", "").asString();
+        const Json::UInt64 maxBytes = http.get("max_text_bytes", Json::UInt64(4u * 1024u * 1024u)).asUInt64();
+        settings.httpMaxTextBytes = maxBytes > 0 ? static_cast<size_t>(maxBytes) : 4u * 1024u * 1024u;
+    }
+
+    const Json::Value& disabled = root["disabled"];
+    if (disabled.isArray())
+    {
+        for (const auto& value : disabled)
+        {
+            if (value.isString() && !value.asString().empty())
+                settings.disabledPlugins.push_back(value.asString());
+        }
+    }
+    return settings;
+}
+
+void AppEditorConfig::SetPluginRuntimeConfig(const PluginRuntimeConfig& settings)
+{
+    Json::Value root(Json::objectValue);
+    root["directory"] = settings.directory;
+    root["http_editor_server"]["bind_address"] = settings.httpBindAddress.empty() ? "0.0.0.0" : settings.httpBindAddress;
+    root["http_editor_server"]["port"] = (settings.httpPort >= 1 && settings.httpPort <= 65535) ? settings.httpPort : 9934;
+    root["http_editor_server"]["auth_token"] = settings.httpAuthToken;
+    root["http_editor_server"]["max_text_bytes"] = Json::UInt64(settings.httpMaxTextBytes > 0 ? settings.httpMaxTextBytes : 4u * 1024u * 1024u);
+    root["disabled"] = Json::Value(Json::arrayValue);
+    for (const std::string& plugin : settings.disabledPlugins)
+    {
+        if (!plugin.empty())
+            root["disabled"].append(plugin);
+    }
+    config["plugins"] = root;
+    Save();
+}
 
 ManualSymbolRuntimeConfig AppEditorConfig::GetManualSymbolRuntimeConfig()
 {

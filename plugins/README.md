@@ -36,3 +36,21 @@ Windows (native or MinGW): build the same CMake project and copy
 You can also build it together with the editor using:
 
     -DDODEV_BUILD_EXAMPLE_PLUGIN=ON
+
+
+## HTTP + WebSocket Editor Server
+
+`plugins/http_editor_server` is a dependency-free REST/SSE/WebSocket plugin. It exposes every open editor as a file room/channel, supports multiple concurrent WebSocket clients, and defaults to `0.0.0.0:9934`. The WebSocket implementation uses native sockets only; no third-party HTTP/WebSocket library is linked. See `plugins/http_editor_server/API.md` for the versioned `/api/v1/...` and `/ws/v1/...` protocol. Build it standalone or enable `DODEV_BUILD_HTTP_EDITOR_SERVER_PLUGIN=ON` to copy it beside the editor automatically.
+
+
+## Building all bundled plugins with DoDevEditor
+
+The general Linux and Windows build wrappers build every plugin shipped under
+`plugins/` when plugin support is enabled. The resulting shared libraries are
+deployed to the runtime plugin directory automatically.
+
+    ./scripts/build-linux.sh release --plugins
+    ./scripts/build-linux.sh release --plugin-dir custom_plugins
+
+Direct CMake builds can use `DODEV_BUILD_BUNDLED_PLUGINS=ON` and
+`DODEV_PLUGIN_OUTPUT_DIR=<path>`.

@@ -157,7 +157,7 @@ uses a small JSON format such as:
 Relative paths are resolved from the directory containing the workspace file.
 In a multi-root workspace the Explorer displays every root independently.
 `Ctrl+P` and `Ctrl+Shift+F` search across all workspace roots. The Git and `SYMBOLS` analysis panels follow the workspace folder containing the active editor file.
-Each root can therefore keep its own repository and optional `.dodev/llvm.json` compiler configuration.
+Each root can therefore keep its own repository and project-local plugin/tool configuration.
 
 ## Search
 
@@ -240,7 +240,7 @@ project.
 
 ## Built-in C / C++ / Kotlin symbols and call hierarchy (optional)
 
-DoDevEditor includes a dependency-free source-analysis framework written in C++17. It does **not** use LLVM, libclang, tree-sitter, an LSP server, or another parser library. The first registered languages are:
+DoDevEditor includes a dependency-free source-analysis framework written in C++17. It does not require an external parser library, tree-sitter, or an LSP server. The first registered languages are:
 
 - C: `.c`
 - C++: `.cpp`, `.cc`, `.cxx`, `.c++`, `.h`, `.hpp`, `.hh`, `.hxx`, `.ipp`, `.inl`, `.tpp`
@@ -273,7 +273,7 @@ Code -> Show Call Hierarchy        Ctrl+Shift+H
 Code -> Go to Definition           F12
 ```
 
-F12 reparses the current unsaved buffer with the manual parser first. For C/C++, libclang can still be used as a semantic fallback when the optional LLVM feature is enabled.
+F12 reparses the current unsaved buffer with the manual parser and uses only the built-in symbol/call index. Optional semantic compiler tooling is supplied by a separate runtime plugin.
 
 ### Runtime parser settings
 
@@ -339,161 +339,8 @@ Windows MinGW helper:
 ./scripts/build-windows-mingw.sh release --no-manual-symbols
 ```
 
-When disabled, `src/symbols/ManualSymbolParser.cpp` is excluded from the target and `DODEV_ENABLE_MANUAL_SYMBOLS=0` removes the manual integration path from the Symbols panel. The existing optional LLVM tooling remains independent.
+When disabled, `src/symbols/ManualSymbolParser.cpp` is excluded from the target and `DODEV_ENABLE_MANUAL_SYMBOLS=0` removes the manual integration path from the Symbols panel.
 
-## Optional LLVM / Clang C/C++ analysis
-
-DoDevEditor can optionally link against **libclang** (`clang-c/Index.h`) for
-C/C++ source navigation and AST-based inspection. This dependency is optional:
-the editor still configures and builds when libclang is not installed.
-
-### Linux build modes
-
-Normal build: auto-detect libclang and enable the feature when available:
-
-```bash
-./scripts/build-linux.sh release --clean
-```
-
-Require LLVM/libclang support (configuration fails if it cannot be found):
-
-```bash
-./scripts/build-linux.sh release --clean --llvm
-```
-
-Explicitly build without libclang:
-
-```bash
-./scripts/build-linux.sh release --clean --no-llvm
-```
-
-On Arch Linux the LLVM-enabled build can be prepared with:
-
-```bash
-sudo pacman -S --needed llvm clang
-./scripts/build-linux.sh release --clean --llvm
-```
-
-The command-line **Check** and **Compile** actions only require `clang` /
-`clang++` on `PATH`; they still work when the editor itself was built without
-libclang. The manual parser supplies normal symbols, static callers/callees and lightweight F12 navigation without libclang. libclang remains useful for compiler-grade AST diagnostics and semantic definition resolution.
-
-### Analysis sidebar tab
-
-The Explorer sidebar has a `SYMBOLS` tab. When the manual parser is enabled it supports C, C++ and Kotlin; LLVM augments C/C++ when available. The tab has three views:
-
-- **Symbols** — manual C/C++/Kotlin symbols by default; libclang symbols are used as a fallback when the manual parser is unavailable/disabled.
-- **Call Hierarchy** — dependency-free callers/callees for the current file, or the legacy libclang call tree when only LLVM analysis is active.
-- **Analysis** — manual parser summary plus optional libclang diagnostics and `clang` / `clang++` compile output.
-
-Controls in this tab:
-
-- `Manual` checkbox — quick master switch for the built-in parser (also persisted to the global runtime settings).
-- `LLVM` checkbox — enables/disables libclang AST analysis for the current session/project.
-- `Parse` — reparses the current C/C++/Kotlin editor buffer, including unsaved text.
-- `Check` — saves the current file and runs Clang with `-fsyntax-only`.
-- `Compile` — saves the current file and compiles one source translation unit
-  to an object under `.dodev/llvm-obj/`.
-- `Standard` — `c++17`, `c++20`, `c++23`, `c17`, or `c11`.
-- `Defines` — semicolon-separated preprocessor definitions, for example
-  `DEBUG;PLATFORM_LINUX=1;APP_NAME=\"DoDevEditor\"`.
-- `Includes` — semicolon-separated include directories. Relative paths are
-  resolved from the opened project root.
-- `Extra args` — semicolon-separated additional Clang command-line arguments.
-- `LLVM Auto` — automatically reparses C/C++ through libclang when switching files/tabs. Manual auto-parse is controlled in General Settings -> Code Analysis.
-- `Save cfg` — saves these settings for the project.
-
-DoDevEditor also automatically supplies the current source directory, project
-root, and existing `include/`, `includes/`, and `src/` directories to Clang.
-
-### Go to Definition
-
-Press:
-
-```text
-F12
-```
-
-or use:
-
-```text
-Code -> Go to Definition
-```
-
-DoDevEditor first reparses the current in-memory buffer with the manual parser and uses its call/symbol index. For C/C++, if the manual result cannot resolve the symbol and libclang is enabled, the editor falls back to libclang's semantic cursor/definition lookup.
-
-### Compile current source with Clang/LLVM
-
-Use:
-
-```text
-Code -> LLVM Syntax Check
-Code -> Compile Current Source with LLVM
-```
-
-or:
-
-```text
-Ctrl+F7
-```
-
-for object compilation. This is intentionally **per-source compilation**, not a
-replacement for the project's CMake link step. For example, a `.cpp` file is
-compiled approximately as:
-
-```bash
-clang++ -std=c++17 \
-  -DDEBUG \
-  -DPLATFORM_LINUX=1 \
-  -Iinclude \
-  -Wall -Wextra \
-  -c src/main.cpp \
-  -o .dodev/llvm-obj/main_<path-hash>.o
-```
-
-Headers are checked with `-fsyntax-only` instead of producing an object file.
-C sources use `clang` and a C standard; C++ sources use `clang++` and a C++
-standard.
-
-### Project configuration
-
-`Save cfg` writes:
-
-```text
-.dodev/llvm.json
-```
-
-Example:
-
-```json
-{
-  "enabled": true,
-  "autoParse": true,
-  "standard": "c++20",
-  "defines": [
-    "DEBUG",
-    "PLATFORM_LINUX=1"
-  ],
-  "includeDirs": [
-    "include",
-    "thirdparty/mylib/include"
-  ],
-  "extraArgs": [
-    "-Wno-unused-parameter"
-  ]
-}
-```
-
-Generated `.dodev/llvm-obj/` files are ignored by Git, while `llvm.json` can be
-committed if the analysis configuration should be shared with the project.
-
-### Current scope
-
-The call tree is translation-unit based: it shows calls discovered while
-parsing the current source file. It is not yet a whole-project reverse-call
-index. Correct parsing and definition resolution depend on supplying the same
-important `-D`, `-I`, language-standard, and other compile arguments used by
-the real project build.
 
 ## VS Code-style navigation
 
@@ -600,7 +447,7 @@ The chat can optionally attach:
 - the last active source file,
 - the current source selection,
 - the last active Git diff.
-- dependency-free C/C++/Kotlin symbols and static call hierarchy, plus LLVM/libclang diagnostics for active C/C++ when enabled.
+- dependency-free C/C++/Kotlin symbols and static call hierarchy in core; optional compiler-specific semantic tooling is supplied by a runtime plugin.
 
 Context is capped before sending to avoid accidentally attaching very large files.
 
@@ -727,7 +574,7 @@ https://generativelanguage.googleapis.com/v1beta
 The default secret source is the `GEMINI_API_KEY` environment variable. Session
 and OS-keyring secrets are also supported. **Refresh Models** loads models that
 advertise `generateContent` support and **Test Provider** validates the configured
-key/API endpoint. The normal Current File, Selection, Git Diff and LLVM context
+key/API endpoint. The normal Current File, Selection, Git Diff and Code Analysis context
 options are reused for Gemini chat requests.
 
 ## Explorer Tree + Folder List
@@ -774,24 +621,6 @@ The newest item is shown first. Reopening an existing item moves it back to the 
 
 The lists are persisted in `config.json` as `recent_files` and `recent_folders` and work in both single-folder and multi-root workspace modes.
 
-## C/C++ clang-format context menu
-
-Right-click an open C/C++ source/header tab to access:
-
-- **Format Document (clang-format)**
-- **Format Selection (clang-format)** when text is selected
-
-Formatting runs against the current in-memory editor buffer. The editor passes the real source path using `--assume-filename`, so `clang-format --style=file` can discover the nearest `.clang-format` / `_clang-format` configuration. If no project format file exists, LLVM style is used as the fallback.
-
-Formatting does **not** save the document. The formatted text remains a normal modified editor buffer and can be reverted with Undo or saved through the normal Local History / Git workflow.
-
-Runtime requirement:
-
-```bash
-clang-format --version
-```
-
-On Arch Linux it is normally supplied by the `clang` package.
 
 ## File menu: Recent Files and Recent Folders
 
@@ -807,7 +636,9 @@ Entries are stored in `config.json` as `recent_files` and `recent_folders`. Reop
 
 DoDevEditor can be built with an optional cross-platform Journal Log Inspector. It adds **Tools → SSH Journal Logs...** and **Tools → Import Journal Logs...**.
 
-The SSH tab launches the local OpenSSH client and runs `journalctl -o json --no-pager` on the remote Linux/systemd host. Controls include host, port, user, private-key path, optional systemd unit/application, **Follow (`-f`)**, **Current boot (`-b`)**, and a **Since** value such as `2026-08-16 08:00:00` or `-2 hours`. Authentication is intentionally delegated to normal OpenSSH keys, agent, and `~/.ssh/config`; passwords are not stored by the editor.
+The SSH tab launches the local OpenSSH client and runs `journalctl -o json --no-pager` on the remote Linux/systemd host. Controls include host, optional port, user, authentication mode, private-key path, optional systemd unit/application, **Follow (`-f`)**, **Current boot (`-b`)**, and a **Since** value such as `2026-08-16 08:00:00` or `-2 hours`. Leave the port blank to preserve the port from `~/.ssh/config` (or OpenSSH's default port 22).
+
+Authentication modes are **SSH config / agent**, **Private key**, and (on Unix-like builds) **Password**. Config/agent and private-key mode use non-interactive `BatchMode=yes`, while password mode uses a temporary owner-only `SSH_ASKPASS` helper and keeps the password out of the command line. The helper is removed when the SSH process exits. Windows OpenSSH builds should use SSH config/agent or private-key authentication. The tab also has **Test SSH**, an **Accept new host key** option (`StrictHostKeyChecking=accept-new`), connection timeouts/keepalives, and a persistent diagnostics box that shows the actual OpenSSH stderr instead of replacing it with only an exit code.
 
 Both live and imported tabs use the same table and filtering pipeline:
 
@@ -893,20 +724,40 @@ The feature uses only C++17 and wxWidgets, so the text and binary comparison imp
 
 ## Runtime plugin SDK
 
-DoDevEditor can load native plugins from the `plugins/` directory beside the
-executable. The feature is enabled by default and can be compiled out:
+DoDevEditor can load native plugins from a configurable plugin directory. The
+default remains `plugins/` beside the executable, but **General Settings ->
+Plugins -> Plugin folder** can point to any other directory. Relative paths are
+resolved against the executable directory. The feature is enabled by default and the general build scripts also build all
+plugins shipped under `plugins/` and deploy their `.so`/`.dll` files into the
+runtime plugin directory:
 
 ```bash
 ./scripts/build-linux.sh release --plugins
 ./scripts/build-linux.sh release --no-plugins
 ```
 
+Use a custom deployment directory that matches **General Settings -> Plugins ->
+Plugin folder** with:
+
+```bash
+./scripts/build-linux.sh release --plugin-dir custom_plugins
+./scripts/build-linux.sh release --plugin-dir /home/user/.local/share/dodev/plugins
+```
+
+Relative `--plugin-dir` paths are resolved below the build's `bin/` directory,
+matching the runtime rule that relative plugin paths are resolved beside the
+DoDevEditor executable. `--no-bundled-plugins` keeps the runtime plugin system
+while skipping all in-tree plugin builds.
+
 or directly with CMake:
 
 ```bash
 -DDODEV_ENABLE_PLUGINS=ON
--DDODEV_ENABLE_PLUGINS=OFF
+-DDODEV_BUILD_BUNDLED_PLUGINS=ON
+-DDODEV_PLUGIN_OUTPUT_DIR=/desired/plugin/path
 ```
+
+`DODEV_ENABLE_PLUGINS=OFF` removes the runtime plugin system entirely.
 
 The ABI lives in `includes/plugin/DoDevPluginAPI.h`. A basic plugin does not
 need wxWidgets; it talks to the editor through C function pointers. Plugins can
@@ -918,6 +769,12 @@ events.
 The editor adds a **Plugins** menu with **Reload Plugins**, **Loaded Plugins...**
 and **Open Plugins Folder**. Reload safely removes plugin-owned menu commands
 and panels before unloading the shared library.
+
+Bundled plugins currently include:
+
+- `plugins/example_plugin` — SDK/editor-access example;
+- `plugins/http_editor_server` — multi-client HTTP/SSE/WebSocket server with one room/channel per open editor;
+
 
 An independent example is under `plugins/example_plugin/`. Build it without
 wxWidgets:
@@ -936,3 +793,139 @@ cmake -S . -B build -DDODEV_ENABLE_PLUGINS=ON -DDODEV_BUILD_EXAMPLE_PLUGIN=ON
 Advanced plugins can create arbitrary wxWidgets panels with `add_custom_panel`.
 Those plugins must use an ABI-compatible wxWidgets/compiler build; ordinary
 host-API-only plugins do not have that requirement.
+
+## Editor invisibles / non-printable characters
+
+The View menu now exposes persistent controls for characters that are normally invisible in source files:
+
+- **Show Spaces and Tabs**
+- **Show End of Line**
+- **Show Control Characters**
+- **Show All Non-Printable Characters**
+
+The state is stored in `config.json` under `editor_view` and is applied to newly opened editor tabs. No file content is modified by these visualization options.
+
+## Replace dialog
+
+The Search menu now contains:
+
+- **Replace in Current Document...** (`Ctrl+H`)
+- **Replace in Workspace Folders...** (`Ctrl+Shift+R`)
+
+The dialog supports match case, whole word, and `std::regex` mode. Regex replacement supports capture groups such as `$1`. Preview results can be double-clicked to navigate to the match.
+
+Current-document replacements are applied to the current editor buffer as undoable unsaved changes. Workspace replacement scans text-like files up to 4 MiB while skipping generated/cache folders such as `.git`, `.dodev`, `build`, `_deps`, `node_modules`, `target`, and similar directories. Open files use their current unsaved buffer; closed files are backed up under `.dodev/replace-backups/<timestamp>/` before being modified on disk.
+
+## Remote SSH journal logs
+
+When `DODEV_ENABLE_JOURNAL_LOGS=ON`, **Tools -> Remote SSH Journal Logs...** opens the SSH journal collector. The corrected SSH flow supports SSH config/agent, private keys, Unix password authentication through `SSH_ASKPASS`, an explicit Test SSH action, SSH diagnostics, remote `journalctl` validation, follow (`-f`), current boot (`-b`), unit filtering and since/from-time filtering.
+
+## Hex / Binary Viewer
+
+DoDevEditor can open any file in a dedicated read-only hexadecimal tab using
+**File -> Open File as Hex...**. The viewer reads raw bytes rather than decoding
+the file as text and displays an aligned offset, hexadecimal byte, and ASCII
+representation.
+
+Features:
+
+- 8, 16, or 32 bytes per displayed row (16 by default).
+- 64 KiB paged reads so large executables, archives, database files, images,
+  firmware, and other binaries do not need to be loaded into memory at once.
+- Previous/Next Page and direct offset navigation. Offsets accept decimal or
+  hexadecimal forms such as `4096` or `0x1000`.
+- Byte-exact search. Hex mode accepts values such as `DE AD BE EF`; text mode
+  searches the UTF-8 bytes of the supplied text. Search streams through the
+  complete file and wraps at EOF.
+- Reload without closing the tab.
+- Viewer tabs are identified with a `[Hex]` suffix and are independent from
+  normal editable source tabs.
+- Read-only operation: the viewer never changes the source file.
+
+The feature is enabled by default and can be removed at compile time:
+
+```bash
+cmake -S . -B build -DDODEV_ENABLE_HEX_VIEWER=OFF
+```
+
+Build-script shortcuts:
+
+```bash
+./scripts/build-linux.sh release --hex-viewer
+./scripts/build-linux.sh release --no-hex-viewer
+./scripts/build-windows-mingw.sh release --hex-viewer
+./scripts/build-windows-mingw.sh release --no-hex-viewer
+```
+
+
+## HTTP + WebSocket Editor Server plugin
+
+A standalone plugin is provided in `plugins/http_editor_server`. It starts a small cross-platform HTTP + RFC 6455 WebSocket server implemented with native sockets only. Every open editor is represented as a room/channel, multiple clients can subscribe concurrently, and network worker threads only read cached snapshots rather than wxWidgets controls. Default bind is `0.0.0.0:9934`; configuration lives in `dodev_http_editor_server.json` beside the plugin. See `plugins/http_editor_server/API.md` for the versioned endpoint and message nomenclature.
+
+The normal build now includes it automatically whenever bundled plugins are enabled:
+
+```bash
+./scripts/build-linux.sh release
+```
+
+It can still be controlled individually with `--http-editor-server-plugin` /
+`--no-http-editor-server-plugin`, or by CMake
+`-DDODEV_BUILD_HTTP_EDITOR_SERVER_PLUGIN=ON`. The primary API is versioned under
+`/api/v1/...` and `/ws/v1/...`; legacy snapshot/SSE paths remain compatibility aliases.
+
+On every successful server start/reload, every registered REST/SSE/WebSocket endpoint is written as a separate line to DoDevEditor's bottom **Logs** tab and to the existing wx log output. HTTP requests and WebSocket send/receive message metadata are also logged. The authentication token and source-text payload are never duplicated into log lines.
+
+### Plugin settings and HTTP token
+
+**General Settings -> Plugins** now centralizes runtime plugin configuration:
+
+- **Plugin folder**: directory scanned for `.so`/`.dll` plugins. Changing it
+  unloads the current plugins and reloads from the new directory when settings
+  are saved.
+- **Runtime plugins table**: every discovered native plugin is listed with an
+  Enabled checkbox, runtime status and library filename. Unchecking a plugin
+  keeps its `.so`/`.dll` installed but adds its basename to `plugins.disabled`
+  in `config.json`, so the loader skips it before `dlopen`/`LoadLibrary`.
+  **Apply Plugin Changes** unloads/reloads the plugin set immediately without
+  restarting DoDevEditor. **Refresh List** rescans the configured folder.
+- **HTTP/WebSocket Editor Server bind address**: defaults to `0.0.0.0`.
+- **HTTP/WebSocket Editor Server port**: defaults to `9934`.
+- **Authentication token**: masked settings field. Blank disables HTTP/WebSocket
+  authentication.
+- **Maximum editor text**: controls the largest editor snapshot exposed by the
+  HTTP/WebSocket plugin.
+
+These HTTP/WebSocket values are persisted in `config.json` under `plugins.http_editor_server`
+and passed to the plugin through the existing `DODEV_HTTP_*` runtime overrides.
+Saving General Settings reloads plugins so changed token/bind/port settings take
+effect immediately.
+
+Example persisted configuration:
+
+```json
+{
+  "plugins": {
+    "directory": "/home/user/.local/share/dodev/plugins",
+    "disabled": [
+      "dodev_example_plugin.so"
+    ],
+    "http_editor_server": {
+      "bind_address": "0.0.0.0",
+      "port": 9934,
+      "auth_token": "change-me",
+      "max_text_bytes": 4194304
+    }
+  }
+}
+```
+
+When a token is configured, clients can use either:
+
+```bash
+curl -H "Authorization: Bearer change-me" \
+  http://127.0.0.1:9934/api/v1/editors/active
+```
+
+or `X-DoDev-Token: change-me`. Because the token is intentionally persistent,
+it is stored in the editor configuration as plain text; use filesystem
+permissions appropriate for your environment.

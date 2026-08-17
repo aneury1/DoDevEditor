@@ -25,20 +25,25 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <fstream>
-#include <sstream>
-#include <cstdlib>
 #include <algorithm>
 #include "EditorPage.h"
 #include "constant.h"
 #include "JsonStyledTextCtrl.h"
 #include "EditorConfigManager.h"
 #include "Config.h"
+#include "Config.h"
 
 EditorPage::EditorPage(wxWindow *parent, const wxString &path  )
     : JsonStyledTextCtrl(parent, wxID_ANY), filepath(path)
 {
     ApplyTheme();
+    if (AppEditorConfig::config.isObject())
+    {
+        const EditorViewRuntimeConfig view = AppEditorConfig::GetEditorViewRuntimeConfig();
+        SetViewWhiteSpace(view.whitespaceVisible ? wxSTC_WS_VISIBLEALWAYS : wxSTC_WS_INVISIBLE);
+        SetViewEOL(view.eolVisible);
+        SetControlCharSymbol(view.controlCharactersVisible ? 0 : 32);
+    }
     if (!path.IsEmpty())
         LoadFile(path);
 
@@ -99,73 +104,6 @@ bool EditorPage::SaveFile(const wxString &path )
     return true;
 }
 
-namespace
-{
-wxString QuoteFormatterShell(const wxString& value)
-{
-#ifdef __WXMSW__
-    wxString escaped = value;
-    escaped.Replace("\"", "\\\"");
-    return wxString("\"") + escaped + "\"";
-#else
-    wxString escaped = value;
-    escaped.Replace("'", "'\"'\"'");
-    return wxString("'") + escaped + "'";
-#endif
-}
-
-std::string FormatterUtf8(const wxString& value)
-{
-    const wxCharBuffer buffer = value.ToUTF8();
-    return buffer.data() ? std::string(buffer.data()) : std::string();
-}
-
-bool WriteFormatterFile(const wxString& path, const wxString& content)
-{
-    const wxCharBuffer pathBuffer = path.ToUTF8();
-    if (!pathBuffer.data())
-        return false;
-    std::ofstream file(pathBuffer.data(), std::ios::binary | std::ios::trunc);
-    if (!file)
-        return false;
-    const std::string bytes = FormatterUtf8(content);
-    file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-    return static_cast<bool>(file);
-}
-
-wxString ReadFormatterFile(const wxString& path)
-{
-    const wxCharBuffer pathBuffer = path.ToUTF8();
-    if (!pathBuffer.data())
-        return wxString();
-    std::ifstream file(pathBuffer.data(), std::ios::binary);
-    if (!file)
-        return wxString();
-    std::ostringstream buffer;
-    buffer << file.rdbuf();
-    const std::string bytes = buffer.str();
-    return wxString::FromUTF8(bytes.c_str(), bytes.size());
-}
-}
-
-bool EditorPage::IsCOrCppFile() const
-{
-    if (filepath.IsEmpty())
-        return false;
-    const wxString ext = wxFileName(filepath).GetExt().Lower();
-    return ext == "c" || ext == "cc" || ext == "cpp" || ext == "cxx" ||
-           ext == "h" || ext == "hh" || ext == "hpp" || ext == "hxx" ||
-           ext == "inl" || ext == "ipp";
-}
-
-void EditorPage::SetEditorStatus(const wxString& message)
-{
-    wxWindow* top = wxGetTopLevelParent(this);
-    auto* frame = dynamic_cast<wxFrame*>(top);
-    if (frame)
-        frame->SetStatusText(message, 0);
-}
-
 void EditorPage::OnContextMenu(wxContextMenuEvent&)
 {
     wxMenu menu;
@@ -188,127 +126,7 @@ void EditorPage::OnContextMenu(wxContextMenuEvent&)
     menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { Copy(); }, wxID_COPY);
     menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { Paste(); }, wxID_PASTE);
     menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { SelectAll(); }, wxID_SELECTALL);
-
-    if (IsCOrCppFile())
-    {
-        menu.AppendSeparator();
-        const int formatDocumentId = wxWindow::NewControlId();
-        const int formatSelectionId = wxWindow::NewControlId();
-        menu.Append(formatDocumentId, "Format Document (clang-format)");
-        menu.Append(formatSelectionId, "Format Selection (clang-format)");
-        menu.Enable(formatSelectionId, GetSelectionEnd() > GetSelectionStart());
-        menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { FormatWithClangFormat(false); }, formatDocumentId);
-        menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { FormatWithClangFormat(true); }, formatSelectionId);
-    }
-
     PopupMenu(&menu);
-}
-
-bool EditorPage::FormatWithClangFormat(bool selectionOnly)
-{
-    if (!IsCOrCppFile())
-        return false;
-
-    const wxString inputPath = wxFileName::CreateTempFileName("dodev-clang-format-in-");
-    const wxString outputPath = wxFileName::CreateTempFileName("dodev-clang-format-out-");
-    const wxString errorPath = wxFileName::CreateTempFileName("dodev-clang-format-err-");
-    if (inputPath.IsEmpty() || outputPath.IsEmpty() || errorPath.IsEmpty())
-    {
-        if (!inputPath.IsEmpty())
-            wxRemoveFile(inputPath);
-        if (!outputPath.IsEmpty())
-            wxRemoveFile(outputPath);
-        if (!errorPath.IsEmpty())
-            wxRemoveFile(errorPath);
-        wxMessageBox("Unable to create temporary files for clang-format.",
-                     "Format C/C++", wxOK | wxICON_ERROR, this);
-        return false;
-    }
-
-    const int selectionStart = GetSelectionStart();
-    const int selectionEnd = GetSelectionEnd();
-    if (selectionOnly && selectionEnd <= selectionStart)
-    {
-        wxRemoveFile(inputPath);
-        wxRemoveFile(outputPath);
-        wxRemoveFile(errorPath);
-        return false;
-    }
-
-    const wxString original = GetText();
-    if (!WriteFormatterFile(inputPath, original))
-    {
-        wxRemoveFile(inputPath);
-        wxRemoveFile(outputPath);
-        wxRemoveFile(errorPath);
-        wxMessageBox("Unable to prepare the current editor buffer for clang-format.",
-                     "Format C/C++", wxOK | wxICON_ERROR, this);
-        return false;
-    }
-
-    wxString command = "clang-format --style=file --fallback-style=LLVM --assume-filename=";
-    command += QuoteFormatterShell(filepath);
-
-    if (selectionOnly && selectionEnd > selectionStart)
-    {
-        command += wxString::Format(" --offset=%d --length=%d", selectionStart,
-                                    selectionEnd - selectionStart);
-    }
-
-    command += " <";
-    command += QuoteFormatterShell(inputPath);
-    command += " >";
-    command += QuoteFormatterShell(outputPath);
-    command += " 2>";
-    command += QuoteFormatterShell(errorPath);
-
-    const wxCharBuffer commandBuffer = command.ToUTF8();
-    const int result = commandBuffer.data() ? std::system(commandBuffer.data()) : -1;
-    const wxString formatted = ReadFormatterFile(outputPath);
-    const wxString errorText = ReadFormatterFile(errorPath);
-
-    wxRemoveFile(inputPath);
-    wxRemoveFile(outputPath);
-    wxRemoveFile(errorPath);
-
-    if (result != 0)
-    {
-        wxString message = "clang-format failed.";
-        if (!errorText.IsEmpty())
-        {
-            message += "\n\n";
-            message += errorText;
-        }
-        else
-        {
-            message += "\n\nMake sure clang-format is installed and available in PATH.";
-        }
-        wxMessageBox(message, "Format C/C++", wxOK | wxICON_ERROR, this);
-        return false;
-    }
-
-    if (formatted == original)
-    {
-        SetEditorStatus("clang-format: document is already formatted");
-        return true;
-    }
-
-    const int oldCurrentPos = GetCurrentPos();
-    const int oldAnchor = GetAnchor();
-    BeginUndoAction();
-    SetTargetStart(0);
-    SetTargetEnd(GetTextLength());
-    ReplaceTarget(formatted);
-    EndUndoAction();
-
-    const int newLength = GetTextLength();
-    const int newCurrentPos = std::min(oldCurrentPos, newLength);
-    const int newAnchor = std::min(oldAnchor, newLength);
-    SetSelection(newAnchor, newCurrentPos);
-    EnsureCaretVisible();
-    SetEditorStatus(selectionOnly ? "clang-format: selection formatted" :
-                                  "clang-format: document formatted");
-    return true;
 }
 
 // ── Apply VSCode dark theme + syntax ──

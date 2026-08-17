@@ -69,8 +69,5 @@ private:
     void OnCharAdded(wxStyledTextEvent& evt);
 
     void OnContextMenu(wxContextMenuEvent& event);
-    bool IsCOrCppFile() const;
-    bool FormatWithClangFormat(bool selectionOnly);
-    void SetEditorStatus(const wxString& message);
 };
 

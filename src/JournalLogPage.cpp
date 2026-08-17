@@ -4,10 +4,12 @@
 
 #include <wx/button.h>
 #include <wx/checkbox.h>
+#include <wx/choice.h>
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
 #include <wx/datetime.h>
 #include <wx/filedlg.h>
+#include <wx/filefn.h>
 #include <wx/filepicker.h>
 #include <wx/filename.h>
 #include <wx/ffile.h>
@@ -26,9 +28,14 @@
 #include <chrono>
 #include <ctime>
 #include <iomanip>
+#include <fstream>
 #include <memory>
 #include <sstream>
 #include <utility>
+
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 
 namespace
 {
@@ -55,6 +62,60 @@ wxString FlattenTextForExport(wxString text)
     text.Replace("\n", "\\n");
     text.Replace("\t", "\\t");
     return text;
+}
+
+long ExecuteArgumentVector(const std::vector<wxString>& arguments,
+                           int flags,
+                           wxProcess* process,
+                           const wxExecuteEnv* environment)
+{
+    if (arguments.empty())
+        return 0;
+
+#ifdef _WIN32
+    std::vector<std::wstring> storage;
+    storage.reserve(arguments.size());
+    for (const wxString& argument : arguments)
+        storage.emplace_back(argument.ToStdWstring());
+
+    std::vector<const wchar_t*> argv;
+    argv.reserve(storage.size() + 1);
+    for (const std::wstring& argument : storage)
+        argv.push_back(argument.c_str());
+    argv.push_back(nullptr);
+    return wxExecute(argv.data(), flags, process, environment);
+#else
+    std::vector<std::string> storage;
+    storage.reserve(arguments.size());
+    for (const wxString& argument : arguments)
+    {
+        const wxScopedCharBuffer utf8 = argument.ToUTF8();
+        storage.emplace_back(utf8.data() ? utf8.data() : "");
+    }
+
+    std::vector<const char*> argv;
+    argv.reserve(storage.size() + 1);
+    for (const std::string& argument : storage)
+        argv.push_back(argument.c_str());
+    argv.push_back(nullptr);
+    return wxExecute(argv.data(), flags, process, environment);
+#endif
+}
+
+wxString CommandForDiagnostics(const std::vector<wxString>& arguments)
+{
+    wxString result;
+    for (const wxString& argument : arguments)
+    {
+        if (!result.IsEmpty())
+            result += " ";
+        wxString escaped = argument;
+        escaped.Replace("\"", "\\\"");
+        result += "\"";
+        result += escaped;
+        result += "\"";
+    }
+    return result;
 }
 
 class JournalSshProcessImpl : public wxProcess
@@ -131,6 +192,7 @@ JournalLogPage::~JournalLogPage()
         if (pid > 0)
             wxProcess::Kill(pid, wxSIGTERM, wxKILL_CHILDREN);
     }
+    CleanupAskpass();
 }
 
 wxString JournalLogPage::GetTabTitle() const
@@ -173,7 +235,6 @@ void JournalLogPage::BuildConnectionControls(wxSizer* parentSizer)
     m_connectionPanel->SetBackgroundColour(FieldBackground());
 
     auto* outer = new wxBoxSizer(wxVERTICAL);
-    auto* first = new wxBoxSizer(wxHORIZONTAL);
 
     auto addLabel = [&](wxSizer* row, const wxString& text)
     {
@@ -182,54 +243,106 @@ void JournalLogPage::BuildConnectionControls(wxSizer* parentSizer)
         row->Add(label, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     };
 
+    auto* first = new wxBoxSizer(wxHORIZONTAL);
     addLabel(first, "Host");
     m_hostCtrl = new wxTextCtrl(m_connectionPanel, wxID_ANY);
-    m_hostCtrl->SetHint("server.example.com");
+    m_hostCtrl->SetHint("server.example.com or SSH config alias");
     first->Add(m_hostCtrl, 2, wxRIGHT, 8);
 
     addLabel(first, "Port");
-    m_portCtrl = new wxTextCtrl(m_connectionPanel, wxID_ANY, "22", wxDefaultPosition, wxSize(58, -1));
+    m_portCtrl = new wxTextCtrl(m_connectionPanel, wxID_ANY, wxString(), wxDefaultPosition, wxSize(72, -1));
+    m_portCtrl->SetHint("config/22");
     first->Add(m_portCtrl, 0, wxRIGHT, 8);
 
     addLabel(first, "User");
     m_userCtrl = new wxTextCtrl(m_connectionPanel, wxID_ANY);
+    m_userCtrl->SetHint("optional if configured in ~/.ssh/config");
     first->Add(m_userCtrl, 1, wxRIGHT, 8);
 
-    addLabel(first, "Identity");
-    m_identityCtrl = new wxFilePickerCtrl(m_connectionPanel, wxID_ANY, wxString(),
-                                          "Choose SSH private key", "*",
-                                          wxDefaultPosition, wxSize(210, -1),
-                                          wxFLP_OPEN | wxFLP_FILE_MUST_EXIST | wxFLP_USE_TEXTCTRL);
-    first->Add(m_identityCtrl, 2, wxRIGHT, 4);
+    addLabel(first, "Auth");
+    wxArrayString authChoices;
+    authChoices.Add("SSH config / agent");
+    authChoices.Add("Private key");
+#ifndef _WIN32
+    authChoices.Add("Password");
+#endif
+    m_authChoice = new wxChoice(m_connectionPanel, wxID_ANY, wxDefaultPosition, wxSize(170, -1), authChoices);
+    m_authChoice->SetSelection(0);
+    first->Add(m_authChoice, 0);
     outer->Add(first, 0, wxEXPAND | wxALL, 6);
 
     auto* second = new wxBoxSizer(wxHORIZONTAL);
-    addLabel(second, "Unit (-u)");
+    addLabel(second, "Identity");
+    m_identityCtrl = new wxFilePickerCtrl(m_connectionPanel, wxID_ANY, wxString(),
+                                          "Choose SSH private key", "*",
+                                          wxDefaultPosition, wxSize(260, -1),
+                                          wxFLP_OPEN | wxFLP_FILE_MUST_EXIST | wxFLP_USE_TEXTCTRL);
+    second->Add(m_identityCtrl, 2, wxRIGHT, 8);
+
+    addLabel(second, "Password");
+    m_passwordCtrl = new wxTextCtrl(m_connectionPanel, wxID_ANY, wxString(),
+                                    wxDefaultPosition, wxSize(180, -1), wxTE_PASSWORD);
+#ifndef _WIN32
+    m_passwordCtrl->SetHint("used through SSH_ASKPASS");
+#else
+    m_passwordCtrl->SetHint("use key/agent on Windows");
+#endif
+    second->Add(m_passwordCtrl, 1, wxRIGHT, 8);
+
+    m_acceptNewHostKeyCheck = new wxCheckBox(m_connectionPanel, wxID_ANY, "Accept new host key");
+    m_acceptNewHostKeyCheck->SetForegroundColour(Foreground());
+    m_acceptNewHostKeyCheck->SetValue(true);
+    second->Add(m_acceptNewHostKeyCheck, 0, wxALIGN_CENTER_VERTICAL);
+    outer->Add(second, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+
+    auto* third = new wxBoxSizer(wxHORIZONTAL);
+    addLabel(third, "Unit (-u)");
     m_unitCtrl = new wxTextCtrl(m_connectionPanel, wxID_ANY);
     m_unitCtrl->SetHint("optional: my-service.service");
-    second->Add(m_unitCtrl, 2, wxRIGHT, 8);
+    third->Add(m_unitCtrl, 2, wxRIGHT, 8);
 
-    addLabel(second, "Since");
+    addLabel(third, "Since");
     m_sinceCtrl = new wxTextCtrl(m_connectionPanel, wxID_ANY);
     m_sinceCtrl->SetHint("2026-08-16 08:00:00 or -2 hours");
-    second->Add(m_sinceCtrl, 2, wxRIGHT, 8);
+    third->Add(m_sinceCtrl, 2, wxRIGHT, 8);
 
     m_followCheck = new wxCheckBox(m_connectionPanel, wxID_ANY, "Follow (-f)");
     m_followCheck->SetForegroundColour(Foreground());
     m_followCheck->SetValue(true);
-    second->Add(m_followCheck, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+    third->Add(m_followCheck, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 
     m_bootCheck = new wxCheckBox(m_connectionPanel, wxID_ANY, "Current boot (-b)");
     m_bootCheck->SetForegroundColour(Foreground());
     m_bootCheck->SetValue(false);
-    second->Add(m_bootCheck, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+    third->Add(m_bootCheck, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
 
+    m_testButton = new wxButton(m_connectionPanel, wxID_ANY, "Test SSH");
     m_connectButton = new wxButton(m_connectionPanel, wxID_ANY, "Connect");
     m_stopButton = new wxButton(m_connectionPanel, wxID_ANY, "Stop");
-    second->Add(m_connectButton, 0, wxRIGHT, 4);
-    second->Add(m_stopButton, 0);
-    outer->Add(second, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    third->Add(m_testButton, 0, wxRIGHT, 4);
+    third->Add(m_connectButton, 0, wxRIGHT, 4);
+    third->Add(m_stopButton, 0);
+    outer->Add(third, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
 
+    auto* diagnosticLabel = new wxStaticText(m_connectionPanel, wxID_ANY, "SSH diagnostics");
+    diagnosticLabel->SetForegroundColour(Foreground());
+    outer->Add(diagnosticLabel, 0, wxLEFT | wxRIGHT, 6);
+
+    m_diagnosticsCtrl = new wxTextCtrl(m_connectionPanel, wxID_ANY, wxString(),
+                                       wxDefaultPosition, wxSize(-1, 78),
+                                       wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
+    m_diagnosticsCtrl->SetBackgroundColour(PanelBackground());
+    m_diagnosticsCtrl->SetForegroundColour(Foreground());
+    outer->Add(m_diagnosticsCtrl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+
+    m_authChoice->Bind(wxEVT_CHOICE, [this](wxCommandEvent&)
+    {
+        UpdateAuthenticationControls();
+    });
+    m_testButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&)
+    {
+        StartSshTest();
+    });
     m_connectButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&)
     {
         StartSshCollection();
@@ -241,6 +354,7 @@ void JournalLogPage::BuildConnectionControls(wxSizer* parentSizer)
 
     m_connectionPanel->SetSizer(outer);
     parentSizer->Add(m_connectionPanel, 0, wxEXPAND | wxALL, 6);
+    UpdateAuthenticationControls();
 }
 
 void JournalLogPage::BuildFilterControls(wxSizer* parentSizer)
@@ -349,43 +463,127 @@ void JournalLogPage::BuildExportControls(wxSizer* parentSizer)
 
 void JournalLogPage::StartSshCollection()
 {
+    StartSshProcess(ProcessPurpose::JournalCollection);
+}
+
+void JournalLogPage::StartSshTest()
+{
+    StartSshProcess(ProcessPurpose::TestConnection);
+}
+
+JournalLogPage::SshAuthMode JournalLogPage::GetSshAuthMode() const
+{
+    if (!m_authChoice)
+        return SshAuthMode::AgentOrConfig;
+
+    const int selection = m_authChoice->GetSelection();
+    if (selection == static_cast<int>(SshAuthMode::PrivateKey))
+        return SshAuthMode::PrivateKey;
+#ifndef _WIN32
+    if (selection == static_cast<int>(SshAuthMode::Password))
+        return SshAuthMode::Password;
+#endif
+    return SshAuthMode::AgentOrConfig;
+}
+
+bool JournalLogPage::StartSshProcess(ProcessPurpose purpose)
+{
     if (m_running)
-        return;
+        return false;
 
     if (!m_hostCtrl || m_hostCtrl->GetValue().Trim().IsEmpty())
     {
         SetStatus("SSH host is required", true);
-        return;
+        return false;
     }
 
-    long port = 22;
-    if (!m_portCtrl->GetValue().ToLong(&port) || port < 1 || port > 65535)
+    wxString portText = m_portCtrl ? m_portCtrl->GetValue() : wxString();
+    portText.Trim(true).Trim(false);
+    if (!portText.IsEmpty())
     {
-        SetStatus("SSH port must be between 1 and 65535", true);
-        return;
+        long port = 22;
+        if (!portText.ToLong(&port) || port < 1 || port > 65535)
+        {
+            SetStatus("SSH port must be between 1 and 65535 (or leave it blank for SSH config/default)", true);
+            return false;
+        }
     }
+
+    const SshAuthMode authMode = GetSshAuthMode();
+    if (authMode == SshAuthMode::PrivateKey)
+    {
+        const wxString identity = m_identityCtrl ? m_identityCtrl->GetPath() : wxString();
+        if (identity.IsEmpty())
+        {
+            SetStatus("Private-key authentication requires an identity file", true);
+            return false;
+        }
+    }
+
+#ifdef _WIN32
+    if (authMode == SshAuthMode::Password)
+    {
+        SetStatus("Password authentication is not available through redirected Windows OpenSSH. Use SSH config/agent or a private key.", true);
+        return false;
+    }
+#else
+    if (authMode == SshAuthMode::Password && (!m_passwordCtrl || m_passwordCtrl->GetValue().IsEmpty()))
+    {
+        SetStatus("Password authentication requires a password", true);
+        return false;
+    }
+#endif
 
     m_stdoutBytes.clear();
     m_stderrBytes.clear();
-    m_process = new JournalSshProcess(this);
-    const wxString command = BuildSshCommand();
+    m_lastSshError.Clear();
+    m_connectionEstablished = false;
+    m_testSshOk = false;
+    m_testJournalctlOk = false;
+    m_processPurpose = purpose;
+    CleanupAskpass();
 
-    m_pid = wxExecute(command, wxEXEC_ASYNC | wxEXEC_MAKE_GROUP_LEADER, m_process);
+    if (m_diagnosticsCtrl)
+        m_diagnosticsCtrl->Clear();
+
+    wxExecuteEnv environment;
+    wxString environmentError;
+    if (!PrepareSshEnvironment(environment, &environmentError))
+    {
+        SetStatus(environmentError, true);
+        m_processPurpose = ProcessPurpose::None;
+        return false;
+    }
+
+    const std::vector<wxString> arguments = BuildSshArguments(purpose);
+    AppendDiagnostic(wxString("Launching: ") + CommandForDiagnostics(arguments));
+
+    m_process = new JournalSshProcess(this);
+    m_pid = ExecuteArgumentVector(arguments,
+                                  wxEXEC_ASYNC | wxEXEC_MAKE_GROUP_LEADER,
+                                  m_process,
+                                  &environment);
     if (m_pid <= 0)
     {
         m_process->ClearOwner();
         delete m_process;
         m_process = nullptr;
         m_pid = 0;
+        m_processPurpose = ProcessPurpose::None;
+        CleanupAskpass();
         SetStatus("Unable to launch ssh. Ensure OpenSSH client is installed and in PATH.", true);
         UpdateButtons();
-        return;
+        return false;
     }
 
     m_running = true;
     m_pollTimer.Start(kPollIntervalMs);
-    SetStatus(wxString::Format("Connected process started (PID %ld)", m_pid));
+    if (purpose == ProcessPurpose::TestConnection)
+        SetStatus(wxString::Format("Testing SSH connection (PID %ld)...", m_pid));
+    else
+        SetStatus(wxString::Format("Connecting through SSH (PID %ld)...", m_pid));
     UpdateButtons();
+    return true;
 }
 
 void JournalLogPage::StopSshCollection()
@@ -393,34 +591,95 @@ void JournalLogPage::StopSshCollection()
     if (!m_running || m_pid <= 0)
         return;
 
-    SetStatus("Stopping SSH journal collection...");
+    SetStatus("Stopping SSH process...");
+    AppendDiagnostic("Stop requested by user");
     wxProcess::Kill(m_pid, wxSIGTERM, wxKILL_CHILDREN);
 }
 
-wxString JournalLogPage::BuildSshCommand() const
+std::vector<wxString> JournalLogPage::BuildSshArguments(ProcessPurpose purpose) const
 {
-    wxString command = "ssh -o BatchMode=yes";
-    command += " -p ";
-    command += m_portCtrl->GetValue();
+    std::vector<wxString> arguments;
+    arguments.push_back("ssh");
+    arguments.push_back("-T");
 
-    const wxString identity = m_identityCtrl ? m_identityCtrl->GetPath() : wxString();
-    if (!identity.IsEmpty())
+    arguments.push_back("-o");
+    arguments.push_back("ConnectTimeout=10");
+    arguments.push_back("-o");
+    arguments.push_back("ConnectionAttempts=1");
+    arguments.push_back("-o");
+    arguments.push_back("ServerAliveInterval=15");
+    arguments.push_back("-o");
+    arguments.push_back("ServerAliveCountMax=3");
+
+    if (m_acceptNewHostKeyCheck && m_acceptNewHostKeyCheck->GetValue())
     {
-        command += " -i ";
-        command += QuoteLocalArgument(identity);
+        arguments.push_back("-o");
+        arguments.push_back("StrictHostKeyChecking=accept-new");
+    }
+    else
+    {
+        arguments.push_back("-o");
+        arguments.push_back("StrictHostKeyChecking=yes");
     }
 
-    wxString destination = m_hostCtrl->GetValue();
+    const SshAuthMode authMode = GetSshAuthMode();
+    if (authMode == SshAuthMode::Password)
+    {
+        arguments.push_back("-o");
+        arguments.push_back("BatchMode=no");
+        arguments.push_back("-o");
+        arguments.push_back("PubkeyAuthentication=no");
+        arguments.push_back("-o");
+        arguments.push_back("PreferredAuthentications=password,keyboard-interactive");
+        arguments.push_back("-o");
+        arguments.push_back("NumberOfPasswordPrompts=1");
+    }
+    else
+    {
+        // This process has redirected stdio and cannot answer terminal prompts.
+        // Fail immediately with useful stderr instead of silently hanging.
+        arguments.push_back("-o");
+        arguments.push_back("BatchMode=yes");
+    }
+
+    if (authMode == SshAuthMode::PrivateKey)
+    {
+        const wxString identity = m_identityCtrl ? m_identityCtrl->GetPath() : wxString();
+        if (!identity.IsEmpty())
+        {
+            arguments.push_back("-i");
+            arguments.push_back(identity);
+            arguments.push_back("-o");
+            arguments.push_back("IdentitiesOnly=yes");
+        }
+    }
+
+    wxString portText = m_portCtrl ? m_portCtrl->GetValue() : wxString();
+    portText.Trim(true).Trim(false);
+    if (!portText.IsEmpty())
+    {
+        arguments.push_back("-p");
+        arguments.push_back(portText);
+    }
+
+    wxString destination = m_hostCtrl ? m_hostCtrl->GetValue() : wxString();
     destination.Trim(true).Trim(false);
     wxString user = m_userCtrl ? m_userCtrl->GetValue() : wxString();
     user.Trim(true).Trim(false);
     if (!user.IsEmpty())
         destination = user + "@" + destination;
+    arguments.push_back(destination);
 
-    command += " ";
-    command += QuoteLocalArgument(destination);
+    if (purpose == ProcessPurpose::TestConnection)
+    {
+        arguments.push_back("printf '__DODEV_SSH_OK__\\n'; "
+                            "if command -v journalctl >/dev/null 2>&1; then "
+                            "printf '__DODEV_JOURNALCTL_OK__\\n'; "
+                            "else printf '__DODEV_JOURNALCTL_MISSING__\\n'; fi");
+        return arguments;
+    }
 
-    wxString remote = "journalctl -o json --no-pager";
+    wxString remote = "printf '__DODEV_SSH_CONNECTED__\\n'; exec journalctl -o json --no-pager";
     if (m_followCheck && m_followCheck->GetValue())
         remote += " -f";
     if (m_bootCheck && m_bootCheck->GetValue())
@@ -442,9 +701,108 @@ wxString JournalLogPage::BuildSshCommand() const
         remote += QuoteRemoteArgument(unit);
     }
 
-    command += " ";
-    command += QuoteLocalArgument(remote);
-    return command;
+    arguments.push_back(remote);
+    return arguments;
+}
+
+bool JournalLogPage::PrepareSshEnvironment(wxExecuteEnv& environment, wxString* error)
+{
+    wxGetEnvMap(&environment.env);
+
+#ifndef _WIN32
+    if (GetSshAuthMode() == SshAuthMode::Password)
+    {
+        const wxString password = m_passwordCtrl ? m_passwordCtrl->GetValue() : wxString();
+        if (password.IsEmpty())
+        {
+            if (error)
+                *error = "Password authentication requires a password";
+            return false;
+        }
+
+        m_askpassPath = wxFileName::CreateTempFileName("dodev_ssh_askpass_");
+        if (m_askpassPath.IsEmpty())
+        {
+            if (error)
+                *error = "Unable to create temporary SSH_ASKPASS helper";
+            return false;
+        }
+
+        const std::string helperPath = ToUtf8(m_askpassPath);
+        {
+            std::ofstream helper(helperPath, std::ios::binary | std::ios::trunc);
+            if (!helper)
+            {
+                CleanupAskpass();
+                if (error)
+                    *error = "Unable to write temporary SSH_ASKPASS helper";
+                return false;
+            }
+            helper << "#!/bin/sh\n"
+                      "printf '%s\\n' \"$DODEV_SSH_PASSWORD\"\n";
+            helper.flush();
+            if (!helper.good())
+            {
+                CleanupAskpass();
+                if (error)
+                    *error = "Unable to write temporary SSH_ASKPASS helper";
+                return false;
+            }
+        }
+
+        if (::chmod(helperPath.c_str(), S_IRUSR | S_IWUSR | S_IXUSR) != 0)
+        {
+            CleanupAskpass();
+            if (error)
+                *error = "Unable to make temporary SSH_ASKPASS helper executable";
+            return false;
+        }
+
+        environment.env["SSH_ASKPASS"] = m_askpassPath;
+        environment.env["SSH_ASKPASS_REQUIRE"] = "force";
+        environment.env["DODEV_SSH_PASSWORD"] = password;
+    }
+#else
+    wxUnusedVar(error);
+#endif
+
+    return true;
+}
+
+void JournalLogPage::CleanupAskpass()
+{
+#ifndef _WIN32
+    if (!m_askpassPath.IsEmpty())
+    {
+        if (wxFileExists(m_askpassPath))
+            wxRemoveFile(m_askpassPath);
+        m_askpassPath.Clear();
+    }
+#else
+    m_askpassPath.Clear();
+#endif
+}
+
+void JournalLogPage::UpdateAuthenticationControls()
+{
+    const SshAuthMode mode = GetSshAuthMode();
+    if (m_identityCtrl)
+        m_identityCtrl->Enable(!m_running && mode == SshAuthMode::PrivateKey);
+    if (m_passwordCtrl)
+        m_passwordCtrl->Enable(!m_running && mode == SshAuthMode::Password);
+}
+
+void JournalLogPage::AppendDiagnostic(const wxString& line, bool error)
+{
+    if (!m_diagnosticsCtrl || line.IsEmpty())
+        return;
+
+    if (m_diagnosticsCtrl->GetLastPosition() > 0)
+        m_diagnosticsCtrl->AppendText("\n");
+    if (error)
+        m_diagnosticsCtrl->AppendText("ERROR: ");
+    m_diagnosticsCtrl->AppendText(line);
+    m_diagnosticsCtrl->ShowPosition(m_diagnosticsCtrl->GetLastPosition());
 }
 
 void JournalLogPage::PollProcessStreams()
@@ -474,34 +832,69 @@ void JournalLogPage::ConsumeStream(wxInputStream* stream, std::string& pending, 
 
 void JournalLogPage::ConsumeCompleteLines(std::string& pending, bool stderrStream, bool flushAll)
 {
+    auto consumeLine = [this, stderrStream](std::string line)
+    {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line.empty())
+            return;
+
+        const wxString text = wxString::FromUTF8(line.c_str());
+        if (stderrStream)
+        {
+            m_lastSshError = text;
+            AppendDiagnostic(text, true);
+            SetStatus(wxString("ssh: ") + text, true);
+            return;
+        }
+
+        if (line == "__DODEV_SSH_CONNECTED__")
+        {
+            m_connectionEstablished = true;
+            AppendDiagnostic("SSH authenticated; remote journalctl started");
+            SetStatus("SSH connected; receiving journal logs...");
+            return;
+        }
+
+        if (m_processPurpose == ProcessPurpose::TestConnection)
+        {
+            if (line == "__DODEV_SSH_OK__")
+            {
+                m_testSshOk = true;
+                AppendDiagnostic("SSH authentication succeeded");
+            }
+            else if (line == "__DODEV_JOURNALCTL_OK__")
+            {
+                m_testJournalctlOk = true;
+                AppendDiagnostic("Remote journalctl is available");
+            }
+            else if (line == "__DODEV_JOURNALCTL_MISSING__")
+            {
+                AppendDiagnostic("Remote journalctl was not found", true);
+            }
+            else
+            {
+                AppendDiagnostic(text);
+            }
+            return;
+        }
+
+        AddJournalJsonLine(line);
+    };
+
     size_t pos = std::string::npos;
     while ((pos = pending.find('\n')) != std::string::npos)
     {
         std::string line = pending.substr(0, pos);
         pending.erase(0, pos + 1);
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
-        if (line.empty())
-            continue;
-        if (stderrStream)
-            SetStatus(wxString("ssh: ") + wxString::FromUTF8(line.c_str()), true);
-        else
-            AddJournalJsonLine(line);
+        consumeLine(std::move(line));
     }
 
     if (flushAll && !pending.empty())
     {
         std::string line = pending;
         pending.clear();
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
-        if (!line.empty())
-        {
-            if (stderrStream)
-                SetStatus(wxString("ssh: ") + wxString::FromUTF8(line.c_str()), true);
-            else
-                AddJournalJsonLine(line);
-        }
+        consumeLine(std::move(line));
     }
 }
 
@@ -514,11 +907,44 @@ void JournalLogPage::OnSshProcessTerminated(int pid, int status)
     ConsumeCompleteLines(m_stdoutBytes, false, true);
     ConsumeCompleteLines(m_stderrBytes, true, true);
 
+    const ProcessPurpose finishedPurpose = m_processPurpose;
+    const bool connected = m_connectionEstablished;
+    const bool testSshOk = m_testSshOk;
+    const bool testJournalctlOk = m_testJournalctlOk;
+    const wxString lastError = m_lastSshError;
+
     m_pollTimer.Stop();
     m_running = false;
     m_pid = 0;
     m_process = nullptr;
-    SetStatus(wxString::Format("SSH journal process exited with status %d", status), status != 0);
+    m_processPurpose = ProcessPurpose::None;
+    CleanupAskpass();
+
+    if (finishedPurpose == ProcessPurpose::TestConnection)
+    {
+        if (status == 0 && testSshOk && testJournalctlOk)
+            SetStatus("SSH test succeeded; journalctl is available");
+        else if (status == 0 && testSshOk)
+            SetStatus("SSH test succeeded, but journalctl is unavailable on the remote host", true);
+        else if (!lastError.IsEmpty())
+            SetStatus(wxString::Format("SSH test failed (status %d): ", status) + lastError, true);
+        else
+            SetStatus(wxString::Format("SSH test failed with status %d", status), true);
+    }
+    else if (status == 0)
+    {
+        SetStatus(connected ? "SSH journal collection completed" : "SSH process completed");
+    }
+    else if (!lastError.IsEmpty())
+    {
+        const wxString prefix = connected ? "journalctl/SSH session ended: " : "SSH connection failed: ";
+        SetStatus(prefix + lastError + wxString::Format(" (status %d)", status), true);
+    }
+    else
+    {
+        SetStatus(wxString::Format("SSH journal process exited with status %d", status), true);
+    }
+
     UpdateButtons();
 }
 
@@ -1003,10 +1429,23 @@ void JournalLogPage::SetStatus(const wxString& text, bool error)
 
 void JournalLogPage::UpdateButtons()
 {
+    if (m_testButton)
+        m_testButton->Enable(!m_running);
     if (m_connectButton)
         m_connectButton->Enable(!m_running);
     if (m_stopButton)
         m_stopButton->Enable(m_running);
+    if (m_authChoice)
+        m_authChoice->Enable(!m_running);
+    if (m_hostCtrl)
+        m_hostCtrl->Enable(!m_running);
+    if (m_portCtrl)
+        m_portCtrl->Enable(!m_running);
+    if (m_userCtrl)
+        m_userCtrl->Enable(!m_running);
+    if (m_acceptNewHostKeyCheck)
+        m_acceptNewHostKeyCheck->Enable(!m_running);
+    UpdateAuthenticationControls();
 }
 
 wxString JournalLogPage::FormatJournalTimestamp(const Json::Value& value)
@@ -1060,19 +1499,6 @@ std::string JournalLogPage::ToUtf8(const wxString& value)
 {
     const wxScopedCharBuffer bytes = value.ToUTF8();
     return bytes.data() ? std::string(bytes.data(), bytes.length()) : std::string();
-}
-
-wxString JournalLogPage::QuoteLocalArgument(const wxString& value)
-{
-#ifdef _WIN32
-    wxString escaped = value;
-    escaped.Replace("\"", "\\\"");
-    return wxString("\"") + escaped + "\"";
-#else
-    wxString escaped = value;
-    escaped.Replace("'", "'\"'\"'");
-    return wxString("'") + escaped + "'";
-#endif
 }
 
 wxString JournalLogPage::QuoteRemoteArgument(const wxString& value)

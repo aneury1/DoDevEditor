@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────────────────────────
 #  CompilerSettings.cmake
 #  C++ standard, preprocessor definitions, warnings, coverage,
-#  and clang-tidy wiring.
+#  and optional instrumentation.
 #  Requires: Options.cmake to be included first.
 # ──────────────────────────────────────────────────────────────
 
@@ -18,17 +18,8 @@ add_compile_definitions(
 )
 
 # ── Per-compiler warning flags ────────────────────────────────
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+if(NOT MSVC)
     add_compile_options(-Wwrite-strings)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    add_compile_options(-Wwrite-strings)
-endif()
-
-# ── clang-tidy ────────────────────────────────────────────────
-if(ENABLE_CLANG_TIDY)
-    find_program(CLANG_TIDY_EXE NAMES clang-tidy REQUIRED)
-    message(STATUS "[clang-tidy] found: ${CLANG_TIDY_EXE}")
-    set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE};-checks=*")
 endif()
 
 # ── Code coverage ─────────────────────────────────────────────
