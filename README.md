@@ -156,9 +156,8 @@ uses a small JSON format such as:
 
 Relative paths are resolved from the directory containing the workspace file.
 In a multi-root workspace the Explorer displays every root independently.
-`Ctrl+P` and `Ctrl+Shift+F` search across all workspace roots. The Git and C/C++
-LLVM panels follow the workspace folder containing the active editor file, so
-each root can keep its own repository and `.dodev/llvm.json` configuration.
+`Ctrl+P` and `Ctrl+Shift+F` search across all workspace roots. The Git and `SYMBOLS` analysis panels follow the workspace folder containing the active editor file.
+Each root can therefore keep its own repository and optional `.dodev/llvm.json` compiler configuration.
 
 ## Search
 
@@ -239,6 +238,109 @@ For detailed compiler commands and lower-memory compilation:
 the Git panel compatible with wxString in the wxWidgets 3.2 build used by this
 project.
 
+## Built-in C / C++ / Kotlin symbols and call hierarchy (optional)
+
+DoDevEditor includes a dependency-free source-analysis framework written in C++17. It does **not** use LLVM, libclang, tree-sitter, an LSP server, or another parser library. The first registered languages are:
+
+- C: `.c`
+- C++: `.cpp`, `.cc`, `.cxx`, `.c++`, `.h`, `.hpp`, `.hh`, `.hxx`, `.ipp`, `.inl`, `.tpp`
+- Kotlin: `.kt`, `.kts`
+
+The parser uses a reusable tokenizer, language-aware symbol passes, callable-body analysis, and a registry that maps file extensions to language backends. `ParserRegistry::RegisterExtension()` / `RegisterExtensions()` are intentionally public so later language support can reuse the same Symbols and Call Hierarchy UI.
+
+The built-in parser extracts the common editor-navigation structures rather than attempting to be a full compiler. It recognizes C/C++ namespaces, classes/structs/unions/enums, typedefs/type aliases, functions/methods/constructors, fields/variables and macros. Kotlin support includes packages, classes/interfaces/objects/enums, functions/methods/extension functions, primary-constructor properties, properties/variables and type aliases.
+
+Function bodies are analyzed in a second pass to build static call relationships. The **Call Hierarchy** view exposes both directions:
+
+```text
+PaymentProcessor::Process
+├── Callees
+│   ├── Validate
+│   ├── BuildISO8583
+│   └── SendTransaction
+└── Callers
+    ├── SaleTransaction::Execute
+    └── RetryTransaction::Execute
+```
+
+Resolution is deliberately conservative. Calls that can be uniquely associated with a symbol receive a navigation target; ambiguous/dynamic calls are kept and marked unresolved instead of pretending compiler-grade certainty. Function pointers, virtual dispatch, reflection and macro-generated code may therefore remain unresolved. This is a **static call hierarchy**, not a runtime debugger call stack.
+
+Use:
+
+```text
+Code -> Parse Symbols / Call Hierarchy
+Code -> Show Call Hierarchy        Ctrl+Shift+H
+Code -> Go to Definition           F12
+```
+
+F12 reparses the current unsaved buffer with the manual parser first. For C/C++, libclang can still be used as a semantic fallback when the optional LLVM feature is enabled.
+
+### Runtime parser settings
+
+`Settings -> General Settings -> Code Analysis` controls the built-in parser without rebuilding. Every major parser/analysis category can be disabled independently:
+
+- master `Enable dependency-free source parsing` switch;
+- C parser;
+- C++ parser;
+- Kotlin parser;
+- automatic parsing on file/tab changes;
+- Symbols;
+- Call hierarchy (callers/callees);
+- Types / namespaces / packages / aliases;
+- Functions / methods / constructors;
+- Variables / fields / properties;
+- C/C++ macros.
+
+Disabled languages are not tokenized or parsed. These choices are persisted under `manual_symbol_parser` in `config.json`.
+
+Example:
+
+```json
+{
+  "manual_symbol_parser": {
+    "enabled": true,
+    "auto_parse": true,
+    "languages": {
+      "c": true,
+      "cpp": true,
+      "kotlin": false
+    },
+    "features": {
+      "symbols": true,
+      "calls": true,
+      "types": true,
+      "functions": true,
+      "variables": true,
+      "macros": false
+    }
+  }
+}
+```
+
+### Compile-time switch
+
+The entire manual parser can also be removed from the executable:
+
+```bash
+cmake -S . -B build -DDODEV_ENABLE_MANUAL_SYMBOLS=OFF
+```
+
+Linux helper:
+
+```bash
+./scripts/build-linux.sh release --manual-symbols
+./scripts/build-linux.sh release --no-manual-symbols
+```
+
+Windows MinGW helper:
+
+```bash
+./scripts/build-windows-mingw.sh release --manual-symbols
+./scripts/build-windows-mingw.sh release --no-manual-symbols
+```
+
+When disabled, `src/symbols/ManualSymbolParser.cpp` is excluded from the target and `DODEV_ENABLE_MANUAL_SYMBOLS=0` removes the manual integration path from the Symbols panel. The existing optional LLVM tooling remains independent.
+
 ## Optional LLVM / Clang C/C++ analysis
 
 DoDevEditor can optionally link against **libclang** (`clang-c/Index.h`) for
@@ -274,24 +376,21 @@ sudo pacman -S --needed llvm clang
 
 The command-line **Check** and **Compile** actions only require `clang` /
 `clang++` on `PATH`; they still work when the editor itself was built without
-libclang. Only AST parsing, call trees, and Go to Definition require libclang.
+libclang. The manual parser supplies normal symbols, static callers/callees and lightweight F12 navigation without libclang. libclang remains useful for compiler-grade AST diagnostics and semantic definition resolution.
 
-### C/C++ sidebar tab
+### Analysis sidebar tab
 
-The Explorer sidebar now has a `C/C++` tab with three views:
+The Explorer sidebar has a `SYMBOLS` tab. When the manual parser is enabled it supports C, C++ and Kotlin; LLVM augments C/C++ when available. The tab has three views:
 
-- **Symbols** — functions, methods, constructors/destructors, types,
-  namespaces, variables/fields, typedefs and macros from the current
-  translation unit.
-- **Calls** — a per-function call tree built from Clang `CallExpr` cursors.
-  Double-click a call to jump to the called symbol's definition when Clang can
-  resolve it.
-- **LLVM** — libclang diagnostics plus `clang` / `clang++` compile output.
+- **Symbols** — manual C/C++/Kotlin symbols by default; libclang symbols are used as a fallback when the manual parser is unavailable/disabled.
+- **Call Hierarchy** — dependency-free callers/callees for the current file, or the legacy libclang call tree when only LLVM analysis is active.
+- **Analysis** — manual parser summary plus optional libclang diagnostics and `clang` / `clang++` compile output.
 
 Controls in this tab:
 
-- `LLVM` checkbox — enables/disables AST analysis for the current session/project.
-- `Parse` — reparses the current C/C++ editor buffer, including unsaved text.
+- `Manual` checkbox — quick master switch for the built-in parser (also persisted to the global runtime settings).
+- `LLVM` checkbox — enables/disables libclang AST analysis for the current session/project.
+- `Parse` — reparses the current C/C++/Kotlin editor buffer, including unsaved text.
 - `Check` — saves the current file and runs Clang with `-fsyntax-only`.
 - `Compile` — saves the current file and compiles one source translation unit
   to an object under `.dodev/llvm-obj/`.
@@ -301,7 +400,7 @@ Controls in this tab:
 - `Includes` — semicolon-separated include directories. Relative paths are
   resolved from the opened project root.
 - `Extra args` — semicolon-separated additional Clang command-line arguments.
-- `Auto` — automatically reparses C/C++ when switching files/tabs.
+- `LLVM Auto` — automatically reparses C/C++ through libclang when switching files/tabs. Manual auto-parse is controlled in General Settings -> Code Analysis.
 - `Save cfg` — saves these settings for the project.
 
 DoDevEditor also automatically supplies the current source directory, project
@@ -318,15 +417,10 @@ F12
 or use:
 
 ```text
-Code -> Go to Definition (LLVM)
+Code -> Go to Definition
 ```
 
-The editor asks libclang for the referenced cursor and then its definition.
-When a location is available, DoDevEditor opens that file and moves the caret
-to the definition.
-
-The parser receives the current in-memory editor text as an unsaved Clang file,
-so `Parse` and `F12` can analyze edits before they are saved.
+DoDevEditor first reparses the current in-memory buffer with the manual parser and uses its call/symbol index. For C/C++, if the manual result cannot resolve the symbol and libclang is enabled, the editor falls back to libclang's semantic cursor/definition lookup.
 
 ### Compile current source with Clang/LLVM
 
@@ -466,6 +560,8 @@ The chat supports these provider modes:
 - OpenAI-compatible Chat Completions endpoints (for example a local/self-hosted server).
 - GitHub Copilot CLI via `copilot -p`; authentication remains managed by the official Copilot CLI.
 - Native Ollama local inference through `/api/chat`, with model discovery, streaming and no-secret localhost mode.
+- Native llama.cpp server integration through `/v1/chat/completions`, with `/health` checks, `/v1/models` discovery, optional API-key authentication and streaming.
+- Google Gemini through `generateContent`, with API-key authentication and model discovery through the Gemini Models API.
 
 Open configuration with:
 
@@ -477,17 +573,18 @@ The General Settings dialog contains editor-context defaults and provider/secret
 
 Secret sources:
 
-- **Environment variable** (default): e.g. `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
+- **Environment variable** (default): e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`.
 - **Session secret**: stored only in DoDevEditor's process memory and discarded when the application exits.
 - **OS keyring**: on Linux, uses `secret-tool`/libsecret. The secret is sent to `secret-tool` through stdin and is not placed in shell arguments.
 - **Existing provider login**: used by GitHub Copilot CLI (`copilot login`).
-- **No secret / local endpoint**: used by native local Ollama.
+- **No secret / local endpoint**: used by native local Ollama and by llama.cpp when the local server has no API key configured.
 
 Example environment setup:
 
 ```bash
 export OPENAI_API_KEY="..."
 export ANTHROPIC_API_KEY="..."
+export GEMINI_API_KEY="..."
 ```
 
 For Linux OS-keyring support on Arch:
@@ -503,7 +600,7 @@ The chat can optionally attach:
 - the last active source file,
 - the current source selection,
 - the last active Git diff.
-- LLVM/libclang symbols, outgoing call tree and diagnostics for the active C/C++ source when enabled.
+- dependency-free C/C++/Kotlin symbols and static call hierarchy, plus LLVM/libclang diagnostics for active C/C++ when enabled.
 
 Context is capped before sending to avoid accidentally attaching very large files.
 
@@ -577,7 +674,7 @@ The integration provides:
 - token-by-token streaming into the AI Chat page;
 - configurable temperature, context window, keep-alive duration and thinking;
 - configurable Ollama server URL;
-- current file, current selection, Git diff and LLVM symbol/call-tree context.
+- current file, current selection, Git diff and code symbol/call-hierarchy context.
 
 A typical configuration is:
 
@@ -595,6 +692,43 @@ Keep alive:     5m
 The AI Chat page continues to run provider requests on a worker thread. Ollama
 stream chunks are marshalled back onto the wxWidgets UI thread before updating
 the conversation view.
+
+## Native llama.cpp AI Provider
+
+DoDevEditor can connect directly to `llama-server`. Choose **llama.cpp (local)**
+from `Settings -> General Settings... -> Provider & Secrets`. The default server
+root is:
+
+```text
+http://127.0.0.1:8080
+```
+
+The editor checks `/health`, discovers the exposed model IDs through `/v1/models`,
+and sends chats through `/v1/chat/completions`. Streaming is enabled by default.
+The local provider starts with **No secret / local endpoint**, but Environment,
+Session Secret and OS Keyring can be selected when `llama-server` is started
+with API-key authentication.
+
+Example:
+
+```bash
+llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080
+```
+
+## Google Gemini AI Provider
+
+Choose **Google Gemini** from `Settings -> General Settings... -> Provider & Secrets`.
+The default API root is:
+
+```text
+https://generativelanguage.googleapis.com/v1beta
+```
+
+The default secret source is the `GEMINI_API_KEY` environment variable. Session
+and OS-keyring secrets are also supported. **Refresh Models** loads models that
+advertise `generateContent` support and **Test Provider** validates the configured
+key/API endpoint. The normal Current File, Selection, Git Diff and LLVM context
+options are reused for Gemini chat requests.
 
 ## Explorer Tree + Folder List
 
@@ -627,3 +761,178 @@ and **Modified** columns. Directories are sorted before files.
 - Switching editor tabs updates the list to the active source file's directory.
 - In multi-root workspaces the list follows whichever workspace root contains the
   current file or selected tree folder.
+
+
+## Recent Files and Folders
+
+The **File** menu now keeps two persistent MRU lists:
+
+- **Recent Files** — the last 15 files opened or successfully saved.
+- **Recent Folders** — the last 15 folders opened directly or added/opened through a workspace.
+
+The newest item is shown first. Reopening an existing item moves it back to the top. If an entry no longer exists, selecting it removes it from the history. Both submenus include a **Clear Recent...** action.
+
+The lists are persisted in `config.json` as `recent_files` and `recent_folders` and work in both single-folder and multi-root workspace modes.
+
+## C/C++ clang-format context menu
+
+Right-click an open C/C++ source/header tab to access:
+
+- **Format Document (clang-format)**
+- **Format Selection (clang-format)** when text is selected
+
+Formatting runs against the current in-memory editor buffer. The editor passes the real source path using `--assume-filename`, so `clang-format --style=file` can discover the nearest `.clang-format` / `_clang-format` configuration. If no project format file exists, LLVM style is used as the fallback.
+
+Formatting does **not** save the document. The formatted text remains a normal modified editor buffer and can be reverted with Undo or saved through the normal Local History / Git workflow.
+
+Runtime requirement:
+
+```bash
+clang-format --version
+```
+
+On Arch Linux it is normally supplied by the `clang` package.
+
+## File menu: Recent Files and Recent Folders
+
+The **File** menu contains two persistent IDE-style history submenus:
+
+- **Recent Files** — up to 15 recently opened/saved files, newest first.
+- **Recent Folders** — up to 15 recently opened workspace folders, newest first.
+
+Entries are stored in `config.json` as `recent_files` and `recent_folders`. Reopening an entry moves it to the top. Missing paths are pruned automatically when the menu refreshes. Each submenu includes a **Clear Recent Files/Folders** action. The first nine entries also have numbered menu mnemonics for quicker keyboard access.
+
+
+## Journal Log Inspector (optional)
+
+DoDevEditor can be built with an optional cross-platform Journal Log Inspector. It adds **Tools → SSH Journal Logs...** and **Tools → Import Journal Logs...**.
+
+The SSH tab launches the local OpenSSH client and runs `journalctl -o json --no-pager` on the remote Linux/systemd host. Controls include host, port, user, private-key path, optional systemd unit/application, **Follow (`-f`)**, **Current boot (`-b`)**, and a **Since** value such as `2026-08-16 08:00:00` or `-2 hours`. Authentication is intentionally delegated to normal OpenSSH keys, agent, and `~/.ssh/config`; passwords are not stored by the editor.
+
+Both live and imported tabs use the same table and filtering pipeline:
+
+- App/unit filter using `std::regex`.
+- Payload filter using `std::regex`.
+- Optional case-sensitive matching.
+- Export the currently visible rows to TXT or JSON.
+- Multi-select rows and right-click to copy them, save selected rows as TXT, or save selected rows as JSON.
+- Stop a live `ssh journalctl -f` process without closing the tab.
+
+Import accepts `.txt`, `.log`, and `.json`. JSON accepts either the array format exported by DoDevEditor or journalctl JSON-lines. Text preserves every line and recognizes DoDevEditor's tab-separated TXT export.
+
+The feature is enabled by default and can be removed at compile time:
+
+```bash
+cmake -S . -B build -DDODEV_ENABLE_JOURNAL_LOGS=OFF
+cmake --build build
+```
+
+The Linux helper also supports:
+
+```bash
+./scripts/build-linux.sh release --journal-logs
+./scripts/build-linux.sh release --no-journal-logs
+```
+
+For the project's existing MinGW cross-build, use for example:
+
+```bash
+cmake -S . -B build/windows -DBUILD_WINDOWS=ON -DDODEV_ENABLE_JOURNAL_LOGS=ON
+cmake --build build/windows --parallel
+```
+
+Windows builds do not require systemd or journalctl locally. Live collection only requires an OpenSSH `ssh` client in `PATH` and a reachable remote Linux host with permission to read the journal. Import/filter/export remain available on Windows and Linux.
+
+The repository also includes a MinGW helper for Linux-hosted Windows cross-builds:
+
+```bash
+./scripts/build-windows-mingw.sh release --journal-logs
+./scripts/build-windows-mingw.sh release --no-journal-logs
+```
+
+
+## File Compare (text + binary)
+
+DoDevEditor can optionally build a standalone side-by-side file comparison tab inspired by Beyond Compare. Open it with **Tools -> Compare Files...** and choose independent left and right files.
+
+The tab provides:
+
+- **Load Left...** and **Load Right...** file selectors.
+- **Auto / Text / Binary** comparison mode.
+- **Swap** and **Compare/Refresh** controls.
+- Synchronized vertical scrolling between the left and right panes.
+- **Previous Diff / Next Diff** navigation.
+- Text comparison with aligned inserted/deleted/changed rows and optional **Ignore whitespace** / **Ignore case** matching.
+- Binary comparison as aligned 16-byte hexadecimal + ASCII rows, including differing-byte count and first differing offset.
+- Read-only compare panes: comparing files never modifies either source file.
+
+Text mode uses a line LCS alignment for ordinary files. To prevent excessive memory use on very large inputs, it automatically falls back to a bounded linear alignment when the LCS matrix would be too large.
+
+The module is enabled by default and can be removed from the build completely:
+
+```bash
+cmake -S . -B build -DDODEV_ENABLE_FILE_COMPARE=OFF
+```
+
+Linux helper:
+
+```bash
+./scripts/build-linux.sh release --file-compare
+./scripts/build-linux.sh release --no-file-compare
+```
+
+Windows MinGW cross-build helper:
+
+```bash
+./scripts/build-windows-mingw.sh release --file-compare
+./scripts/build-windows-mingw.sh release --no-file-compare
+```
+
+The feature uses only C++17 and wxWidgets, so the text and binary comparison implementation is the same on Linux and Windows.
+
+
+## Runtime plugin SDK
+
+DoDevEditor can load native plugins from the `plugins/` directory beside the
+executable. The feature is enabled by default and can be compiled out:
+
+```bash
+./scripts/build-linux.sh release --plugins
+./scripts/build-linux.sh release --no-plugins
+```
+
+or directly with CMake:
+
+```bash
+-DDODEV_ENABLE_PLUGINS=ON
+-DDODEV_ENABLE_PLUGINS=OFF
+```
+
+The ABI lives in `includes/plugin/DoDevPluginAPI.h`. A basic plugin does not
+need wxWidgets; it talks to the editor through C function pointers. Plugins can
+add menu commands, inspect or modify the active editor, enumerate/select/close
+open tabs, open files, create editor tabs, access the file/Git/Symbols/bottom
+panels, create host-owned text panels, and subscribe to editor/tab/workspace
+events.
+
+The editor adds a **Plugins** menu with **Reload Plugins**, **Loaded Plugins...**
+and **Open Plugins Folder**. Reload safely removes plugin-owned menu commands
+and panels before unloading the shared library.
+
+An independent example is under `plugins/example_plugin/`. Build it without
+wxWidgets:
+
+```bash
+cmake -S plugins/example_plugin -B build/example-plugin -DDODEV_SDK_ROOT="$PWD"
+cmake --build build/example-plugin
+```
+
+Or build/copy it together with the editor:
+
+```bash
+cmake -S . -B build -DDODEV_ENABLE_PLUGINS=ON -DDODEV_BUILD_EXAMPLE_PLUGIN=ON
+```
+
+Advanced plugins can create arbitrary wxWidgets panels with `add_custom_panel`.
+Those plugins must use an ABI-compatible wxWidgets/compiler build; ordinary
+host-API-only plugins do not have that requirement.

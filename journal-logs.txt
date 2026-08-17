@@ -1,0 +1,10 @@
+2026-08-17 11:22:50	kdeconnectd	No uuids found for "38:8C:EF:53:77:98"
+2026-08-17 11:22:50	kdeconnectd	No uuids found for "E8:E6:09:61:A7:AB"
+2026-08-17 11:22:52	unix_chkpwd	password check failed for user (neonland)
+2026-08-17 11:22:52	sshd-session	pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=192.168.1.133  user=neonland
+2026-08-17 11:22:54	sshd-session	Failed password for neonland from 192.168.1.133 port 47528 ssh2
+2026-08-17 11:22:55	sshd-session	Connection closed by authenticating user neonland 192.168.1.133 port 47528 [preauth]
+2026-08-17 11:23:29	sshd-session	Accepted password for neonland from 192.168.1.133 port 39370 ssh2
+2026-08-17 11:23:29	sshd-session	pam_unix(sshd:session): session opened for user neonland(uid=1000) by neonland(uid=0)
+2026-08-17 11:23:29	systemd-logind	New session '5' of user 'neonland' with class 'user' and type 'tty'.
+2026-08-17 11:23:29	systemd	Started Session 5 of User neonland.

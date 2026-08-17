@@ -37,6 +37,24 @@ public:
                       const wxString& shortcut = "");
 
     // ─────────────────────────────
+    // Add Submenu
+    // ─────────────────────────────
+    void AddSubMenu(const wxString& menuName,
+                    const wxString& label,
+                    wxMenu* subMenu);
+
+    // Dynamic/plugin item. The caller supplies a unique id. Unlike AddItem,
+    // the event trampoline looks up the current callback at dispatch time so
+    // the menu item can be removed safely while the application remains open.
+    void AddRuntimeItem(const wxString& menuName,
+                        const wxString& label,
+                        int id,
+                        Callback cb,
+                        const wxString& shortcut = "");
+    bool RemoveRuntimeItem(int id);
+    wxMenu* FindMenuByName(const wxString& name) const;
+
+    // ─────────────────────────────
     // Add Separator
     // ─────────────────────────────
     void AddSeparator(const wxString& menuName);

@@ -183,7 +183,8 @@ CurlResult PostJson(const wxString& url,
 }
 
 
-CurlResult GetUrl(const wxString& url)
+CurlResult GetUrl(const wxString& url,
+                  const std::vector<std::pair<wxString, wxString>>& headers = {})
 {
     CurlResult result;
     const wxString configPath = wxFileName::CreateTempFileName("dodev-ai-curl-get-");
@@ -200,6 +201,8 @@ CurlResult GetUrl(const wxString& url)
     cfg << "connect-timeout = 5\n";
     cfg << "max-time = 20\n";
     cfg << "url = \"" << CurlConfigQuote(url) << "\"\n";
+    for (const auto& header : headers)
+        cfg << "header = \"" << CurlConfigQuote(header.first + ": " + header.second) << "\"\n";
     if (!WritePrivateTextFile(configPath, cfg.str()))
     {
         result.error = "Unable to write temporary curl configuration.";
@@ -230,6 +233,67 @@ wxString OllamaEndpoint(const AIProviderSettings& settings, const wxString& endp
     return base + "/api/" + endpoint;
 }
 
+wxString LlamaCppRoot(const AIProviderSettings& settings)
+{
+    wxString base = settings.baseUrl.IsEmpty()
+        ? AISettings::DefaultBaseUrl(AIProviderKind::LlamaCpp)
+        : settings.baseUrl;
+    base = TrimTrailingSlashes(base);
+    const wxString chatSuffix = "/v1/chat/completions";
+    if (base.EndsWith(chatSuffix))
+        base = base.Left(base.length() - chatSuffix.length());
+    else if (base.EndsWith("/v1"))
+        base = base.Left(base.length() - 3);
+    return TrimTrailingSlashes(base);
+}
+
+wxString LlamaCppEndpoint(const AIProviderSettings& settings, const wxString& endpoint)
+{
+    return LlamaCppRoot(settings) + endpoint;
+}
+
+wxString GeminiRoot(const AIProviderSettings& settings)
+{
+    wxString base = settings.baseUrl.IsEmpty()
+        ? AISettings::DefaultBaseUrl(AIProviderKind::Gemini)
+        : settings.baseUrl;
+    return TrimTrailingSlashes(base);
+}
+
+wxString NormalizeGeminiModel(wxString model)
+{
+    if (model.StartsWith("models/"))
+        model = model.Mid(7);
+    return model;
+}
+
+wxString GeminiGenerateEndpoint(const AIProviderSettings& settings)
+{
+    return GeminiRoot(settings) + "/models/" + NormalizeGeminiModel(settings.model) + ":generateContent";
+}
+
+wxString ResolveProviderSecret(const AIProviderSettings& settings,
+                               const wxString& secretOverride,
+                               wxString* error)
+{
+    if (error)
+        *error = wxString();
+    if (!secretOverride.IsEmpty())
+        return secretOverride;
+    if (settings.secretSource == AISecretSource::None ||
+        settings.secretSource == AISecretSource::ExistingLogin)
+        return wxString();
+    return AISecretStore::Resolve(settings, error);
+}
+
+std::vector<std::pair<wxString, wxString>> BearerHeaders(const wxString& secret)
+{
+    std::vector<std::pair<wxString, wxString>> headers;
+    if (!secret.IsEmpty())
+        headers.push_back({"Authorization", "Bearer " + secret});
+    return headers;
+}
+
 void AppendMessages(Json::Value& array, const std::vector<AIMessage>& messages);
 
 Json::Value BuildOllamaBody(const AIRequest& request, bool stream)
@@ -258,6 +322,62 @@ Json::Value BuildOllamaBody(const AIRequest& request, bool stream)
     }
     AppendMessages(messages, request.messages);
     body["messages"] = messages;
+    return body;
+}
+
+Json::Value BuildLlamaCppBody(const AIRequest& request, bool stream)
+{
+    Json::Value body(Json::objectValue);
+    body["model"] = ToUtf8(request.settings.model);
+    body["stream"] = stream;
+    body["temperature"] = request.settings.llamaCppTemperature;
+    body["max_tokens"] = request.settings.maxOutputTokens;
+
+    Json::Value messages(Json::arrayValue);
+    if (!request.systemPrompt.IsEmpty())
+    {
+        Json::Value system(Json::objectValue);
+        system["role"] = "system";
+        system["content"] = ToUtf8(request.systemPrompt);
+        messages.append(system);
+    }
+    AppendMessages(messages, request.messages);
+    body["messages"] = messages;
+    return body;
+}
+
+Json::Value BuildGeminiBody(const AIRequest& request)
+{
+    Json::Value body(Json::objectValue);
+    if (!request.systemPrompt.IsEmpty())
+    {
+        Json::Value instruction(Json::objectValue);
+        Json::Value parts(Json::arrayValue);
+        Json::Value part(Json::objectValue);
+        part["text"] = ToUtf8(request.systemPrompt);
+        parts.append(part);
+        instruction["parts"] = parts;
+        body["system_instruction"] = instruction;
+    }
+
+    Json::Value contents(Json::arrayValue);
+    for (const AIMessage& message : request.messages)
+    {
+        Json::Value content(Json::objectValue);
+        content["role"] = message.role == "assistant" ? "model" : "user";
+        Json::Value parts(Json::arrayValue);
+        Json::Value part(Json::objectValue);
+        part["text"] = ToUtf8(message.content);
+        parts.append(part);
+        content["parts"] = parts;
+        contents.append(content);
+    }
+    body["contents"] = contents;
+
+    Json::Value generation(Json::objectValue);
+    generation["temperature"] = request.settings.geminiTemperature;
+    generation["maxOutputTokens"] = request.settings.maxOutputTokens;
+    body["generationConfig"] = generation;
     return body;
 }
 
@@ -335,11 +455,15 @@ AIResult AIClient::Send(const AIRequest& request)
 
     wxString secretError;
     wxString secret;
-    const bool optionalCompatibleSecret =
-        request.settings.provider == AIProviderKind::OpenAICompatible &&
+    const bool secretOptional =
+        request.settings.provider == AIProviderKind::OpenAICompatible ||
+        request.settings.provider == AIProviderKind::LlamaCpp;
+    const bool noSecretSelected = request.settings.secretSource == AISecretSource::None;
+    const bool emptyOptionalEnvironment =
+        secretOptional &&
         request.settings.secretSource == AISecretSource::Environment &&
         request.settings.environmentVariable.IsEmpty();
-    if (!optionalCompatibleSecret)
+    if (!noSecretSelected && !emptyOptionalEnvironment)
     {
         secret = AISecretStore::Resolve(request.settings, &secretError);
         if (secret.IsEmpty())
@@ -361,6 +485,10 @@ AIResult AIClient::Send(const AIRequest& request)
         return SendOllama(request, false, StreamCallback());
     case AIProviderKind::GitHubCopilotCLI:
         return SendCopilotCLI(request);
+    case AIProviderKind::LlamaCpp:
+        return SendLlamaCpp(request, secret, false, StreamCallback());
+    case AIProviderKind::Gemini:
+        return SendGemini(request, secret);
     }
 
     result.error = "Unknown AI provider.";
@@ -378,6 +506,25 @@ AIResult AIClient::SendStreaming(const AIRequest& request, StreamCallback onChun
     }
     if (request.settings.provider == AIProviderKind::Ollama && request.settings.ollamaStream)
         return SendOllama(request, true, std::move(onChunk));
+    if (request.settings.provider == AIProviderKind::LlamaCpp && request.settings.llamaCppStream)
+    {
+        wxString secretError;
+        wxString secret;
+        const bool emptyOptionalEnvironment =
+            request.settings.secretSource == AISecretSource::Environment &&
+            request.settings.environmentVariable.IsEmpty();
+        if (request.settings.secretSource != AISecretSource::None && !emptyOptionalEnvironment)
+        {
+            secret = AISecretStore::Resolve(request.settings, &secretError);
+            if (secret.IsEmpty())
+            {
+                AIResult result;
+                result.error = secretError.IsEmpty() ? wxString("No llama.cpp API secret is configured.") : secretError;
+                return result;
+            }
+        }
+        return SendLlamaCpp(request, secret, true, std::move(onChunk));
+    }
 
     AIResult result = Send(request);
     if (result.ok && onChunk)
@@ -451,6 +598,159 @@ OllamaStatus AIClient::QueryOllamaStatus(const AIProviderSettings& settings)
                 status.runningModels.push_back(FromUtf8(item["model"].asString()));
         }
     }
+    status.ok = true;
+    return status;
+}
+
+std::vector<wxString> AIClient::ListLlamaCppModels(const AIProviderSettings& settings,
+                                                  const wxString& secretOverride,
+                                                  wxString* error)
+{
+    if (error)
+        *error = wxString();
+
+    wxString secretError;
+    const wxString secret = ResolveProviderSecret(settings, secretOverride, &secretError);
+    if (settings.secretSource != AISecretSource::None && secret.IsEmpty() && !secretError.IsEmpty())
+    {
+        if (error)
+            *error = secretError;
+        return {};
+    }
+
+    std::vector<std::pair<wxString, wxString>> headers = BearerHeaders(secret);
+    const CurlResult curl = GetUrl(LlamaCppEndpoint(settings, "/v1/models"), headers);
+    Json::Value root;
+    wxString parseError;
+    const bool parsed = ParseJson(curl.output, root, parseError);
+    if (curl.code != 0 || !parsed)
+    {
+        if (error)
+        {
+            *error = curl.error;
+            if (error->IsEmpty()) *error = parsed ? ExtractApiError(root) : parseError;
+            if (error->IsEmpty()) *error = curl.output;
+        }
+        return {};
+    }
+
+    std::vector<wxString> models;
+    if (root["data"].isArray())
+    {
+        for (const Json::Value& item : root["data"])
+        {
+            if (item["id"].isString())
+                models.push_back(FromUtf8(item["id"].asString()));
+        }
+    }
+    std::sort(models.begin(), models.end(), [](const wxString& a, const wxString& b)
+    {
+        return a.CmpNoCase(b) < 0;
+    });
+    return models;
+}
+
+ProviderStatus AIClient::QueryLlamaCppStatus(const AIProviderSettings& settings,
+                                             const wxString& secretOverride)
+{
+    ProviderStatus status;
+    const CurlResult health = GetUrl(LlamaCppEndpoint(settings, "/health"));
+    Json::Value healthRoot;
+    wxString parseError;
+    if (health.code != 0 || !ParseJson(health.output, healthRoot, parseError))
+    {
+        status.error = health.error;
+        if (status.error.IsEmpty()) status.error = parseError;
+        if (status.error.IsEmpty()) status.error = health.output;
+        return status;
+    }
+    if (!healthRoot["status"].isString() || healthRoot["status"].asString() != "ok")
+    {
+        status.error = ExtractApiError(healthRoot);
+        if (status.error.IsEmpty()) status.error = "llama.cpp server is not ready.";
+        return status;
+    }
+
+    status.models = ListLlamaCppModels(settings, secretOverride, &status.error);
+    if (!status.error.IsEmpty())
+        return status;
+
+    status.detail = wxString::Format("Ready — %zu model(s) exposed", status.models.size());
+    status.ok = true;
+    return status;
+}
+
+std::vector<wxString> AIClient::ListGeminiModels(const AIProviderSettings& settings,
+                                                const wxString& secretOverride,
+                                                wxString* error)
+{
+    if (error)
+        *error = wxString();
+
+    wxString secretError;
+    const wxString secret = ResolveProviderSecret(settings, secretOverride, &secretError);
+    if (secret.IsEmpty())
+    {
+        if (error)
+            *error = secretError.IsEmpty() ? wxString("A Gemini API key is required.") : secretError;
+        return {};
+    }
+
+    const CurlResult curl = GetUrl(GeminiRoot(settings) + "/models?pageSize=1000",
+                                   {{"x-goog-api-key", secret}});
+    Json::Value root;
+    wxString parseError;
+    const bool parsed = ParseJson(curl.output, root, parseError);
+    if (curl.code != 0 || !parsed)
+    {
+        if (error)
+        {
+            *error = curl.error;
+            if (error->IsEmpty()) *error = parsed ? ExtractApiError(root) : parseError;
+            if (error->IsEmpty()) *error = curl.output;
+        }
+        return {};
+    }
+
+    std::vector<wxString> models;
+    if (root["models"].isArray())
+    {
+        for (const Json::Value& item : root["models"])
+        {
+            if (!item["name"].isString())
+                continue;
+            bool supportsGenerate = true;
+            if (item["supportedGenerationMethods"].isArray())
+            {
+                supportsGenerate = false;
+                for (const Json::Value& method : item["supportedGenerationMethods"])
+                {
+                    if (method.isString() && method.asString() == "generateContent")
+                    {
+                        supportsGenerate = true;
+                        break;
+                    }
+                }
+            }
+            if (supportsGenerate)
+                models.push_back(NormalizeGeminiModel(FromUtf8(item["name"].asString())));
+        }
+    }
+    std::sort(models.begin(), models.end(), [](const wxString& a, const wxString& b)
+    {
+        return a.CmpNoCase(b) < 0;
+    });
+    return models;
+}
+
+ProviderStatus AIClient::QueryGeminiStatus(const AIProviderSettings& settings,
+                                           const wxString& secretOverride)
+{
+    ProviderStatus status;
+    status.models = ListGeminiModels(settings, secretOverride, &status.error);
+    if (!status.error.IsEmpty())
+        return status;
+    status.detail = wxString::Format("Connected — %zu generateContent model(s) available", status.models.size());
     status.ok = true;
     return status;
 }
@@ -597,6 +897,230 @@ AIResult AIClient::SendOllama(const AIRequest& request, bool stream, StreamCallb
         return result;
     }
     result.ok = true;
+    return result;
+}
+
+AIResult AIClient::SendLlamaCpp(const AIRequest& request, const wxString& secret,
+                                bool stream, StreamCallback onChunk)
+{
+    AIResult result;
+    if (request.settings.model.IsEmpty())
+    {
+        result.error = "Select a llama.cpp model in General Settings.";
+        return result;
+    }
+
+    const Json::Value body = BuildLlamaCppBody(request, stream);
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "";
+    const std::string bodyText = Json::writeString(writer, body);
+    const wxString endpoint = LlamaCppEndpoint(request.settings, "/v1/chat/completions");
+
+    std::vector<std::pair<wxString, wxString>> headers;
+    headers.push_back({"Content-Type", "application/json"});
+    if (!secret.IsEmpty())
+        headers.push_back({"Authorization", "Bearer " + secret});
+
+    if (!stream)
+    {
+        const CurlResult curl = PostJson(endpoint, headers, bodyText);
+        Json::Value root;
+        wxString parseError;
+        const bool parsed = ParseJson(curl.output, root, parseError);
+        if (curl.code != 0)
+            return CurlFailure(curl, parsed ? &root : nullptr);
+        if (!parsed)
+        {
+            result.error = parseError;
+            return result;
+        }
+        if (root["choices"].isArray() && !root["choices"].empty() &&
+            root["choices"][0]["message"]["content"].isString())
+        {
+            result.text = FromUtf8(root["choices"][0]["message"]["content"].asString());
+        }
+        if (result.text.IsEmpty())
+        {
+            result.error = ExtractApiError(root);
+            if (result.error.IsEmpty()) result.error = "llama.cpp returned no chat content.";
+            return result;
+        }
+        result.ok = true;
+        result.exitCode = curl.code;
+        return result;
+    }
+
+    const wxString bodyPath = wxFileName::CreateTempFileName("dodev-llamacpp-body-");
+    const wxString configPath = wxFileName::CreateTempFileName("dodev-llamacpp-curl-");
+    if (bodyPath.IsEmpty() || configPath.IsEmpty() || !WritePrivateTextFile(bodyPath, bodyText))
+    {
+        if (!bodyPath.IsEmpty()) wxRemoveFile(bodyPath);
+        if (!configPath.IsEmpty()) wxRemoveFile(configPath);
+        result.error = "Unable to create temporary llama.cpp request files.";
+        return result;
+    }
+
+    std::ostringstream cfg;
+    cfg << "no-buffer\n";
+    cfg << "silent\n";
+    cfg << "show-error\n";
+    cfg << "fail-with-body\n";
+    cfg << "request = \"POST\"\n";
+    cfg << "connect-timeout = 20\n";
+    cfg << "max-time = 600\n";
+    cfg << "url = \"" << CurlConfigQuote(endpoint) << "\"\n";
+    for (const auto& header : headers)
+        cfg << "header = \"" << CurlConfigQuote(header.first + ": " + header.second) << "\"\n";
+    cfg << "data-binary = \"@" << CurlConfigQuote(bodyPath) << "\"\n";
+    if (!WritePrivateTextFile(configPath, cfg.str()))
+    {
+        wxRemoveFile(bodyPath);
+        wxRemoveFile(configPath);
+        result.error = "Unable to create temporary llama.cpp curl configuration.";
+        return result;
+    }
+
+    const wxString command = "curl --config " + QuoteShell(configPath) + " 2>&1";
+    const wxCharBuffer commandBuffer = command.ToUTF8();
+#ifdef __WXMSW__
+    FILE* pipe = commandBuffer.data() ? _popen(commandBuffer.data(), "r") : nullptr;
+#else
+    FILE* pipe = commandBuffer.data() ? popen(commandBuffer.data(), "r") : nullptr;
+#endif
+    if (!pipe)
+    {
+        wxRemoveFile(bodyPath);
+        wxRemoveFile(configPath);
+        result.error = "Unable to start curl for llama.cpp streaming.";
+        return result;
+    }
+
+    std::string pending;
+    char buffer[8192];
+    bool providerError = false;
+    while (std::fgets(buffer, sizeof(buffer), pipe))
+    {
+        pending += buffer;
+        size_t newline = std::string::npos;
+        while ((newline = pending.find('\n')) != std::string::npos)
+        {
+            std::string line = pending.substr(0, newline);
+            pending.erase(0, newline + 1);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.rfind("data:", 0) == 0)
+                line.erase(0, 5);
+            while (!line.empty() && (line.front() == ' ' || line.front() == '\t'))
+                line.erase(line.begin());
+            if (line.empty() || line == "[DONE]")
+                continue;
+
+            Json::Value chunk;
+            wxString parseError;
+            if (!ParseJson(FromUtf8(line), chunk, parseError))
+                continue;
+            const wxString apiError = ExtractApiError(chunk);
+            if (!apiError.IsEmpty())
+            {
+                result.error = apiError;
+                providerError = true;
+                continue;
+            }
+            if (chunk["choices"].isArray() && !chunk["choices"].empty() &&
+                chunk["choices"][0]["delta"]["content"].isString())
+            {
+                const wxString text = FromUtf8(chunk["choices"][0]["delta"]["content"].asString());
+                if (!text.IsEmpty())
+                {
+                    result.text += text;
+                    if (onChunk) onChunk(text);
+                }
+            }
+        }
+    }
+#ifdef __WXMSW__
+    const int rawCode = _pclose(pipe);
+#else
+    const int rawCode = pclose(pipe);
+#endif
+    wxRemoveFile(bodyPath);
+    wxRemoveFile(configPath);
+    result.exitCode = NormalizeSystemCode(rawCode);
+    if (providerError || result.exitCode != 0)
+    {
+        if (result.error.IsEmpty()) result.error = "llama.cpp streaming request failed.";
+        return result;
+    }
+    if (result.text.IsEmpty())
+    {
+        result.error = "llama.cpp returned no streaming chat content.";
+        return result;
+    }
+    result.ok = true;
+    return result;
+}
+
+AIResult AIClient::SendGemini(const AIRequest& request, const wxString& secret)
+{
+    AIResult result;
+    if (request.settings.model.IsEmpty())
+    {
+        result.error = "Select a Gemini model in General Settings.";
+        return result;
+    }
+    if (secret.IsEmpty())
+    {
+        result.error = "A Gemini API key is required.";
+        return result;
+    }
+
+    const Json::Value body = BuildGeminiBody(request);
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "";
+    const CurlResult curl = PostJson(
+        GeminiGenerateEndpoint(request.settings),
+        {{"Content-Type", "application/json"}, {"x-goog-api-key", secret}},
+        Json::writeString(writer, body));
+
+    Json::Value root;
+    wxString parseError;
+    const bool parsed = ParseJson(curl.output, root, parseError);
+    if (curl.code != 0)
+        return CurlFailure(curl, parsed ? &root : nullptr);
+    if (!parsed)
+    {
+        result.error = parseError;
+        return result;
+    }
+
+    wxString text;
+    if (root["candidates"].isArray())
+    {
+        for (const Json::Value& candidate : root["candidates"])
+        {
+            if (!candidate["content"]["parts"].isArray())
+                continue;
+            for (const Json::Value& part : candidate["content"]["parts"])
+            {
+                if (!part["text"].isString())
+                    continue;
+                if (!text.IsEmpty()) text += "\n";
+                text += FromUtf8(part["text"].asString());
+            }
+            if (!text.IsEmpty())
+                break;
+        }
+    }
+    if (text.IsEmpty())
+    {
+        result.error = ExtractApiError(root);
+        if (result.error.IsEmpty())
+            result.error = "Gemini returned no text content.";
+        return result;
+    }
+
+    result.ok = true;
+    result.exitCode = curl.code;
+    result.text = text;
     return result;
 }
 

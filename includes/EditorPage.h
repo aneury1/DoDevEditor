@@ -44,6 +44,8 @@ public:
 
     // ── Tab title: filename or "Untitled" (with leading "●" if modified) ──
     wxString GetTitle() const;
+    void SetDisplayNameOverride(const wxString& name) { m_displayNameOverride = name; }
+    const wxString& GetDisplayNameOverride() const { return m_displayNameOverride; }
 
     // ── Load file from disk ──
     bool LoadFile(const wxString& path) ;
@@ -59,10 +61,16 @@ public:
 private:
     Json::Value m_theme;
     wxString m_languageName = "Plain Text";
+    wxString m_displayNameOverride;
     void OnChange(wxStyledTextEvent&);
 
     void OnUpdateUI(wxStyledTextEvent&);
 
-    void OnCharAdded(wxStyledTextEvent& evt) ;
+    void OnCharAdded(wxStyledTextEvent& evt);
+
+    void OnContextMenu(wxContextMenuEvent& event);
+    bool IsCOrCppFile() const;
+    bool FormatWithClangFormat(bool selectionOnly);
+    void SetEditorStatus(const wxString& message);
 };
 

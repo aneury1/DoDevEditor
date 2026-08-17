@@ -10,7 +10,9 @@ enum class AIProviderKind
     Anthropic,
     OpenAICompatible,
     GitHubCopilotCLI,
-    Ollama
+    Ollama,
+    LlamaCpp,
+    Gemini
 };
 
 enum class AISecretSource
@@ -40,6 +42,13 @@ struct AIProviderSettings
     double ollamaTemperature = 0.2;
     int ollamaContext = 32768;
     wxString ollamaKeepAlive = "5m";
+
+    // llama.cpp server settings. baseUrl is the server root, e.g. http://127.0.0.1:8080.
+    bool llamaCppStream = true;
+    double llamaCppTemperature = 0.2;
+
+    // Gemini generation settings.
+    double geminiTemperature = 0.2;
 
     bool includeCurrentFile = true;
     bool includeSelection = true;

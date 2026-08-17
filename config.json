@@ -1,25 +1,32 @@
 {
-	"ai" : 
-	{
-		"base_url" : "http://192.168.1.136:11434",
-		"copilot_executable" : "copilot",
-		"enabled" : true,
-		"environment_variable" : "",
-		"include_current_file" : true,
-		"include_git_diff" : true,
-		"include_llvm" : true,
-		"include_selection" : true,
-		"keyring_id" : "ollama",
-		"max_output_tokens" : 4096,
-		"model" : "",
-		"ollama_context" : 32768,
-		"ollama_keep_alive" : "5m",
-		"ollama_stream" : true,
-		"ollama_temperature" : 0.20000000000000001,
-		"ollama_think" : false,
-		"provider" : 4,
-		"secret_source" : 4
-	},
-	"editor_theme" : "vscode",
-	"last_workspace_folders" : null
+	"ai" : null,
+	"last_opened_folder" : "/home/neonland/Documents/projects/VAOffice",
+	"last_workspace_file" : "",
+	"last_workspace_folders" : 
+	[
+		"/home/neonland/Documents/projects/VAOffice"
+	],
+	"manual_symbol_parser" : null,
+	"recent_files" : 
+	[
+		"/home/neonland/Documents/projects/VAOffice/POSApp/src/app/App.h",
+		"/home/neonland/Documents/projects/VAOffice/.dodev/history/088fb2cc5549ff74/index.json",
+		"/home/neonland/Documents/projects/VAOffice/.dodev/history/088fb2cc5549ff74/1786912650498.snapshot",
+		"/home/neonland/Documents/projects/VAOffice/.dodev/history/088fb2cc5549ff74/1786912641097.patch",
+		"/home/neonland/Documents/projects/VAOffice/.dodev/history/088fb2cc5549ff74/1786912630866.snapshot",
+		"/home/neonland/Documents/projects/VAOffice/.dodev/history/088fb2cc5549ff74/1786912630866.patch",
+		"/home/neonland/Documents/projects/VAOffice/.dodev/history/088fb2cc5549ff74/1786912630865.patch",
+		"/home/neonland/Documents/projects/VAOffice/.dodev/llvm.json",
+		"/home/neonland/Documents/projects/VAOffice/POSApp/src/controllers/AuthController.cpp",
+		"/home/neonland/Documents/projects/VAOffice/POSApp/src/controllers/SettingsController.h",
+		"/home/neonland/Documents/projects/VAOffice/POSApp/src/controllers/InventoryController.cpp",
+		"/home/neonland/Documents/projects/VAOffice/POSApp/src/controllers/CustomerController.h",
+		"/home/neonland/Documents/projects/VAOffice/POSApp/src/controllers/ReportController.cpp",
+		"/home/neonland/Documents/projects/VAOffice/POSApp/src/app/App.cpp",
+		"/home/neonland/Documents/projects/VAOffice/src/ModuleLoader/UnixModuleLoader.cpp"
+	],
+	"recent_folders" : 
+	[
+		"/home/neonland/Documents/projects/VAOffice"
+	]
 }

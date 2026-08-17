@@ -6,10 +6,74 @@
 
 #include <json/json.h>
 
+#include <algorithm>
 #include <fstream>
+#include <map>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <utility>
+
+namespace
+{
+std::string ToUtf8(const wxString& value)
+{
+    const wxScopedCharBuffer buffer = value.utf8_str();
+    return buffer.data() ? std::string(buffer.data()) : std::string();
+}
+
+wxString FromUtf8(const std::string& value)
+{
+    return wxString::FromUTF8(value.c_str());
+}
+
+wxString WordAt(const wxString& text, unsigned requestedLine, unsigned requestedColumn)
+{
+    if (requestedLine == 0)
+        return wxString();
+
+    size_t lineStart = 0;
+    unsigned line = 1;
+    while (line < requestedLine && lineStart < text.length())
+    {
+        const size_t next = text.find('\n', lineStart);
+        if (next == wxString::npos)
+            return wxString();
+        lineStart = next + 1;
+        ++line;
+    }
+
+    size_t lineEnd = text.find('\n', lineStart);
+    if (lineEnd == wxString::npos)
+        lineEnd = text.length();
+    if (lineStart >= lineEnd)
+        return wxString();
+
+    size_t position = lineStart;
+    if (requestedColumn > 0)
+        position += static_cast<size_t>(requestedColumn - 1);
+    if (position >= lineEnd)
+        position = lineEnd - 1;
+
+    auto isWord = [](wxChar c)
+    {
+        return wxIsalnum(c) || c == '_' || c == '$';
+    };
+
+    if (!isWord(text[position]) && position > lineStart && isWord(text[position - 1]))
+        --position;
+    if (!isWord(text[position]))
+        return wxString();
+
+    size_t begin = position;
+    while (begin > lineStart && isWord(text[begin - 1]))
+        --begin;
+    size_t end = position + 1;
+    while (end < lineEnd && isWord(text[end]))
+        ++end;
+    return text.Mid(begin, end - begin);
+}
+}
 
 class SymbolTablePanel::LocationData : public wxTreeItemData
 {
@@ -25,7 +89,8 @@ public:
 };
 
 SymbolTablePanel::SymbolTablePanel(wxWindow* parent)
-    : wxPanel(parent, wxID_ANY)
+    : wxPanel(parent, wxID_ANY),
+      m_manualRuntimeSettings(AppEditorConfig::GetManualSymbolRuntimeConfig())
 {
     BuildUI();
     UpdateAvailabilityUI();
@@ -37,13 +102,23 @@ void SymbolTablePanel::BuildUI()
     auto* root = new wxBoxSizer(wxVERTICAL);
 
     auto* headerRow = new wxBoxSizer(wxHORIZONTAL);
-    auto* header = new wxStaticText(this, wxID_ANY, "C/C++ ANALYSIS");
+    auto* header = new wxStaticText(this, wxID_ANY, "CODE ANALYSIS");
     header->SetForegroundColour(wxColour(200, 200, 200));
     wxFont headerFont = header->GetFont();
     headerFont.SetWeight(wxFONTWEIGHT_BOLD);
     headerFont.SetPointSize(9);
     header->SetFont(headerFont);
     headerRow->Add(header, 1, wxALIGN_CENTER_VERTICAL);
+
+    m_manualEnableCheck = new wxCheckBox(this, wxID_ANY, "Manual");
+    m_manualEnableCheck->SetForegroundColour(wxColour(220, 220, 220));
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    m_manualEnableCheck->SetValue(m_manualRuntimeSettings.enabled);
+#else
+    m_manualEnableCheck->SetValue(false);
+    m_manualEnableCheck->Enable(false);
+#endif
+    headerRow->Add(m_manualEnableCheck, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 8);
 
     m_enableCheck = new wxCheckBox(this, wxID_ANY, "LLVM");
     m_enableCheck->SetForegroundColour(wxColour(220, 220, 220));
@@ -87,25 +162,22 @@ void SymbolTablePanel::BuildUI()
     settings->Add(m_standardChoice, 1, wxEXPAND);
 
     settings->Add(makeLabel("Defines"), 0, wxALIGN_CENTER_VERTICAL);
-    m_defines = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
-                               wxTE_PROCESS_ENTER);
+    m_defines = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
     m_defines->SetHint("DEBUG;PLATFORM_LINUX=1");
     settings->Add(m_defines, 1, wxEXPAND);
 
     settings->Add(makeLabel("Includes"), 0, wxALIGN_CENTER_VERTICAL);
-    m_includeDirs = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
-                                   wxTE_PROCESS_ENTER);
+    m_includeDirs = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
     m_includeDirs->SetHint("include;thirdparty/foo/include");
     settings->Add(m_includeDirs, 1, wxEXPAND);
 
     settings->Add(makeLabel("Extra args"), 0, wxALIGN_CENTER_VERTICAL);
-    m_extraArgs = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
-                                 wxTE_PROCESS_ENTER);
+    m_extraArgs = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
     m_extraArgs->SetHint("-Wall;-Wno-unused-parameter");
     settings->Add(m_extraArgs, 1, wxEXPAND);
 
-    settings->Add(makeLabel("Auto"), 0, wxALIGN_CENTER_VERTICAL);
-    m_autoCheck = new wxCheckBox(this, wxID_ANY, "Parse on file/tab change");
+    settings->Add(makeLabel("LLVM Auto"), 0, wxALIGN_CENTER_VERTICAL);
+    m_autoCheck = new wxCheckBox(this, wxID_ANY, "Parse C/C++ with LLVM on file/tab change");
     m_autoCheck->SetForegroundColour(wxColour(200, 200, 200));
     m_autoCheck->SetValue(true);
     settings->Add(m_autoCheck, 1, wxEXPAND);
@@ -113,7 +185,6 @@ void SymbolTablePanel::BuildUI()
     root->Add(settings, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
 
     m_notebook = new wxNotebook(this, wxID_ANY);
-
     m_symbolsTree = new wxTreeCtrl(m_notebook, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                    wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT |
                                    wxTR_SINGLE | wxBORDER_NONE);
@@ -132,16 +203,26 @@ void SymbolTablePanel::BuildUI()
     }
 
     m_notebook->AddPage(m_symbolsTree, "Symbols", true);
-    m_notebook->AddPage(m_callsTree, "Calls", false);
-    m_notebook->AddPage(m_output, "LLVM", false);
+    m_notebook->AddPage(m_callsTree, "Call Hierarchy", false);
+    m_notebook->AddPage(m_output, "Analysis", false);
     root->Add(m_notebook, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
-
     SetSizer(root);
 
     refreshButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { RefreshAnalysis(); });
     syntaxButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { CompileCurrent(true); });
     compileButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { CompileCurrent(false); });
     saveConfigButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { SaveProjectConfig(); });
+
+    m_manualEnableCheck->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&)
+    {
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+        m_manualRuntimeSettings.enabled = m_manualEnableCheck->GetValue();
+        AppEditorConfig::SetManualSymbolRuntimeConfig(m_manualRuntimeSettings);
+        RefreshAnalysis();
+#else
+        m_manualEnableCheck->SetValue(false);
+#endif
+    });
 
     m_enableCheck->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&)
     {
@@ -184,6 +265,19 @@ void SymbolTablePanel::SetProjectRoot(const wxString& root)
     LoadProjectConfig();
 }
 
+void SymbolTablePanel::ReloadRuntimeSettings()
+{
+    m_manualRuntimeSettings = AppEditorConfig::GetManualSymbolRuntimeConfig();
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    if (m_manualEnableCheck)
+        m_manualEnableCheck->SetValue(m_manualRuntimeSettings.enabled);
+#endif
+    if (!m_currentPath.IsEmpty())
+        RefreshAnalysis();
+    else
+        UpdateAvailabilityUI();
+}
+
 void SymbolTablePanel::SetCurrentDocument(const wxString& path,
                                           const wxString& contents,
                                           bool autoRefresh)
@@ -191,21 +285,37 @@ void SymbolTablePanel::SetCurrentDocument(const wxString& path,
     m_currentPath = path;
     m_currentContents = contents;
 
-    if (!CppAnalysisEngine::IsCOrCppFile(path))
+    bool manualSupported = false;
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    manualSupported = m_manualParser.SupportsFile(ToUtf8(path));
+#endif
+    const bool llvmSupported = CppAnalysisEngine::IsCOrCppFile(path);
+    if (!manualSupported && !llvmSupported)
     {
         Clear();
-        m_status->SetLabel(path.IsEmpty() ? "No document" : "Current document is not C/C++");
+        m_status->SetLabel(path.IsEmpty() ? "No document" : "No symbol parser registered for this file type");
         return;
     }
 
     m_status->SetLabel(wxFileName(path).GetFullName());
-    if (autoRefresh && m_autoCheck->GetValue() && IsLLVMEnabled())
+    const bool manualAuto = manualSupported && IsManualParsingEnabled() && m_manualRuntimeSettings.autoParse;
+    const bool llvmAuto = llvmSupported && IsLLVMEnabled() && m_autoCheck->GetValue();
+    if (autoRefresh && (manualAuto || llvmAuto))
         RefreshAnalysis();
 }
 
 bool SymbolTablePanel::IsLLVMEnabled() const
 {
     return CppAnalysisEngine::HasLibClang() && m_enableCheck && m_enableCheck->GetValue();
+}
+
+bool SymbolTablePanel::IsManualParsingEnabled() const
+{
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    return m_manualRuntimeSettings.enabled && m_manualEnableCheck && m_manualEnableCheck->GetValue();
+#else
+    return false;
+#endif
 }
 
 wxString SymbolTablePanel::LLVMStatus() const
@@ -217,7 +327,6 @@ std::vector<wxString> SymbolTablePanel::ParseList(const wxString& value)
 {
     std::vector<wxString> result;
     wxString token;
-
     auto flush = [&]()
     {
         token.Trim(true).Trim(false);
@@ -284,29 +393,106 @@ wxString SymbolTablePanel::KindName(CppSymbolKind kind)
     }
 }
 
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+dodev::symbols::RuntimeSettings SymbolTablePanel::ManualSettings() const
+{
+    dodev::symbols::RuntimeSettings settings;
+    settings.enabled = m_manualRuntimeSettings.enabled;
+    settings.cEnabled = m_manualRuntimeSettings.cEnabled;
+    settings.cppEnabled = m_manualRuntimeSettings.cppEnabled;
+    settings.kotlinEnabled = m_manualRuntimeSettings.kotlinEnabled;
+    settings.symbolsEnabled = m_manualRuntimeSettings.symbolsEnabled;
+    settings.callsEnabled = m_manualRuntimeSettings.callsEnabled;
+    settings.typesEnabled = m_manualRuntimeSettings.typesEnabled;
+    settings.functionsEnabled = m_manualRuntimeSettings.functionsEnabled;
+    settings.variablesEnabled = m_manualRuntimeSettings.variablesEnabled;
+    settings.macrosEnabled = m_manualRuntimeSettings.macrosEnabled;
+    settings.autoParse = m_manualRuntimeSettings.autoParse;
+    return settings;
+}
+
+wxString SymbolTablePanel::ManualKindName(dodev::symbols::SymbolKind kind)
+{
+    return wxString::FromUTF8(dodev::symbols::SymbolKindName(kind));
+}
+#endif
+
 void SymbolTablePanel::RefreshAnalysis()
 {
     Clear();
-    if (!IsLLVMEnabled())
+    bool manualRan = false;
+    bool llvmRan = false;
+    wxString manualStatus;
+    wxString llvmStatus;
+
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    if (IsManualParsingEnabled())
     {
-        UpdateAvailabilityUI();
-        return;
+        const dodev::symbols::Language language = m_manualParser.LanguageForPath(ToUtf8(m_currentPath));
+        const dodev::symbols::RuntimeSettings settings = ManualSettings();
+        if (language != dodev::symbols::Language::Unknown &&
+            dodev::symbols::ParserRegistry::IsLanguageEnabled(language, settings))
+        {
+            m_lastManualAnalysis = m_manualParser.Parse(ToUtf8(m_currentPath), ToUtf8(m_currentContents), settings);
+            manualRan = m_lastManualAnalysis.success;
+            manualStatus = FromUtf8(m_lastManualAnalysis.status);
+            if (manualRan)
+            {
+                if (settings.symbolsEnabled)
+                    PopulateManualSymbols(m_lastManualAnalysis);
+                if (settings.callsEnabled)
+                    PopulateManualCalls(m_lastManualAnalysis);
+                m_output->Clear();
+                AppendOutput("Manual parser: dependency-free C++17 tokenizer/parser");
+                AppendOutput("Language: " + FromUtf8(m_lastManualAnalysis.languageName));
+                AppendOutput(wxString::Format("Symbols: %zu", m_lastManualAnalysis.symbols.size()));
+                AppendOutput(wxString::Format("Calls: %zu", m_lastManualAnalysis.calls.size()));
+            }
+        }
+        else if (language != dodev::symbols::Language::Unknown)
+        {
+            manualStatus = FromUtf8(dodev::symbols::LanguageName(language)) + " parser disabled in Settings";
+        }
     }
-    if (!CppAnalysisEngine::IsCOrCppFile(m_currentPath))
+#endif
+
+    if (CppAnalysisEngine::IsCOrCppFile(m_currentPath) && IsLLVMEnabled())
     {
-        m_status->SetLabel("Open a C/C++ file to parse symbols");
-        return;
+        const CppAnalysisResult result = m_engine.Parse(m_currentPath, m_currentContents, CurrentOptions());
+        m_lastAnalysis = result;
+        llvmRan = result.success;
+        llvmStatus = result.status;
+        if (!manualRan)
+        {
+            PopulateSymbols(result);
+            PopulateCalls(result);
+        }
+        if (!m_output->GetValue().IsEmpty())
+        {
+            AppendOutput("");
+            AppendOutput("LLVM / libclang:");
+            AppendOutput(CppAnalysisEngine::LibClangVersion());
+            for (const wxString& diagnostic : result.diagnostics)
+                AppendOutput(diagnostic);
+        }
+        else
+        {
+            ShowDiagnostics(result);
+        }
     }
 
-    m_status->SetLabel("Parsing " + wxFileName(m_currentPath).GetFullName() + " ...");
-    const CppAnalysisResult result = m_engine.Parse(m_currentPath,
-                                                    m_currentContents,
-                                                    CurrentOptions());
-    m_lastAnalysis = result;
-    PopulateSymbols(result);
-    PopulateCalls(result);
-    ShowDiagnostics(result);
-    m_status->SetLabel(result.status);
+    if (manualRan && llvmRan)
+        m_status->SetLabel(manualStatus + " | LLVM ready");
+    else if (manualRan)
+        m_status->SetLabel(manualStatus);
+    else if (llvmRan)
+        m_status->SetLabel(llvmStatus);
+    else if (!manualStatus.IsEmpty())
+        m_status->SetLabel(manualStatus);
+    else if (!m_currentPath.IsEmpty())
+        m_status->SetLabel("Analysis disabled for this file. Check Settings > Code Analysis.");
+    else
+        UpdateAvailabilityUI();
 }
 
 void SymbolTablePanel::PopulateSymbols(const CppAnalysisResult& result)
@@ -327,25 +513,16 @@ void SymbolTablePanel::PopulateSymbols(const CppAnalysisResult& result)
         case CppSymbolKind::Function:
         case CppSymbolKind::Method:
         case CppSymbolKind::Constructor:
-        case CppSymbolKind::Destructor:
-            parent = m_functionsRoot;
-            break;
+        case CppSymbolKind::Destructor: parent = m_functionsRoot; break;
         case CppSymbolKind::Class:
         case CppSymbolKind::Struct:
         case CppSymbolKind::Enum:
         case CppSymbolKind::Namespace:
-        case CppSymbolKind::Typedef:
-            parent = m_typesRoot;
-            break;
+        case CppSymbolKind::Typedef: parent = m_typesRoot; break;
         case CppSymbolKind::Variable:
-        case CppSymbolKind::Field:
-            parent = m_variablesRoot;
-            break;
-        case CppSymbolKind::Macro:
-            parent = m_macrosRoot;
-            break;
-        default:
-            break;
+        case CppSymbolKind::Field: parent = m_variablesRoot; break;
+        case CppSymbolKind::Macro: parent = m_macrosRoot; break;
+        default: break;
         }
 
         const wxString label = wxString::Format("%s  [%s]  %u:%u",
@@ -354,9 +531,7 @@ void SymbolTablePanel::PopulateSymbols(const CppAnalysisResult& result)
                                                 symbol.location.line,
                                                 symbol.location.column);
         m_symbolsTree->AppendItem(parent, label, -1, -1,
-            new LocationData(symbol.location.file,
-                             symbol.location.line,
-                             symbol.location.column));
+            new LocationData(symbol.location.file, symbol.location.line, symbol.location.column));
     }
 
     m_symbolsTree->Expand(m_functionsRoot);
@@ -364,6 +539,147 @@ void SymbolTablePanel::PopulateSymbols(const CppAnalysisResult& result)
     m_symbolsTree->Expand(m_variablesRoot);
     m_symbolsTree->Expand(m_macrosRoot);
 }
+
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+void SymbolTablePanel::PopulateManualSymbols(const dodev::symbols::AnalysisResult& result)
+{
+    using dodev::symbols::SymbolKind;
+    m_symbolsTree->DeleteAllItems();
+    const wxTreeItemId root = m_symbolsTree->AddRoot("Symbols");
+    m_functionsRoot = m_symbolsTree->AppendItem(root, "Functions / Methods");
+    m_typesRoot = m_symbolsTree->AppendItem(root, "Types / Namespaces / Packages");
+    m_variablesRoot = m_symbolsTree->AppendItem(root, "Variables / Fields / Properties");
+    m_macrosRoot = m_symbolsTree->AppendItem(root, "Macros");
+    m_otherRoot = m_symbolsTree->AppendItem(root, "Other");
+
+    for (const auto& symbol : result.symbols)
+    {
+        wxTreeItemId parent = m_otherRoot;
+        switch (symbol.kind)
+        {
+        case SymbolKind::Function:
+        case SymbolKind::Method:
+        case SymbolKind::Constructor:
+        case SymbolKind::Destructor: parent = m_functionsRoot; break;
+        case SymbolKind::Class:
+        case SymbolKind::Struct:
+        case SymbolKind::Union:
+        case SymbolKind::Interface:
+        case SymbolKind::Object:
+        case SymbolKind::Enum:
+        case SymbolKind::Namespace:
+        case SymbolKind::Package:
+        case SymbolKind::TypeAlias: parent = m_typesRoot; break;
+        case SymbolKind::Variable:
+        case SymbolKind::Field:
+        case SymbolKind::Property: parent = m_variablesRoot; break;
+        case SymbolKind::Macro: parent = m_macrosRoot; break;
+        default: break;
+        }
+        wxString display = FromUtf8(symbol.qualifiedName.empty() ? symbol.name : symbol.qualifiedName);
+        const wxString label = wxString::Format("%s  [%s]  %u:%u",
+                                                display.c_str(),
+                                                ManualKindName(symbol.kind).c_str(),
+                                                symbol.location.line,
+                                                symbol.location.column);
+        m_symbolsTree->AppendItem(parent, label, -1, -1,
+            new LocationData(FromUtf8(symbol.location.file), symbol.location.line, symbol.location.column));
+    }
+
+    for (const wxTreeItemId& item : {m_functionsRoot, m_typesRoot, m_variablesRoot, m_macrosRoot})
+        if (item.IsOk()) m_symbolsTree->Expand(item);
+}
+
+void SymbolTablePanel::PopulateManualCalls(const dodev::symbols::AnalysisResult& result)
+{
+    using dodev::symbols::SymbolKind;
+    m_callsTree->DeleteAllItems();
+    const wxTreeItemId root = m_callsTree->AddRoot("Call Hierarchy");
+
+    std::map<std::string, const dodev::symbols::Symbol*> callableSymbols;
+    for (const auto& symbol : result.symbols)
+    {
+        if (symbol.kind == SymbolKind::Function || symbol.kind == SymbolKind::Method ||
+            symbol.kind == SymbolKind::Constructor || symbol.kind == SymbolKind::Destructor)
+            callableSymbols[symbol.qualifiedName] = &symbol;
+    }
+
+    std::set<std::string> callableNames;
+    for (const auto& entry : callableSymbols)
+        callableNames.insert(entry.first);
+    for (const auto& call : result.calls)
+    {
+        callableNames.insert(call.caller);
+        if (call.target.IsValid() && !call.displayCallee.empty())
+            callableNames.insert(call.displayCallee);
+    }
+
+    auto shortName = [](const std::string& name)
+    {
+        const std::size_t cpp = name.rfind("::");
+        const std::size_t dot = name.rfind('.');
+        if (cpp != std::string::npos && (dot == std::string::npos || cpp > dot))
+            return name.substr(cpp + 2);
+        if (dot != std::string::npos)
+            return name.substr(dot + 1);
+        return name;
+    };
+
+    for (const std::string& callableName : callableNames)
+    {
+        const dodev::symbols::Symbol* callableSymbol = nullptr;
+        auto symbolIt = callableSymbols.find(callableName);
+        if (symbolIt != callableSymbols.end())
+            callableSymbol = symbolIt->second;
+
+        LocationData* rootData = nullptr;
+        if (callableSymbol && callableSymbol->location.IsValid())
+            rootData = new LocationData(FromUtf8(callableSymbol->location.file), callableSymbol->location.line, callableSymbol->location.column);
+        const wxTreeItemId callableItem = m_callsTree->AppendItem(root, FromUtf8(callableName), -1, -1, rootData);
+
+        std::vector<const dodev::symbols::CallReference*> outgoing;
+        std::vector<const dodev::symbols::CallReference*> incoming;
+        for (const auto& call : result.calls)
+        {
+            if (call.caller == callableName)
+                outgoing.push_back(&call);
+            const std::string targetName = call.displayCallee.empty() ? call.callee : call.displayCallee;
+            if (targetName == callableName || call.callee == shortName(callableName))
+                incoming.push_back(&call);
+        }
+
+        const wxTreeItemId callees = m_callsTree->AppendItem(callableItem,
+            wxString::Format("Callees (%zu)", outgoing.size()));
+        for (const auto* call : outgoing)
+        {
+            const auto& nav = call->target.IsValid() ? call->target : call->callSite;
+            wxString label = FromUtf8(call->displayCallee.empty() ? call->callee : call->displayCallee);
+            if (!call->target.IsValid())
+                label += "  [unresolved]";
+            m_callsTree->AppendItem(callees, label, -1, -1,
+                nav.IsValid() ? new LocationData(FromUtf8(nav.file), nav.line, nav.column) : nullptr);
+        }
+
+        const wxTreeItemId callers = m_callsTree->AppendItem(callableItem,
+            wxString::Format("Callers (%zu)", incoming.size()));
+        for (const auto* call : incoming)
+        {
+            const dodev::symbols::Symbol* callerSymbol = nullptr;
+            auto callerIt = callableSymbols.find(call->caller);
+            if (callerIt != callableSymbols.end())
+                callerSymbol = callerIt->second;
+            const auto& nav = callerSymbol ? callerSymbol->location : call->callSite;
+            m_callsTree->AppendItem(callers, FromUtf8(call->caller), -1, -1,
+                nav.IsValid() ? new LocationData(FromUtf8(nav.file), nav.line, nav.column) : nullptr);
+        }
+
+        m_callsTree->Expand(callableItem);
+        if (!outgoing.empty()) m_callsTree->Expand(callees);
+        if (!incoming.empty()) m_callsTree->Expand(callers);
+    }
+    m_callsTree->Expand(root);
+}
+#endif
 
 void SymbolTablePanel::PopulateCalls(const CppAnalysisResult& result)
 {
@@ -387,17 +703,11 @@ void SymbolTablePanel::AppendCallNode(wxTreeItemId parent, const CppCallNode& no
     CppSourceLocation navigation = node.target.IsValid() ? node.target : node.callSite;
     wxString locationText;
     if (navigation.IsValid())
-        locationText = wxString::Format("  %s:%u", wxFileName(navigation.file).GetFullName().c_str(),
-                                        navigation.line);
+        locationText = wxString::Format("  %s:%u", wxFileName(navigation.file).GetFullName().c_str(), navigation.line);
 
     const wxTreeItemId item = m_callsTree->AppendItem(parent,
-        node.name + locationText,
-        -1,
-        -1,
-        navigation.IsValid()
-            ? new LocationData(navigation.file, navigation.line, navigation.column)
-            : nullptr);
-
+        node.name + locationText, -1, -1,
+        navigation.IsValid() ? new LocationData(navigation.file, navigation.line, navigation.column) : nullptr);
     for (const auto& child : node.children)
         AppendCallNode(item, child);
 }
@@ -428,11 +738,18 @@ void SymbolTablePanel::AppendOutput(const wxString& line)
     m_output->AppendText(line);
 }
 
+void SymbolTablePanel::ShowCallHierarchy()
+{
+    RefreshAnalysis();
+    if (m_notebook && m_notebook->GetPageCount() > 1)
+        m_notebook->SetSelection(1);
+}
+
 void SymbolTablePanel::CompileCurrent(bool syntaxOnly)
 {
     if (!CppAnalysisEngine::IsCOrCppFile(m_currentPath))
     {
-        wxMessageBox("Open a C/C++ source file first.", "LLVM compile",
+        wxMessageBox("Open a C/C++ source file first.", "C/C++ compile",
                      wxOK | wxICON_INFORMATION, this);
         return;
     }
@@ -450,84 +767,114 @@ void SymbolTablePanel::CompileCurrent(bool syntaxOnly)
     for (const auto& line : result.output)
         AppendOutput(line);
     m_notebook->SetSelection(2);
-    m_status->SetLabel(result.success ? "Clang compilation succeeded" : "Clang compilation failed");
+    m_status->SetLabel(result.success ? "C/C++ compilation succeeded" : "C/C++ compilation failed");
 }
-
 
 wxString SymbolTablePanel::BuildAIContext() const
 {
-    if (!IsLLVMEnabled() || m_currentPath.IsEmpty())
-        return wxString();
-
     wxString text;
-    text += "File: " + m_currentPath + "\n";
-    text += "Parser: " + CppAnalysisEngine::LibClangVersion() + "\n";
-    if (!m_lastAnalysis.status.IsEmpty())
-        text += "Status: " + m_lastAnalysis.status + "\n";
-
-    if (!m_lastAnalysis.symbols.empty())
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    if (m_lastManualAnalysis.success)
     {
-        text += "\nSymbols:\n";
-        for (const auto& symbol : m_lastAnalysis.symbols)
+        text += "Manual source analysis\n";
+        text += "File: " + m_currentPath + "\n";
+        text += "Language: " + FromUtf8(m_lastManualAnalysis.languageName) + "\n";
+        if (!m_lastManualAnalysis.symbols.empty())
         {
-            text += "- " + KindName(symbol.kind) + ": " + symbol.displayName;
-            if (symbol.location.IsValid())
-                text += wxString::Format(" @ %u:%u", symbol.location.line, symbol.location.column);
-            text += "\n";
+            text += "\nSymbols:\n";
+            for (const auto& symbol : m_lastManualAnalysis.symbols)
+            {
+                text += "- " + ManualKindName(symbol.kind) + ": " +
+                        FromUtf8(symbol.qualifiedName.empty() ? symbol.name : symbol.qualifiedName);
+                if (symbol.location.IsValid())
+                    text += wxString::Format(" @ %u:%u", symbol.location.line, symbol.location.column);
+                text += "\n";
+            }
+        }
+        if (!m_lastManualAnalysis.calls.empty())
+        {
+            text += "\nCalls:\n";
+            for (const auto& call : m_lastManualAnalysis.calls)
+            {
+                text += "- " + FromUtf8(call.caller) + " -> " +
+                        FromUtf8(call.displayCallee.empty() ? call.callee : call.displayCallee);
+                if (!call.target.IsValid())
+                    text += " [unresolved]";
+                text += "\n";
+            }
         }
     }
+#endif
 
-    std::function<void(const CppCallNode&, int)> appendCall;
-    appendCall = [&text, &appendCall](const CppCallNode& node, int depth)
+    if (IsLLVMEnabled() && !m_lastAnalysis.status.IsEmpty())
     {
-        wxString indent;
-        indent.Pad(static_cast<size_t>(depth * 2), ' ');
-        text += indent;
-        text += "- " + node.name;
-        const CppSourceLocation location = node.target.IsValid() ? node.target : node.callSite;
-        if (location.IsValid())
-            text += wxString::Format(" @ %s:%u", wxFileName(location.file).GetFullName().c_str(), location.line);
-        text += "\n";
-        for (const auto& child : node.children)
-            appendCall(child, depth + 1);
-    };
-
-    if (!m_lastAnalysis.callTree.empty())
-    {
-        text += "\nCall tree:\n";
-        for (const auto& root : m_lastAnalysis.callTree)
-            appendCall(root, 0);
-    }
-
-    if (!m_lastAnalysis.diagnostics.empty())
-    {
-        text += "\nDiagnostics:\n";
-        for (const wxString& diagnostic : m_lastAnalysis.diagnostics)
-            text += "- " + diagnostic + "\n";
+        if (!text.IsEmpty())
+            text += "\n";
+        text += "LLVM/libclang analysis\n";
+        text += "Parser: " + CppAnalysisEngine::LibClangVersion() + "\n";
+        if (!m_lastAnalysis.diagnostics.empty())
+        {
+            text += "Diagnostics:\n";
+            for (const wxString& diagnostic : m_lastAnalysis.diagnostics)
+                text += "- " + diagnostic + "\n";
+        }
     }
     return text;
 }
 
 bool SymbolTablePanel::NavigateToDefinition(unsigned line, unsigned column)
 {
-    if (!IsLLVMEnabled())
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    if (IsManualParsingEnabled() && m_manualParser.SupportsFile(ToUtf8(m_currentPath)))
     {
-        wxMessageBox("Go to Definition requires optional libclang support.",
-                     "LLVM analysis", wxOK | wxICON_INFORMATION, this);
-        return false;
+        const dodev::symbols::RuntimeSettings settings = ManualSettings();
+        const dodev::symbols::Language language = m_manualParser.LanguageForPath(ToUtf8(m_currentPath));
+        if (dodev::symbols::ParserRegistry::IsLanguageEnabled(language, settings))
+            m_lastManualAnalysis = m_manualParser.Parse(ToUtf8(m_currentPath), ToUtf8(m_currentContents), settings);
     }
+    if (m_lastManualAnalysis.success)
+    {
+        const wxString word = WordAt(m_currentContents, line, column);
+        if (!word.IsEmpty())
+        {
+            const std::string utf8Word = ToUtf8(word);
+            for (const auto& call : m_lastManualAnalysis.calls)
+            {
+                if (call.callSite.line == line && call.callee == utf8Word && call.target.IsValid())
+                {
+                    if (m_openLocation)
+                        m_openLocation(FromUtf8(call.target.file), call.target.line, call.target.column);
+                    return true;
+                }
+            }
+
+            const dodev::symbols::Symbol* selected = nullptr;
+            for (const auto& symbol : m_lastManualAnalysis.symbols)
+            {
+                if (symbol.name != utf8Word)
+                    continue;
+                if (!selected || (symbol.definition && !selected->definition))
+                    selected = &symbol;
+            }
+            if (selected && selected->location.IsValid())
+            {
+                if (m_openLocation)
+                    m_openLocation(FromUtf8(selected->location.file), selected->location.line, selected->location.column);
+                return true;
+            }
+        }
+    }
+#endif
+
+    if (!IsLLVMEnabled())
+        return false;
     if (!CppAnalysisEngine::IsCOrCppFile(m_currentPath))
         return false;
 
     CppSourceLocation location;
     wxString diagnostic;
-    if (!m_engine.FindDefinition(m_currentPath,
-                                 m_currentContents,
-                                 line,
-                                 column,
-                                 CurrentOptions(),
-                                 location,
-                                 diagnostic))
+    if (!m_engine.FindDefinition(m_currentPath, m_currentContents, line, column,
+                                 CurrentOptions(), location, diagnostic))
     {
         if (!diagnostic.IsEmpty())
             m_status->SetLabel(diagnostic);
@@ -551,29 +898,40 @@ void SymbolTablePanel::OpenTreeItem(wxTreeCtrl* tree, const wxTreeItemId& item)
 
 void SymbolTablePanel::UpdateAvailabilityUI()
 {
-    const bool available = CppAnalysisEngine::HasLibClang();
-    m_enableCheck->Enable(available);
-    if (!available)
-    {
+    const bool llvmAvailable = CppAnalysisEngine::HasLibClang();
+    m_enableCheck->Enable(llvmAvailable);
+    if (!llvmAvailable)
         m_enableCheck->SetValue(false);
-        m_status->SetLabel("libclang optional feature: not linked. Build with --llvm to enable parsing/call tree/F12.");
-    }
-    else if (!m_enableCheck->GetValue())
-    {
-        m_status->SetLabel("LLVM analysis disabled for this session");
-    }
+
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    m_manualEnableCheck->Enable(true);
+    m_manualEnableCheck->SetValue(m_manualRuntimeSettings.enabled);
+    if (m_manualRuntimeSettings.enabled)
+        m_status->SetLabel("Manual C/C++/Kotlin parser ready" +
+                           (llvmAvailable ? wxString("; LLVM available") : wxString("; LLVM not linked")));
     else
-    {
-        m_status->SetLabel(CppAnalysisEngine::LibClangVersion());
-    }
+        m_status->SetLabel("Manual parser disabled in Settings" +
+                           (llvmAvailable ? wxString("; LLVM available") : wxString()));
+#else
+    m_manualEnableCheck->Enable(false);
+    m_manualEnableCheck->SetValue(false);
+    if (llvmAvailable)
+        m_status->SetLabel("Manual parser compiled out; LLVM available for C/C++");
+    else
+        m_status->SetLabel("Manual parser compiled out and libclang is not linked");
+#endif
 }
 
 wxString SymbolTablePanel::ConfigPath() const
 {
     if (m_projectRoot.IsEmpty())
         return wxString();
-    return m_projectRoot + wxFileName::GetPathSeparator() + ".dodev" +
-           wxFileName::GetPathSeparator() + "llvm.json";
+    wxString path = m_projectRoot;
+    path += wxFileName::GetPathSeparator();
+    path += ".dodev";
+    path += wxFileName::GetPathSeparator();
+    path += "llvm.json";
+    return path;
 }
 
 void SymbolTablePanel::LoadProjectConfig()
@@ -587,7 +945,7 @@ void SymbolTablePanel::LoadProjectConfig()
         m_standardChoice->SetStringSelection("c++17");
         m_autoCheck->SetValue(true);
         m_enableCheck->SetValue(CppAnalysisEngine::HasLibClang());
-        UpdateAvailabilityUI();
+        ReloadRuntimeSettings();
         return;
     }
 
@@ -620,6 +978,10 @@ void SymbolTablePanel::LoadProjectConfig()
         m_autoCheck->SetValue(root["autoParse"].asBool());
     if (root.isMember("enabled") && CppAnalysisEngine::HasLibClang())
         m_enableCheck->SetValue(root["enabled"].asBool());
+    m_manualRuntimeSettings = AppEditorConfig::GetManualSymbolRuntimeConfig();
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    m_manualEnableCheck->SetValue(m_manualRuntimeSettings.enabled);
+#endif
     UpdateAvailabilityUI();
 }
 
@@ -689,6 +1051,9 @@ void SymbolTablePanel::AddMacro(const wxString& name)
 void SymbolTablePanel::Clear()
 {
     m_lastAnalysis = CppAnalysisResult();
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    m_lastManualAnalysis = dodev::symbols::AnalysisResult();
+#endif
     if (m_symbolsTree)
         m_symbolsTree->DeleteAllItems();
     if (m_callsTree)

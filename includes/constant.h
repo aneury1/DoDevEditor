@@ -50,6 +50,12 @@ enum {
     ID_TOGGLE_WORDWRAP,
     ID_TOGGLE_DOCKER,
     ID_OPEN_AI_CHAT,
+    ID_SSH_JOURNAL_LOGS,
+    ID_IMPORT_JOURNAL_LOGS,
+    ID_FILE_COMPARE,
+    ID_PLUGIN_RELOAD,
+    ID_PLUGIN_LIST,
+    ID_PLUGIN_FOLDER,
     ID_GENERAL_SETTINGS,
     ID_TOGGLE_WHITESPACE,
     ID_FIND,
@@ -60,6 +66,7 @@ enum {
     ID_GOTO_LINE,
     ID_GOTO_DEFINITION,
     ID_CPP_PARSE_SYMBOLS,
+    ID_SHOW_CALL_HIERARCHY,
     ID_CPP_SYNTAX_CHECK,
     ID_CPP_COMPILE,
     ID_ZOOM_IN,
@@ -72,6 +79,12 @@ enum {
     ID_FIND_BTN,
     ID_FIND_CLOSE,
 };
+
+constexpr int ID_RECENT_FILE_BASE = wxID_HIGHEST + 1000;
+constexpr int ID_RECENT_FOLDER_BASE = wxID_HIGHEST + 1100;
+constexpr int ID_RECENT_FILE_CLEAR = wxID_HIGHEST + 1200;
+constexpr int ID_RECENT_FOLDER_CLEAR = wxID_HIGHEST + 1201;
+constexpr int MAX_RECENT_MENU_ITEMS = 15;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VSCode-inspired dark colour palette

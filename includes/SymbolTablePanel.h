@@ -12,6 +12,14 @@
 #include <vector>
 
 #include "CppAnalysisEngine.h"
+#include "Config.h"
+
+#ifndef DODEV_ENABLE_MANUAL_SYMBOLS
+#define DODEV_ENABLE_MANUAL_SYMBOLS 0
+#endif
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+#include "symbols/ManualSymbolParser.h"
+#endif
 
 class SymbolTablePanel : public wxPanel
 {
@@ -27,12 +35,15 @@ public:
     void SetCurrentDocument(const wxString& path, const wxString& contents, bool autoRefresh = true);
 
     void RefreshAnalysis();
+    void ShowCallHierarchy();
     void CompileCurrent(bool syntaxOnly = false);
     bool NavigateToDefinition(unsigned line, unsigned column);
 
     bool IsLLVMEnabled() const;
+    bool IsManualParsingEnabled() const;
     wxString LLVMStatus() const;
     wxString BuildAIContext() const;
+    void ReloadRuntimeSettings();
 
     // Compatibility with the original lightweight symbol panel API.
     void AddFunction(const wxString& name);
@@ -51,6 +62,12 @@ private:
     void BuildUI();
     void PopulateSymbols(const CppAnalysisResult& result);
     void PopulateCalls(const CppAnalysisResult& result);
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    void PopulateManualSymbols(const dodev::symbols::AnalysisResult& result);
+    void PopulateManualCalls(const dodev::symbols::AnalysisResult& result);
+    dodev::symbols::RuntimeSettings ManualSettings() const;
+    static wxString ManualKindName(dodev::symbols::SymbolKind kind);
+#endif
     void AppendCallNode(wxTreeItemId parent, const CppCallNode& node);
     void ShowDiagnostics(const CppAnalysisResult& result);
     void AppendOutput(const wxString& line);
@@ -67,11 +84,17 @@ private:
 
     CppAnalysisEngine m_engine;
     CppAnalysisResult m_lastAnalysis;
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+    dodev::symbols::ParserRegistry m_manualParser;
+    dodev::symbols::AnalysisResult m_lastManualAnalysis;
+#endif
+    ManualSymbolRuntimeConfig m_manualRuntimeSettings;
     OpenLocationCallback m_openLocation;
     SaveCurrentFileCallback m_saveCurrentFile;
 
     wxStaticText* m_status = nullptr;
     wxCheckBox* m_enableCheck = nullptr;
+    wxCheckBox* m_manualEnableCheck = nullptr;
     wxCheckBox* m_autoCheck = nullptr;
     wxChoice* m_standardChoice = nullptr;
     wxTextCtrl* m_defines = nullptr;

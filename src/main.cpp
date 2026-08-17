@@ -32,6 +32,7 @@
 #include <iterator>
 #include <cstdint>
 #include <unordered_set>
+#include <memory>
 #include "CommandPalette.h"
 #include "QuickOpenDialog.h"
 #include "constant.h"
@@ -54,6 +55,15 @@
 #include "WorkspaceManager.h"
 #include "LocalHistoryManager.h"
 #include "FileHistoryDialog.h"
+#if DODEV_ENABLE_JOURNAL_LOGS
+#include "JournalLogPage.h"
+#endif
+#if DODEV_ENABLE_FILE_COMPARE
+#include "FileComparePage.h"
+#endif
+#if DODEV_ENABLE_PLUGINS
+#include "PluginInterface.h"
+#endif
 
 Json::Value AppEditorConfig::config;
 
@@ -81,6 +91,7 @@ class MainFrame : public wxFrame
     FolderListView *m_folderList = nullptr;
     wxPanel *m_editorPane = nullptr;
     wxAuiNotebook *m_notebook = nullptr;
+    wxAuiNotebook *m_bottomNotebook = nullptr;
     wxAuiNotebook *m_sideNotebook = nullptr;
     FindBar *m_findBar = nullptr;
     SourceControlPanel *m_gitPanel = nullptr;
@@ -89,6 +100,17 @@ class MainFrame : public wxFrame
     AIChatPage *m_aiChatPage = nullptr;
     wxWindow *m_lastAIContextPage = nullptr;
     wxStatusBar *m_statusBar = nullptr;
+    wxMenu *m_recentFilesMenu = nullptr;
+    wxMenu *m_recentFoldersMenu = nullptr;
+    DynamicMenuBar *m_dynamicMenuBar = nullptr;
+    std::vector<wxString> m_recentFilePaths;
+    std::vector<wxString> m_recentFolderPaths;
+
+#if DODEV_ENABLE_PLUGINS
+    std::unique_ptr<PluginManager> m_pluginManager;
+    std::map<wxWindow*, wxTextCtrl*> m_pluginTextPanels;
+    int m_nextPluginMenuId = wxID_HIGHEST + 5000;
+#endif
 
     struct ProjectSearchResult
     {
@@ -110,14 +132,17 @@ public:
                   wxDefaultPosition, wxSize(1280, 780))
     {
         SetBackgroundColour(Colors::BG);
+        AppEditorConfig::LoadOpenedFolder();
         BuildUI();
         BuildMenuBar();
         BuildStatusBar();
         SetupAccelerators();
+#if DODEV_ENABLE_PLUGINS
+        InitializePlugins();
+#endif
 
         Centre();
         Show();
-        AppEditorConfig::LoadOpenedFolder();
         bool restoredWorkspace = false;
 
         const std::string lastWorkspaceFile = AppEditorConfig::GetLastWorkspaceFile();
@@ -275,7 +300,7 @@ private:
             OpenGitCommitDiff(repositoryRoot, commitHash, oldPath, newPath, status);
         });
 
-        // TAB 2: optional LLVM/libclang C/C++ analysis
+        // TAB 2: manual C/C++/Kotlin symbols/calls + optional LLVM analysis
         m_symbolsPanel = new SymbolTablePanel(bottomTabs);
         m_symbolsPanel->SetOpenLocationCallback([this](const wxString& path, unsigned line, unsigned column)
         {
@@ -292,7 +317,7 @@ private:
 
         // Add tabs
         bottomTabs->AddPage(m_gitPanel, "GIT", true);
-        bottomTabs->AddPage(m_symbolsPanel, "C/C++", false);
+        bottomTabs->AddPage(m_symbolsPanel, "SYMBOLS", false);
         bottomTabs->AddPage(emptyPanel, "Debug", false);
 
         // ── SPLIT ──
@@ -323,6 +348,7 @@ private:
             wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS;
         DualNotebookPanel *tpanel = new DualNotebookPanel(m_editorPane,  wxID_ANY);
         m_notebook = tpanel->GetTopNotebook();
+        m_bottomNotebook = tpanel->GetBottomNotebook();
         edSizer->Add(tpanel, 1, wxEXPAND);
         /// edSizer->Add(m_notebook, 1, wxEXPAND);
     }
@@ -456,9 +482,202 @@ private:
         });
     }
 
+    static wxString RecentMenuLabel(const wxString& path, size_t index, bool folder)
+    {
+        wxFileName fileName(path);
+        wxString primary;
+        wxString secondary;
+
+        if (folder)
+        {
+            wxFileName folderName;
+            folderName.AssignDir(path);
+            const wxArrayString& dirs = folderName.GetDirs();
+            if (!dirs.IsEmpty())
+                primary = dirs[dirs.size() - 1];
+            else
+                primary = folderName.GetPath();
+            secondary = folderName.GetPath();
+        }
+        else
+        {
+            primary = fileName.GetFullName();
+            secondary = fileName.GetPath();
+        }
+
+        if (primary.IsEmpty())
+            primary = path;
+
+        wxString label;
+        if (index < 9)
+            label = wxString::Format("&%d  ", static_cast<int>(index + 1));
+        else
+            label = wxString::Format("%d  ", static_cast<int>(index + 1));
+
+        label += primary;
+        if (!secondary.IsEmpty() && secondary != primary)
+        {
+            label += " — ";
+            label += secondary;
+        }
+
+        // wxWidgets treats '&' as a menu mnemonic marker. Escape path ampersands.
+        // Restore the mnemonic marker added above after escaping the user-controlled text.
+        const wxString prefix = index < 9
+            ? wxString::Format("&%d  ", static_cast<int>(index + 1))
+            : wxString::Format("%d  ", static_cast<int>(index + 1));
+        wxString body = label.Mid(prefix.length());
+        body.Replace("&", "&&");
+        return prefix + body;
+    }
+
+    static std::string RecentUtf8(const wxString& value)
+    {
+        const wxCharBuffer buffer = value.ToUTF8();
+        return buffer.data() ? std::string(buffer.data()) : std::string();
+    }
+
+    void RefreshRecentMenus()
+    {
+        m_recentFilePaths.clear();
+        m_recentFolderPaths.clear();
+
+        // Keep the persisted lists clean even if files/folders were removed outside
+        // DoDevEditor. Missing entries disappear the next time File is rebuilt.
+        for (const std::string& storedPath : AppEditorConfig::GetRecentFiles())
+        {
+            const wxString path = wxString::FromUTF8(storedPath.c_str());
+            if (wxFileExists(path))
+                m_recentFilePaths.push_back(path);
+            else
+                AppEditorConfig::RemoveRecentFile(storedPath);
+        }
+        for (const std::string& storedPath : AppEditorConfig::GetRecentFolders())
+        {
+            const wxString path = wxString::FromUTF8(storedPath.c_str());
+            if (wxDirExists(path))
+                m_recentFolderPaths.push_back(path);
+            else
+                AppEditorConfig::RemoveRecentFolder(storedPath);
+        }
+
+        if (m_recentFilesMenu)
+        {
+            // The submenu is entirely dynamic. Rebuild it in one place so stale
+            // separators/placeholders cannot survive a refresh.
+            while (m_recentFilesMenu->GetMenuItemCount() > 0)
+            {
+                wxMenuItem* item = m_recentFilesMenu->FindItemByPosition(0);
+                if (!item)
+                    break;
+                m_recentFilesMenu->Destroy(item);
+            }
+
+            const size_t count = std::min(m_recentFilePaths.size(),
+                                          static_cast<size_t>(MAX_RECENT_MENU_ITEMS));
+            for (size_t i = 0; i < count; ++i)
+                m_recentFilesMenu->Append(ID_RECENT_FILE_BASE + static_cast<int>(i),
+                                          RecentMenuLabel(m_recentFilePaths[i], i, false));
+
+            if (count == 0)
+            {
+                wxMenuItem* empty = m_recentFilesMenu->Append(wxID_ANY, "(No Recent Files)");
+                if (empty)
+                    empty->Enable(false);
+            }
+            else
+            {
+                m_recentFilesMenu->AppendSeparator();
+                m_recentFilesMenu->Append(ID_RECENT_FILE_CLEAR, "Clear Recent Files");
+            }
+        }
+
+        if (m_recentFoldersMenu)
+        {
+            while (m_recentFoldersMenu->GetMenuItemCount() > 0)
+            {
+                wxMenuItem* item = m_recentFoldersMenu->FindItemByPosition(0);
+                if (!item)
+                    break;
+                m_recentFoldersMenu->Destroy(item);
+            }
+
+            const size_t count = std::min(m_recentFolderPaths.size(),
+                                          static_cast<size_t>(MAX_RECENT_MENU_ITEMS));
+            for (size_t i = 0; i < count; ++i)
+                m_recentFoldersMenu->Append(ID_RECENT_FOLDER_BASE + static_cast<int>(i),
+                                            RecentMenuLabel(m_recentFolderPaths[i], i, true));
+
+            if (count == 0)
+            {
+                wxMenuItem* empty = m_recentFoldersMenu->Append(wxID_ANY, "(No Recent Folders)");
+                if (empty)
+                    empty->Enable(false);
+            }
+            else
+            {
+                m_recentFoldersMenu->AppendSeparator();
+                m_recentFoldersMenu->Append(ID_RECENT_FOLDER_CLEAR, "Clear Recent Folders");
+            }
+        }
+    }
+
+    void RememberRecentFile(const wxString& path)
+    {
+        if (path.IsEmpty() || !wxFileExists(path))
+            return;
+        AppEditorConfig::AddRecentFile(RecentUtf8(wxFileName(path).GetFullPath()));
+        RefreshRecentMenus();
+    }
+
+    void RememberRecentFolder(const wxString& path)
+    {
+        if (path.IsEmpty() || !wxDirExists(path))
+            return;
+        wxFileName folderName;
+        folderName.AssignDir(path);
+        AppEditorConfig::AddRecentFolder(RecentUtf8(folderName.GetPath()));
+        RefreshRecentMenus();
+    }
+
+    void OpenRecentFile(size_t index)
+    {
+        if (index >= m_recentFilePaths.size())
+            return;
+        const wxString path = m_recentFilePaths[index];
+        if (!wxFileExists(path))
+        {
+            AppEditorConfig::RemoveRecentFile(RecentUtf8(path));
+            RefreshRecentMenus();
+            wxString message = "The recent file no longer exists:\n";
+            message += path;
+            wxMessageBox(message, "Recent File", wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        OpenFileInTab(path);
+    }
+
+    void OpenRecentFolder(size_t index)
+    {
+        if (index >= m_recentFolderPaths.size())
+            return;
+        const wxString path = m_recentFolderPaths[index];
+        if (!wxDirExists(path))
+        {
+            AppEditorConfig::RemoveRecentFolder(RecentUtf8(path));
+            RefreshRecentMenus();
+            wxString message = "The recent folder no longer exists:\n";
+            message += path;
+            wxMessageBox(message, "Recent Folder", wxOK | wxICON_INFORMATION, this);
+            return;
+        }
+        loadPath(path);
+    }
+
     void BuildMenuBar()
     {
         auto *mb = new DynamicMenuBar(this);
+        m_dynamicMenuBar = mb;
 
         // ───────── FILE ─────────
         mb->AddItem("File", "New", ID_NEW_FILE, [this]()
@@ -469,6 +688,15 @@ private:
 
         mb->AddItem("File", "Open Folder...", ID_OPEN_FOLDER, [this]()
                     { OpenFolder(); }, "Ctrl+Shift+O");
+
+        mb->AddSeparator("File");
+        m_recentFilesMenu = new wxMenu();
+        m_recentFoldersMenu = new wxMenu();
+        mb->AddSubMenu("File", "Recent Files", m_recentFilesMenu);
+        mb->AddSubMenu("File", "Recent Folders", m_recentFoldersMenu);
+        RefreshRecentMenus();
+        mb->AddSeparator("File");
+
         mb->AddItem("File", "Add Folder to Workspace...", ID_ADD_FOLDER_WORKSPACE, [this]()
                     { AddFolderToWorkspace(); });
         mb->AddItem("File", "Remove Folder from Workspace...", ID_REMOVE_FOLDER_WORKSPACE, [this]()
@@ -539,15 +767,30 @@ private:
                     { GoToLine(); }, "Ctrl+G");
 
         // ───────── C/C++ / LLVM ─────────
-        mb->AddItem("Code", "Go to Definition (LLVM)", ID_GOTO_DEFINITION, [this]()
+        mb->AddItem("Code", "Go to Definition", ID_GOTO_DEFINITION, [this]()
                     { GoToDefinition(); }, "F12");
         mb->AddSeparator("Code");
-        mb->AddItem("Code", "Parse C/C++ Symbols", ID_CPP_PARSE_SYMBOLS, [this]()
+        mb->AddItem("Code", "Parse Symbols / Call Hierarchy", ID_CPP_PARSE_SYMBOLS, [this]()
                     { RefreshCppAnalysis(); });
+        mb->AddItem("Code", "Show Call Hierarchy", ID_SHOW_CALL_HIERARCHY, [this]()
+                    { ShowCallHierarchy(); }, "Ctrl+Shift+H");
         mb->AddItem("Code", "LLVM Syntax Check", ID_CPP_SYNTAX_CHECK, [this]()
                     { CompileCurrentWithLLVM(true); });
         mb->AddItem("Code", "Compile Current Source with LLVM", ID_CPP_COMPILE, [this]()
                     { CompileCurrentWithLLVM(false); }, "Ctrl+F7");
+
+#if DODEV_ENABLE_JOURNAL_LOGS
+        // ───────── TOOLS / JOURNAL LOGS ─────────
+        mb->AddItem("Tools", "SSH Journal Logs...", ID_SSH_JOURNAL_LOGS, [this]()
+                    { OpenSshJournalLogs(); });
+        mb->AddItem("Tools", "Import Journal Logs...", ID_IMPORT_JOURNAL_LOGS, [this]()
+                    { ImportJournalLogs(); });
+#endif
+#if DODEV_ENABLE_FILE_COMPARE
+        // ───────── TOOLS / FILE COMPARE ─────────
+        mb->AddItem("Tools", "Compare Files...", ID_FILE_COMPARE, [this]()
+                    { OpenFileCompare(); });
+#endif
 
         // ───────── VIEW ─────────
         mb->AddItem("View", "Toggle Sidebar", ID_TOGGLE_SIDEBAR, [this]()
@@ -561,6 +804,17 @@ private:
                          { ToggleDockerInspector(); }, false);
         mb->AddItem("View", "AI Chat", ID_OPEN_AI_CHAT, [this]()
                     { OpenAIChat(); }, "Ctrl+Alt+I");
+
+#if DODEV_ENABLE_PLUGINS
+        // ───────── PLUGINS ─────────
+        mb->AddItem("Plugins", "Reload Plugins", ID_PLUGIN_RELOAD, [this]()
+                    { ReloadPlugins(); });
+        mb->AddItem("Plugins", "Loaded Plugins...", ID_PLUGIN_LIST, [this]()
+                    { ShowLoadedPlugins(); });
+        mb->AddItem("Plugins", "Open Plugins Folder", ID_PLUGIN_FOLDER, [this]()
+                    { OpenPluginsFolder(); });
+        mb->AddSeparator("Plugins");
+#endif
 
         // ───────── SETTINGS ─────────
         mb->AddItem("Settings", "General Settings...", ID_GENERAL_SETTINGS, [this]()
@@ -577,6 +831,29 @@ private:
         SetMenuBar(mb);
 
         // Bind
+        Bind(wxEVT_MENU, [this](wxCommandEvent& event)
+        {
+            const int index = event.GetId() - ID_RECENT_FILE_BASE;
+            if (index >= 0)
+                OpenRecentFile(static_cast<size_t>(index));
+        }, ID_RECENT_FILE_BASE, ID_RECENT_FILE_BASE + MAX_RECENT_MENU_ITEMS - 1);
+        Bind(wxEVT_MENU, [this](wxCommandEvent& event)
+        {
+            const int index = event.GetId() - ID_RECENT_FOLDER_BASE;
+            if (index >= 0)
+                OpenRecentFolder(static_cast<size_t>(index));
+        }, ID_RECENT_FOLDER_BASE, ID_RECENT_FOLDER_BASE + MAX_RECENT_MENU_ITEMS - 1);
+        Bind(wxEVT_MENU, [this](wxCommandEvent&)
+        {
+            AppEditorConfig::ClearRecentFiles();
+            RefreshRecentMenus();
+        }, ID_RECENT_FILE_CLEAR);
+        Bind(wxEVT_MENU, [this](wxCommandEvent&)
+        {
+            AppEditorConfig::ClearRecentFolders();
+            RefreshRecentMenus();
+        }, ID_RECENT_FOLDER_CLEAR);
+
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { NewTab(); }, ID_NEW_FILE);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
@@ -636,6 +913,8 @@ private:
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { RefreshCppAnalysis(); }, ID_CPP_PARSE_SYMBOLS);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
+             { ShowCallHierarchy(); }, ID_SHOW_CALL_HIERARCHY);
+        Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { CompileCurrentWithLLVM(true); }, ID_CPP_SYNTAX_CHECK);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { CompileCurrentWithLLVM(false); }, ID_CPP_COMPILE);
@@ -643,6 +922,16 @@ private:
              { ToggleSidebar(); }, ID_TOGGLE_SIDEBAR);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { OpenAIChat(); }, ID_OPEN_AI_CHAT);
+#if DODEV_ENABLE_JOURNAL_LOGS
+        Bind(wxEVT_MENU, [this](wxCommandEvent &)
+             { OpenSshJournalLogs(); }, ID_SSH_JOURNAL_LOGS);
+        Bind(wxEVT_MENU, [this](wxCommandEvent &)
+             { ImportJournalLogs(); }, ID_IMPORT_JOURNAL_LOGS);
+#endif
+#if DODEV_ENABLE_FILE_COMPARE
+        Bind(wxEVT_MENU, [this](wxCommandEvent &)
+             { OpenFileCompare(); }, ID_FILE_COMPARE);
+#endif
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
              { ShowGeneralSettings(); }, ID_GENERAL_SETTINGS);
         Bind(wxEVT_MENU, [this](wxCommandEvent &)
@@ -700,6 +989,7 @@ private:
             wxAcceleratorEntry(wxACCEL_SHIFT, WXK_F3, ID_FIND_PREV),
             wxAcceleratorEntry(wxACCEL_NORMAL, WXK_F12, ID_GOTO_DEFINITION),
             wxAcceleratorEntry(wxACCEL_CTRL, WXK_F7, ID_CPP_COMPILE),
+            wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_SHIFT, (int)'H', ID_SHOW_CALL_HIERARCHY),
             wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_ALT, (int)'I', ID_OPEN_AI_CHAT),
             wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_ALT, (int)'H', ID_FILE_HISTORY),
         };
@@ -736,16 +1026,29 @@ private:
                 m_notebook->SetPageText(idx, page->GetTitle());
             if (m_symbolsPanel && CurrentPage() == page)
                 m_symbolsPanel->SetCurrentDocument(page->filepath, page->GetText(), false);
+#if DODEV_ENABLE_PLUGINS
+            if (m_pluginManager)
+                m_pluginManager->DispatchEvent(DODEV_EVENT_EDITOR_CHANGED, page,
+                                               m_notebook->GetPageIndex(page), PluginUtf8(page->filepath));
+#endif
             e.Skip(); });
 
         if (!page->filepath.IsEmpty())
             ActivateWorkspaceForPath(page->filepath);
         if (m_symbolsPanel)
             m_symbolsPanel->SetCurrentDocument(page->filepath, page->GetText(), true);
+#if DODEV_ENABLE_PLUGINS
+        if (m_pluginManager)
+            m_pluginManager->DispatchEvent(DODEV_EVENT_EDITOR_OPENED, page,
+                                           m_notebook->GetPageIndex(page), PluginUtf8(page->filepath));
+#endif
     }
 
     void OpenFileInTab(const wxString &path)
     {
+        if (!path.IsEmpty() && wxFileExists(path))
+            RememberRecentFile(path);
+
         // Check if already open
         for (size_t i = 0; i < m_notebook->GetPageCount(); ++i)
         {
@@ -817,6 +1120,53 @@ private:
         if (m_statusBar)
             m_statusBar->SetStatusText("Commit " + commitHash.Left(8) + ": " + newPath, 0);
     }
+
+#if DODEV_ENABLE_JOURNAL_LOGS
+    void OpenSshJournalLogs()
+    {
+        if (!m_notebook)
+            return;
+        auto* page = new JournalLogPage(m_notebook, JournalLogPage::Mode::Ssh);
+        m_notebook->AddPage(page, page->GetTabTitle(), true);
+        if (m_statusBar)
+            m_statusBar->SetStatusText("SSH Journal Logs", 0);
+    }
+
+    void ImportJournalLogs()
+    {
+        if (!m_notebook)
+            return;
+        wxFileDialog dialog(this, "Import journal logs", wxString(), wxString(),
+                            "Log files (*.txt;*.log;*.json)|*.txt;*.log;*.json|Text files (*.txt;*.log)|*.txt;*.log|JSON files (*.json)|*.json",
+                            wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dialog.ShowModal() != wxID_OK)
+            return;
+
+        auto* page = new JournalLogPage(m_notebook, JournalLogPage::Mode::Imported);
+        wxString error;
+        if (!page->LoadImportFile(dialog.GetPath(), &error))
+        {
+            page->Destroy();
+            wxMessageBox(error, "Import Journal Logs", wxOK | wxICON_ERROR, this);
+            return;
+        }
+        m_notebook->AddPage(page, page->GetTabTitle(), true);
+        if (m_statusBar)
+            m_statusBar->SetStatusText(wxString("Imported logs: ") + dialog.GetPath(), 0);
+    }
+#endif
+
+#if DODEV_ENABLE_FILE_COMPARE
+    void OpenFileCompare()
+    {
+        if (!m_notebook)
+            return;
+        auto* page = new FileComparePage(m_notebook);
+        m_notebook->AddPage(page, page->GetTabTitle(), true);
+        if (m_statusBar)
+            m_statusBar->SetStatusText("File Compare", 0);
+    }
+#endif
 
     AIEditorContext BuildAIEditorContext() const
     {
@@ -918,6 +1268,8 @@ private:
         if (dialog.ShowModal() == wxID_OK && dialog.SettingsChanged())
         {
             ApplyEditorThemeToOpenPages();
+            if (m_symbolsPanel)
+                m_symbolsPanel->ReloadRuntimeSettings();
             if (m_aiChatPage)
                 m_aiChatPage->ReloadSettings();
             if (m_statusBar)
@@ -958,6 +1310,17 @@ private:
         m_symbolsPanel->RefreshAnalysis();
     }
 
+    void ShowCallHierarchy()
+    {
+        auto* page = CurrentPage();
+        if (!page || !m_symbolsPanel)
+            return;
+        if (m_sideNotebook && m_sideNotebook->GetPageCount() > 1)
+            m_sideNotebook->SetSelection(1);
+        m_symbolsPanel->SetCurrentDocument(page->filepath, page->GetText(), false);
+        m_symbolsPanel->ShowCallHierarchy();
+    }
+
     void CompileCurrentWithLLVM(bool syntaxOnly)
     {
         auto* page = CurrentPage();
@@ -974,9 +1337,6 @@ private:
         auto* page = CurrentPage();
         if (!page || !m_symbolsPanel)
             return;
-        if (!CppAnalysisEngine::IsCOrCppFile(page->filepath))
-            return;
-
         m_symbolsPanel->SetCurrentDocument(page->filepath, page->GetText(), false);
         const int caret = page->GetCurrentPos();
         const int lineIndex = page->LineFromPosition(caret);
@@ -1094,6 +1454,471 @@ private:
         return display;
     }
 
+#if DODEV_ENABLE_PLUGINS
+    static std::string PluginUtf8(const wxString& value)
+    {
+        const wxScopedCharBuffer buffer = value.ToUTF8();
+        return buffer.data() ? std::string(buffer.data()) : std::string();
+    }
+
+    wxString PluginsDirectory() const
+    {
+        wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
+        wxString directory = executable.GetPath();
+        directory += wxFileName::GetPathSeparator();
+        directory += "plugins";
+        return directory;
+    }
+
+    wxAuiNotebook* PluginNotebookForLocation(DoDevPanelLocation location) const
+    {
+        switch (location)
+        {
+        case DODEV_PANEL_LOCATION_SIDE:
+            return m_sideNotebook;
+        case DODEV_PANEL_LOCATION_BOTTOM:
+            return m_bottomNotebook;
+        case DODEV_PANEL_LOCATION_EDITOR:
+            return m_notebook;
+        default:
+            return nullptr;
+        }
+    }
+
+    void* PluginPanelById(DoDevPanelId id)
+    {
+        switch (id)
+        {
+        case DODEV_PANEL_MAIN_FRAME: return this;
+        case DODEV_PANEL_FILE_TREE: return m_tree;
+        case DODEV_PANEL_FOLDER_LIST: return m_folderList;
+        case DODEV_PANEL_SOURCE_CONTROL: return m_gitPanel;
+        case DODEV_PANEL_SYMBOLS: return m_symbolsPanel;
+        case DODEV_PANEL_SIDE_NOTEBOOK: return m_sideNotebook;
+        case DODEV_PANEL_EDITOR_NOTEBOOK: return m_notebook;
+        case DODEV_PANEL_BOTTOM_NOTEBOOK: return m_bottomNotebook;
+        case DODEV_PANEL_AI_CHAT: return m_aiChatPage;
+        case DODEV_PANEL_SIDEBAR_ROOT: return sidePanel;
+        case DODEV_PANEL_EDITOR_ROOT: return m_editorPane;
+        case DODEV_PANEL_BOTTOM_LOGS:
+        case DODEV_PANEL_BOTTOM_CONSOLE:
+        case DODEV_PANEL_BOTTOM_ERRORS:
+        case DODEV_PANEL_BOTTOM_OUTPUT:
+        case DODEV_PANEL_BOTTOM_INSPECTOR:
+        {
+            if (!m_bottomNotebook)
+                return nullptr;
+            const wxString wanted = id == DODEV_PANEL_BOTTOM_LOGS ? "Logs" :
+                                    id == DODEV_PANEL_BOTTOM_CONSOLE ? "Console" :
+                                    id == DODEV_PANEL_BOTTOM_ERRORS ? "Errors" :
+                                    id == DODEV_PANEL_BOTTOM_OUTPUT ? "Output" : "Inspector";
+            for (size_t i = 0; i < m_bottomNotebook->GetPageCount(); ++i)
+            {
+                if (m_bottomNotebook->GetPageText(i) == wanted)
+                    return m_bottomNotebook->GetPage(i);
+            }
+            return nullptr;
+        }
+        default: return nullptr;
+        }
+    }
+
+    bool FocusPluginPanel(DoDevPanelId id)
+    {
+        if (id == DODEV_PANEL_AI_CHAT)
+        {
+            OpenAIChat();
+            return m_aiChatPage != nullptr;
+        }
+        if (id == DODEV_PANEL_MAIN_FRAME)
+        {
+            Raise();
+            SetFocus();
+            return true;
+        }
+
+        wxWindow* panel = static_cast<wxWindow*>(PluginPanelById(id));
+        if (!panel)
+            return false;
+
+        const bool isSide = id == DODEV_PANEL_FILE_TREE || id == DODEV_PANEL_FOLDER_LIST ||
+                            id == DODEV_PANEL_SOURCE_CONTROL || id == DODEV_PANEL_SYMBOLS ||
+                            id == DODEV_PANEL_SIDE_NOTEBOOK || id == DODEV_PANEL_SIDEBAR_ROOT;
+        if (isSide && sidePanel && !sidePanel->IsShown())
+            ToggleSidebar();
+
+        if (m_sideNotebook)
+        {
+            const int index = m_sideNotebook->GetPageIndex(panel);
+            if (index != wxNOT_FOUND)
+                m_sideNotebook->SetSelection(index);
+        }
+        if (m_bottomNotebook)
+        {
+            const int index = m_bottomNotebook->GetPageIndex(panel);
+            if (index != wxNOT_FOUND)
+                m_bottomNotebook->SetSelection(index);
+        }
+        if (m_notebook)
+        {
+            const int index = m_notebook->GetPageIndex(panel);
+            if (index != wxNOT_FOUND)
+                m_notebook->SetSelection(index);
+        }
+        panel->SetFocus();
+        return true;
+    }
+
+    bool RemovePluginPanel(void* handle)
+    {
+        auto* page = static_cast<wxWindow*>(handle);
+        if (!page)
+            return false;
+
+        wxAuiNotebook* notebooks[] = {m_sideNotebook, m_bottomNotebook, m_notebook};
+        for (wxAuiNotebook* notebook : notebooks)
+        {
+            if (!notebook)
+                continue;
+            const int index = notebook->GetPageIndex(page);
+            if (index != wxNOT_FOUND)
+            {
+                m_pluginTextPanels.erase(page);
+                if (page == m_aiChatPage)
+                    m_aiChatPage = nullptr;
+                return notebook->DeletePage(index);
+            }
+        }
+        return false;
+    }
+
+    void* CreatePluginTextPanel(DoDevPanelLocation location,
+                                const std::string& title,
+                                const std::string& text,
+                                bool select)
+    {
+        wxAuiNotebook* notebook = PluginNotebookForLocation(location);
+        if (!notebook)
+            return nullptr;
+
+        auto* page = new wxPanel(notebook, wxID_ANY);
+        page->SetBackgroundColour(Colors::BG_PANEL);
+        auto* sizer = new wxBoxSizer(wxVERTICAL);
+        auto* control = new wxTextCtrl(page, wxID_ANY,
+                                       wxString::FromUTF8(text.c_str()),
+                                       wxDefaultPosition, wxDefaultSize,
+                                       wxTE_MULTILINE | wxTE_RICH2);
+        sizer->Add(control, 1, wxEXPAND);
+        page->SetSizer(sizer);
+        notebook->AddPage(page, wxString::FromUTF8(title.c_str()), select);
+        m_pluginTextPanels[page] = control;
+        return page;
+    }
+
+    bool ClosePluginRequestedTab(int index)
+    {
+        if (!m_notebook || index < 0 || index >= static_cast<int>(m_notebook->GetPageCount()))
+            return false;
+        wxWindow* page = m_notebook->GetPage(index);
+        if (auto* editor = dynamic_cast<EditorPage*>(page))
+        {
+            if (!ConfirmClose(editor))
+                return false;
+            if (m_pluginManager)
+                m_pluginManager->DispatchEvent(DODEV_EVENT_EDITOR_CLOSED, editor, index, PluginUtf8(editor->filepath));
+        }
+        if (page == m_aiChatPage)
+            m_aiChatPage = nullptr;
+        if (page == m_lastAIContextPage)
+            m_lastAIContextPage = nullptr;
+        return m_notebook->DeletePage(index);
+    }
+
+    void InitializePlugins()
+    {
+        PluginManager::HostBindings host;
+        host.log = [](DoDevLogLevel level, const std::string& message)
+        {
+            const wxString text = wxString::FromUTF8(message.c_str());
+            if (level == DODEV_LOG_ERROR)
+                wxLogError("[plugin] %s", text);
+            else if (level == DODEV_LOG_WARNING)
+                wxLogWarning("[plugin] %s", text);
+            else
+                wxLogMessage("[plugin] %s", text);
+        };
+        host.getPanel = [this](DoDevPanelId id) -> void*
+        {
+            return PluginPanelById(id);
+        };
+        host.focusPanel = [this](DoDevPanelId id)
+        {
+            return FocusPluginPanel(id);
+        };
+        host.tabCount = [this]() -> int
+        {
+            return m_notebook ? static_cast<int>(m_notebook->GetPageCount()) : 0;
+        };
+        host.activeTabIndex = [this]() -> int
+        {
+            return m_notebook ? m_notebook->GetSelection() : wxNOT_FOUND;
+        };
+        host.tabAt = [this](int index) -> void*
+        {
+            if (!m_notebook || index < 0 || index >= static_cast<int>(m_notebook->GetPageCount()))
+                return nullptr;
+            return m_notebook->GetPage(index);
+        };
+        host.activeTab = [this]() -> void*
+        {
+            const int index = m_notebook ? m_notebook->GetSelection() : wxNOT_FOUND;
+            return index == wxNOT_FOUND ? nullptr : m_notebook->GetPage(index);
+        };
+        host.selectTab = [this](int index)
+        {
+            if (!m_notebook || index < 0 || index >= static_cast<int>(m_notebook->GetPageCount()))
+                return false;
+            m_notebook->SetSelection(index);
+            return true;
+        };
+        host.closeTab = [this](int index) { return ClosePluginRequestedTab(index); };
+        host.tabTitle = [this](int index) -> std::string
+        {
+            if (!m_notebook || index < 0 || index >= static_cast<int>(m_notebook->GetPageCount()))
+                return {};
+            return PluginUtf8(m_notebook->GetPageText(index));
+        };
+        host.tabPath = [this](int index) -> std::string
+        {
+            if (!m_notebook || index < 0 || index >= static_cast<int>(m_notebook->GetPageCount()))
+                return {};
+            if (auto* editor = dynamic_cast<EditorPage*>(m_notebook->GetPage(index)))
+                return PluginUtf8(editor->filepath);
+            return {};
+        };
+        host.activeEditor = [this]() -> void* { return CurrentPage(); };
+        host.isEditor = [](void* handle)
+        {
+            return dynamic_cast<EditorPage*>(static_cast<wxWindow*>(handle)) != nullptr;
+        };
+        host.editorGetText = [](void* handle) -> std::string
+        {
+            auto* editor = dynamic_cast<EditorPage*>(static_cast<wxWindow*>(handle));
+            return editor ? PluginUtf8(editor->GetText()) : std::string();
+        };
+        host.editorSetText = [](void* handle, const std::string& text)
+        {
+            auto* editor = dynamic_cast<EditorPage*>(static_cast<wxWindow*>(handle));
+            if (!editor)
+                return false;
+            editor->BeginUndoAction();
+            editor->SetTargetStart(0);
+            editor->SetTargetEnd(editor->GetTextLength());
+            editor->ReplaceTarget(wxString::FromUTF8(text.c_str()));
+            editor->EndUndoAction();
+            return true;
+        };
+        host.editorInsertText = [](void* handle, size_t position, const std::string& text)
+        {
+            auto* editor = dynamic_cast<EditorPage*>(static_cast<wxWindow*>(handle));
+            if (!editor)
+                return false;
+            const int length = editor->GetTextLength();
+            const int pos = static_cast<int>(std::min(position, static_cast<size_t>(std::max(length, 0))));
+            editor->InsertText(pos, wxString::FromUTF8(text.c_str()));
+            return true;
+        };
+        host.editorGetPath = [](void* handle) -> std::string
+        {
+            auto* editor = dynamic_cast<EditorPage*>(static_cast<wxWindow*>(handle));
+            return editor ? PluginUtf8(editor->filepath) : std::string();
+        };
+        host.editorGetCaret = [](void* handle) -> size_t
+        {
+            auto* editor = dynamic_cast<EditorPage*>(static_cast<wxWindow*>(handle));
+            return editor ? static_cast<size_t>(std::max(editor->GetCurrentPos(), 0)) : 0;
+        };
+        host.editorSetCaret = [](void* handle, size_t position)
+        {
+            auto* editor = dynamic_cast<EditorPage*>(static_cast<wxWindow*>(handle));
+            if (!editor)
+                return false;
+            const int pos = static_cast<int>(std::min(position, static_cast<size_t>(std::max(editor->GetTextLength(), 0))));
+            editor->SetCurrentPos(pos);
+            editor->SetSelection(pos, pos);
+            editor->EnsureCaretVisible();
+            return true;
+        };
+        host.editorGetSelection = [](void* handle, size_t& start, size_t& end)
+        {
+            auto* editor = dynamic_cast<EditorPage*>(static_cast<wxWindow*>(handle));
+            if (!editor)
+                return false;
+            start = static_cast<size_t>(std::max(editor->GetSelectionStart(), 0));
+            end = static_cast<size_t>(std::max(editor->GetSelectionEnd(), 0));
+            return true;
+        };
+        host.editorReplaceSelection = [](void* handle, const std::string& text)
+        {
+            auto* editor = dynamic_cast<EditorPage*>(static_cast<wxWindow*>(handle));
+            if (!editor)
+                return false;
+            editor->ReplaceSelection(wxString::FromUTF8(text.c_str()));
+            return true;
+        };
+        host.openFile = [this](const std::string& path)
+        {
+            const wxString file = wxString::FromUTF8(path.c_str());
+            if (!wxFileExists(file))
+                return false;
+            OpenFileInTab(file);
+            return true;
+        };
+        host.newEditorTab = [this](const std::string& title, const std::string& text) -> void*
+        {
+            NewTab();
+            auto* editor = CurrentPage();
+            if (!editor)
+                return nullptr;
+            editor->SetDisplayNameOverride(wxString::FromUTF8(title.c_str()));
+            editor->SetText(wxString::FromUTF8(text.c_str()));
+            editor->SetSavePoint();
+            editor->modified = false;
+            const int index = m_notebook->GetPageIndex(editor);
+            if (index != wxNOT_FOUND)
+                m_notebook->SetPageText(index, editor->GetTitle());
+            return editor;
+        };
+        host.setStatus = [this](const std::string& text)
+        {
+            if (m_statusBar)
+                m_statusBar->SetStatusText(wxString::FromUTF8(text.c_str()), 0);
+        };
+        host.addMenuItem = [this](const std::string& menu,
+                                  const std::string& label,
+                                  const std::string& shortcut,
+                                  std::function<void()> callback) -> int
+        {
+            if (!m_dynamicMenuBar)
+                return 0;
+            const int id = m_nextPluginMenuId++;
+            m_dynamicMenuBar->AddRuntimeItem(wxString::FromUTF8(menu.c_str()),
+                                             wxString::FromUTF8(label.c_str()),
+                                             id,
+                                             std::move(callback),
+                                             wxString::FromUTF8(shortcut.c_str()));
+            return id;
+        };
+        host.removeMenuItem = [this](int token)
+        {
+            return m_dynamicMenuBar && m_dynamicMenuBar->RemoveRuntimeItem(token);
+        };
+        host.createTextPanel = [this](DoDevPanelLocation location,
+                                      const std::string& title,
+                                      const std::string& text,
+                                      bool select) -> void*
+        {
+            return CreatePluginTextPanel(location, title, text, select);
+        };
+        host.textPanelSetText = [this](void* handle, const std::string& text)
+        {
+            auto* page = static_cast<wxWindow*>(handle);
+            const auto it = m_pluginTextPanels.find(page);
+            if (it == m_pluginTextPanels.end() || !it->second)
+                return false;
+            it->second->SetValue(wxString::FromUTF8(text.c_str()));
+            return true;
+        };
+        host.removePanel = [this](void* handle) { return RemovePluginPanel(handle); };
+        host.addCustomPanel = [this](DoDevPanelLocation location,
+                                     const std::string& title,
+                                     DoDevWindowFactory factory,
+                                     void* userData,
+                                     bool select) -> void*
+        {
+            wxAuiNotebook* notebook = PluginNotebookForLocation(location);
+            if (!notebook || !factory)
+                return nullptr;
+            void* raw = factory(notebook, userData);
+            auto* page = static_cast<wxWindow*>(raw);
+            if (!page)
+                return nullptr;
+            notebook->AddPage(page, wxString::FromUTF8(title.c_str()), select);
+            return page;
+        };
+
+        m_pluginManager = std::make_unique<PluginManager>(std::move(host));
+        const wxString directory = PluginsDirectory();
+        wxFileName::Mkdir(directory, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        std::vector<std::string> errors;
+        const size_t loaded = m_pluginManager->LoadDirectory(PluginUtf8(directory), &errors);
+        wxLogMessage("Plugin system: %zu plugin(s) loaded from %s", loaded, directory);
+        for (const std::string& error : errors)
+            wxLogWarning("Plugin load: %s", wxString::FromUTF8(error.c_str()));
+    }
+
+    void ReloadPlugins()
+    {
+        if (!m_pluginManager)
+            return;
+        std::vector<std::string> errors;
+        m_pluginManager->ReloadDirectory(PluginUtf8(PluginsDirectory()), &errors);
+        wxString message = wxString::Format("Loaded %zu plugin(s).", m_pluginManager->GetPlugins().size());
+        if (!errors.empty())
+        {
+            message += "\n\nErrors:\n";
+            for (const std::string& error : errors)
+            {
+                message += wxString::FromUTF8(error.c_str());
+                message += "\n";
+            }
+        }
+        wxMessageBox(message, "Plugins", wxOK | (errors.empty() ? wxICON_INFORMATION : wxICON_WARNING), this);
+    }
+
+    void ShowLoadedPlugins()
+    {
+        if (!m_pluginManager)
+            return;
+        const auto plugins = m_pluginManager->GetPlugins();
+        wxString message;
+        if (plugins.empty())
+            message = "No plugins are currently loaded.";
+        else
+        {
+            for (const auto& plugin : plugins)
+            {
+                message += wxString::FromUTF8(plugin.name.c_str());
+                if (!plugin.version.empty())
+                {
+                    message += "  v";
+                    message += wxString::FromUTF8(plugin.version.c_str());
+                }
+                message += "\n";
+                message += wxString::FromUTF8(plugin.id.c_str());
+                message += "\n";
+                if (!plugin.description.empty())
+                {
+                    message += wxString::FromUTF8(plugin.description.c_str());
+                    message += "\n";
+                }
+                message += wxString::FromUTF8(plugin.path.c_str());
+                message += "\n\n";
+            }
+        }
+        wxMessageBox(message, "Loaded Plugins", wxOK | wxICON_INFORMATION, this);
+    }
+
+    void OpenPluginsFolder()
+    {
+        const wxString directory = PluginsDirectory();
+        wxFileName::Mkdir(directory, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        if (!wxLaunchDefaultApplication(directory))
+            wxMessageBox(wxString("Plugins folder:\n") + directory,
+                         "Plugins", wxOK | wxICON_INFORMATION, this);
+    }
+#endif
+
     void ApplyWorkspaceToUI()
     {
         const std::vector<wxString> folders = m_workspace.GetFolderPaths();
@@ -1152,6 +1977,11 @@ private:
             else
                 m_statusBar->SetStatusText(wxString::Format("Workspace: %zu folders", folders.size()), 0);
         }
+#if DODEV_ENABLE_PLUGINS
+        if (m_pluginManager)
+            m_pluginManager->DispatchEvent(DODEV_EVENT_WORKSPACE_CHANGED, nullptr, -1,
+                                           PluginUtf8(m_activeWorkspaceRoot));
+#endif
     }
 
     void AddFolderToWorkspace()
@@ -1166,6 +1996,7 @@ private:
             wxMessageBox("Could not add the selected folder.", "Workspace", wxOK | wxICON_ERROR, this);
             return;
         }
+        RememberRecentFolder(dlg.GetPath());
 
         const wxString workspaceFile = m_workspace.GetWorkspaceFile();
         if (!workspaceFile.IsEmpty())
@@ -1239,6 +2070,8 @@ private:
             wxMessageBox(error, "Open Workspace", wxOK | wxICON_ERROR, this);
             return;
         }
+        for (const wxString& folder : m_workspace.GetFolderPaths())
+            RememberRecentFolder(folder);
         ApplyWorkspaceToUI();
         PersistWorkspaceSession();
     }
@@ -1307,6 +2140,7 @@ private:
                 wxMessageBox("Could not open the specified folder.", "Error", wxOK | wxICON_ERROR, this);
                 return;
             }
+            RememberRecentFolder(path);
             ApplyWorkspaceToUI();
             PersistWorkspaceSession();
         }
@@ -1444,16 +2278,14 @@ private:
 
     void AfterSuccessfulSave(EditorPage* page)
     {
+        if (page && !page->filepath.IsEmpty())
+            RememberRecentFile(page->filepath);
         UpdateTabTitle(page);
         ActivateWorkspaceForPath(page->filepath);
         if (m_gitPanel)
             m_gitPanel->RefreshRepository();
         if (m_symbolsPanel)
-        {
-            m_symbolsPanel->SetCurrentDocument(page->filepath, page->GetText(), false);
-            if (m_symbolsPanel->IsLLVMEnabled())
-                m_symbolsPanel->RefreshAnalysis();
-        }
+            m_symbolsPanel->SetCurrentDocument(page->filepath, page->GetText(), true);
     }
 
     bool SavePageWithHistory(EditorPage* page, const wxString& targetPath = wxEmptyString)
@@ -2156,10 +2988,22 @@ private:
             "  • Ctrl+G Go to line or line:column\n"
             "  • Git stage/unstage, commit file lists and side-by-side diff editors\n"
             "  • JSON syntax highlighting plus Dark/Light/VS Code-like editor themes\n"
-            "  • Optional LLVM/libclang C/C++ symbols, call tree and F12 definition\n"
+#if DODEV_ENABLE_MANUAL_SYMBOLS
+            "  • Dependency-free C/C++/Kotlin symbols plus callers/callees call hierarchy\n"
+#endif
+            "  • Optional LLVM/libclang diagnostics and semantic C/C++ definition lookup\n"
             "  • Clang syntax check / object compilation with project defines/includes\n"
             "  • Runtime-toggleable Docker inspector (containers, images, logs, stats, inspect)\n"
-            "  • AI Chat tab with OpenAI, Claude, OpenAI-compatible, GitHub Copilot CLI and Ollama providers\n"
+            "  • AI Chat tab with OpenAI, Claude, OpenAI-compatible, GitHub Copilot CLI, Ollama, llama.cpp and Gemini providers\n"
+#if DODEV_ENABLE_JOURNAL_LOGS
+            "  • SSH journalctl inspector/importer with regex filters and TXT/JSON export\n"
+#endif
+#if DODEV_ENABLE_FILE_COMPARE
+            "  • Beyond Compare-style side-by-side text and binary file comparison\n"
+#endif
+#if DODEV_ENABLE_PLUGINS
+            "  • Runtime .so/.dll plugin SDK for menus, panels, tabs and editor access\n"
+#endif
             "  • General AI settings with environment, session-memory and OS-keyring secrets\n"
             "  • Auto-indent & auto-close brackets\n"
             "  • Word-wrap, whitespace display\n"
@@ -2198,11 +3042,34 @@ private:
                 m_statusBar->SetStatusText("Commit " + commitDiff->GetCommitHash().Left(8) +
                                            ": " + commitDiff->GetGitPath(), 0);
             }
+#if DODEV_ENABLE_JOURNAL_LOGS
+            else if (auto* journal = dynamic_cast<JournalLogPage*>(selected))
+            {
+                m_statusBar->SetStatusText(journal->GetTabTitle(), 0);
+            }
+#endif
+#if DODEV_ENABLE_FILE_COMPARE
+            else if (auto* compare = dynamic_cast<FileComparePage*>(selected))
+            {
+                m_statusBar->SetStatusText(compare->GetTabTitle(), 0);
+            }
+#endif
             else if (selected == m_aiChatPage)
             {
                 m_statusBar->SetStatusText("AI Chat", 0);
             }
         }
+#if DODEV_ENABLE_PLUGINS
+        if (m_pluginManager && evt.GetSelection() != wxNOT_FOUND && m_notebook)
+        {
+            wxWindow* selected = m_notebook->GetPage(evt.GetSelection());
+            std::string path;
+            if (auto* editor = dynamic_cast<EditorPage*>(selected))
+                path = PluginUtf8(editor->filepath);
+            m_pluginManager->DispatchEvent(DODEV_EVENT_ACTIVE_TAB_CHANGED, selected,
+                                           evt.GetSelection(), path);
+        }
+#endif
         evt.Skip();
     }
 
@@ -2215,6 +3082,11 @@ private:
             evt.Veto();
             return;
         }
+#if DODEV_ENABLE_PLUGINS
+        if (m_pluginManager && page)
+            m_pluginManager->DispatchEvent(DODEV_EVENT_EDITOR_CLOSED, page,
+                                           evt.GetSelection(), PluginUtf8(page->filepath));
+#endif
         if (closing == m_lastAIContextPage)
             m_lastAIContextPage = nullptr;
         if (closing == m_aiChatPage)
@@ -2255,6 +3127,13 @@ private:
                 }
             }
         }
+#if DODEV_ENABLE_PLUGINS
+        if (m_pluginManager)
+        {
+            m_pluginManager->UnloadAll();
+            m_pluginManager.reset();
+        }
+#endif
         evt.Skip();
     }
 

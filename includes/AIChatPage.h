@@ -49,7 +49,7 @@ private:
     void SendPrompt();
     void AddMessage(const wxString& role, const wxString& text);
     void AddSystemNotice(const wxString& text, bool error = false);
-    void BeginStreamingMessage();
+    void BeginStreamingMessage(const wxString& providerName);
     void AppendStreamingChunk(const wxString& text);
     void EndStreamingMessage();
     wxString BuildSystemPrompt() const;

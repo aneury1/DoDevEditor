@@ -20,7 +20,7 @@ wxString FromJsonString(const Json::Value& value, const wxString& fallback = wxS
 int ClampProvider(int value)
 {
     if (value < static_cast<int>(AIProviderKind::OpenAI) ||
-        value > static_cast<int>(AIProviderKind::Ollama))
+        value > static_cast<int>(AIProviderKind::Gemini))
         return static_cast<int>(AIProviderKind::OpenAI);
     return value;
 }
@@ -62,6 +62,13 @@ AIProviderSettings AISettings::Load()
     if (settings.ollamaContext < 512) settings.ollamaContext = 512;
     if (settings.ollamaContext > 1048576) settings.ollamaContext = 1048576;
     settings.ollamaKeepAlive = FromJsonString(ai["ollama_keep_alive"], "5m");
+    settings.llamaCppStream = ai.get("llamacpp_stream", true).asBool();
+    settings.llamaCppTemperature = ai.get("llamacpp_temperature", 0.2).asDouble();
+    if (settings.llamaCppTemperature < 0.0) settings.llamaCppTemperature = 0.0;
+    if (settings.llamaCppTemperature > 2.0) settings.llamaCppTemperature = 2.0;
+    settings.geminiTemperature = ai.get("gemini_temperature", 0.2).asDouble();
+    if (settings.geminiTemperature < 0.0) settings.geminiTemperature = 0.0;
+    if (settings.geminiTemperature > 2.0) settings.geminiTemperature = 2.0;
     if (settings.maxOutputTokens < 64)
         settings.maxOutputTokens = 64;
     if (settings.maxOutputTokens > 65536)
@@ -90,6 +97,9 @@ void AISettings::Save(const AIProviderSettings& settings)
     ai["ollama_temperature"] = settings.ollamaTemperature;
     ai["ollama_context"] = settings.ollamaContext;
     ai["ollama_keep_alive"] = ToStd(settings.ollamaKeepAlive);
+    ai["llamacpp_stream"] = settings.llamaCppStream;
+    ai["llamacpp_temperature"] = settings.llamaCppTemperature;
+    ai["gemini_temperature"] = settings.geminiTemperature;
     ai["include_current_file"] = settings.includeCurrentFile;
     ai["include_selection"] = settings.includeSelection;
     ai["include_git_diff"] = settings.includeGitDiff;
@@ -107,6 +117,8 @@ wxString AISettings::ProviderName(AIProviderKind provider)
     case AIProviderKind::OpenAICompatible: return "OpenAI-compatible";
     case AIProviderKind::Ollama: return "Ollama (local)";
     case AIProviderKind::GitHubCopilotCLI: return "GitHub Copilot CLI";
+    case AIProviderKind::LlamaCpp: return "llama.cpp (local)";
+    case AIProviderKind::Gemini: return "Google Gemini";
     }
     return "OpenAI";
 }
@@ -120,6 +132,8 @@ wxString AISettings::DefaultBaseUrl(AIProviderKind provider)
     case AIProviderKind::OpenAICompatible: return "http://localhost:11434/v1/chat/completions";
     case AIProviderKind::Ollama: return "http://localhost:11434";
     case AIProviderKind::GitHubCopilotCLI: return wxString();
+    case AIProviderKind::LlamaCpp: return "http://127.0.0.1:8080";
+    case AIProviderKind::Gemini: return "https://generativelanguage.googleapis.com/v1beta";
     }
     return wxString();
 }
@@ -133,6 +147,8 @@ wxString AISettings::DefaultEnvironmentVariable(AIProviderKind provider)
     case AIProviderKind::OpenAICompatible: return "DODEV_AI_API_KEY";
     case AIProviderKind::Ollama: return wxString();
     case AIProviderKind::GitHubCopilotCLI: return "COPILOT_GITHUB_TOKEN";
+    case AIProviderKind::LlamaCpp: return "LLAMA_API_KEY";
+    case AIProviderKind::Gemini: return "GEMINI_API_KEY";
     }
     return wxString();
 }
@@ -146,6 +162,8 @@ wxString AISettings::DefaultKeyringId(AIProviderKind provider)
     case AIProviderKind::OpenAICompatible: return "openai-compatible";
     case AIProviderKind::Ollama: return "ollama";
     case AIProviderKind::GitHubCopilotCLI: return "github-copilot";
+    case AIProviderKind::LlamaCpp: return "llamacpp";
+    case AIProviderKind::Gemini: return "gemini";
     }
     return "ai";
 }

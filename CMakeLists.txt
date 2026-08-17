@@ -36,6 +36,24 @@ find_package(Threads REQUIRED)
 option(DODEV_ENABLE_LLVM "Enable optional libclang C/C++ analysis" ON)
 option(DODEV_REQUIRE_LLVM "Fail configuration when libclang is requested but missing" OFF)
 
+# Optional SSH/systemd journal inspector. This module has no compile-time SSH
+# dependency: at runtime it uses an installed OpenSSH client to reach a Linux
+# host and runs journalctl there. Import/export/filtering remain cross-platform.
+option(DODEV_ENABLE_JOURNAL_LOGS "Enable SSH journal log inspector and log importer" ON)
+
+# Optional standalone file comparison editor. The implementation is entirely
+# wxWidgets/C++ and supports text and binary files on Linux and Windows.
+option(DODEV_ENABLE_FILE_COMPARE "Enable side-by-side text/binary file comparison editor" ON)
+
+# Optional dependency-free source symbol/call parser for C, C++ and Kotlin.
+# This deliberately uses no LLVM/tree-sitter/third-party parsing library.
+option(DODEV_ENABLE_MANUAL_SYMBOLS "Enable built-in C/C++/Kotlin symbol and call parser" ON)
+
+# Optional runtime plugin system. Plugins use a small C ABI and may be built
+# independently as .so/.dll files.
+option(DODEV_ENABLE_PLUGINS "Enable runtime dynamic plugin system" ON)
+option(DODEV_BUILD_EXAMPLE_PLUGIN "Build and copy the SDK example plugin" OFF)
+
 set(DODEV_HAS_LIBCLANG OFF)
 set(DODEV_LIBCLANG_TARGET "")
 
@@ -223,6 +241,14 @@ file(GLOB_RECURSE SI_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/*.c")
 
+# Remove optional implementation units entirely when their feature is disabled.
+if(NOT DODEV_ENABLE_FILE_COMPARE)
+    list(FILTER SI_SOURCES EXCLUDE REGEX ".*/FileComparePage\\.cpp$")
+endif()
+if(NOT DODEV_ENABLE_MANUAL_SYMBOLS)
+    list(FILTER SI_SOURCES EXCLUDE REGEX ".*/symbols/ManualSymbolParser\\.cpp$")
+endif()
+
 if(NOT SI_SOURCES)
     message(FATAL_ERROR "No source files found in ${CMAKE_SOURCE_DIR}/src/")
 endif()
@@ -239,6 +265,39 @@ endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/includes")
+
+if(DODEV_ENABLE_JOURNAL_LOGS)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_JOURNAL_LOGS=1)
+    message(STATUS "DoDevEditor Journal Logs: enabled")
+else()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_JOURNAL_LOGS=0)
+    message(STATUS "DoDevEditor Journal Logs: disabled")
+endif()
+
+if(DODEV_ENABLE_FILE_COMPARE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_FILE_COMPARE=1)
+    message(STATUS "DoDevEditor File Compare: enabled")
+else()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_FILE_COMPARE=0)
+    message(STATUS "DoDevEditor File Compare: disabled")
+endif()
+
+if(DODEV_ENABLE_MANUAL_SYMBOLS)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_MANUAL_SYMBOLS=1)
+    message(STATUS "DoDevEditor Manual Symbols: enabled (C/C++/Kotlin, no external parser library)")
+else()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_MANUAL_SYMBOLS=0)
+    message(STATUS "DoDevEditor Manual Symbols: disabled")
+endif()
+
+if(DODEV_ENABLE_PLUGINS)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_PLUGINS=1)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${CMAKE_DL_LIBS})
+    message(STATUS "DoDevEditor Plugins: enabled")
+else()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_ENABLE_PLUGINS=0)
+    message(STATUS "DoDevEditor Plugins: disabled")
+endif()
 
 if(DODEV_HAS_LIBCLANG)
     target_compile_definitions(${PROJECT_NAME} PRIVATE DODEV_HAS_LIBCLANG=1)
@@ -270,6 +329,13 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/config"
     COMMENT "Copying syntax/theme JSON configuration"
     VERBATIM)
+
+if(DODEV_ENABLE_PLUGINS)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins"
+        COMMENT "Creating runtime plugins directory"
+        VERBATIM)
+endif()
 
 target_compile_options(${PROJECT_NAME} PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:
@@ -311,6 +377,17 @@ if(BUILD_WINDOWS)
         shell32 shlwapi gdi32 comdlg32 wsock32)
 else()
     target_link_options(${PROJECT_NAME} PRIVATE -Wl,--gc-sections)
+endif()
+
+if(DODEV_ENABLE_PLUGINS AND DODEV_BUILD_EXAMPLE_PLUGIN)
+    add_subdirectory(plugins/example_plugin)
+    add_dependencies(${PROJECT_NAME} dodev_example_plugin)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:dodev_example_plugin>"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins/$<TARGET_FILE_NAME:dodev_example_plugin>"
+        COMMENT "Copying example DoDevEditor plugin"
+        VERBATIM)
 endif()
 
 if(CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$" AND CMAKE_STRIP)

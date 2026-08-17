@@ -26,6 +26,15 @@ private:
     wxTextCtrl* m_copilotExecutable = nullptr;
     wxSpinCtrl* m_maxTokens = nullptr;
 
+    wxChoice* m_providerModels = nullptr;
+    wxButton* m_providerRefreshModels = nullptr;
+    wxButton* m_providerTest = nullptr;
+    wxStaticText* m_providerStatus = nullptr;
+
+    wxCheckBox* m_llamaCppStream = nullptr;
+    wxSpinCtrlDouble* m_llamaCppTemperature = nullptr;
+    wxSpinCtrlDouble* m_geminiTemperature = nullptr;
+
     wxChoice* m_ollamaModels = nullptr;
     wxButton* m_ollamaRefreshModels = nullptr;
     wxButton* m_ollamaTest = nullptr;
@@ -39,12 +48,29 @@ private:
     wxCheckBox* m_includeSelection = nullptr;
     wxCheckBox* m_includeGitDiff = nullptr;
     wxCheckBox* m_includeLLVM = nullptr;
+
+    // Dependency-free manual symbol/call parser runtime controls.
+    wxCheckBox* m_manualEnabled = nullptr;
+    wxCheckBox* m_manualC = nullptr;
+    wxCheckBox* m_manualCpp = nullptr;
+    wxCheckBox* m_manualKotlin = nullptr;
+    wxCheckBox* m_manualSymbols = nullptr;
+    wxCheckBox* m_manualCalls = nullptr;
+    wxCheckBox* m_manualTypes = nullptr;
+    wxCheckBox* m_manualFunctions = nullptr;
+    wxCheckBox* m_manualVariables = nullptr;
+    wxCheckBox* m_manualMacros = nullptr;
+    wxCheckBox* m_manualAutoParse = nullptr;
     bool m_saved = false;
 
     void LoadValues();
     void UpdateProviderDefaults(bool forceDefaults);
     void UpdateSecretControls();
     void UpdateOllamaControls();
+    void UpdateProviderDiscoveryControls();
+    void RefreshProviderModels(bool showMessage = true);
+    void TestProviderConnection();
+    wxString CurrentTestingSecret() const;
     void RefreshOllamaModels(bool showMessage = true);
     void TestOllamaConnection();
     AIProviderSettings SettingsFromControls() const;

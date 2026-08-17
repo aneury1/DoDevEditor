@@ -15,6 +15,10 @@ fi
 GENERATOR=""
 VERBOSE=0
 LLVM_MODE="auto"
+JOURNAL_LOGS="on"
+FILE_COMPARE="on"
+MANUAL_SYMBOLS="on"
+PLUGINS="on"
 
 usage() {
     cat <<USAGE
@@ -28,6 +32,14 @@ Options:
   --verbose           Show every compiler/linker command
   --llvm              Require optional libclang symbols/call-tree support
   --no-llvm           Build without linking libclang
+  --journal-logs       Enable SSH journal log inspector (default)
+  --no-journal-logs    Disable journal log inspector at compile time
+  --file-compare       Enable side-by-side file comparison (default)
+  --no-file-compare    Disable file comparison at compile time
+  --manual-symbols     Enable built-in C/C++/Kotlin symbol/call parser (default)
+  --no-manual-symbols  Disable built-in symbol/call parser at compile time
+  --plugins            Enable runtime plugin system (default)
+  --no-plugins         Disable runtime plugin system
   -h, --help          Show this help
 
 Examples:
@@ -70,6 +82,14 @@ while (($#)); do
         --verbose) VERBOSE=1 ;;
         --llvm) LLVM_MODE="required" ;;
         --no-llvm) LLVM_MODE="off" ;;
+        --journal-logs) JOURNAL_LOGS="on" ;;
+        --no-journal-logs) JOURNAL_LOGS="off" ;;
+        --file-compare) FILE_COMPARE="on" ;;
+        --no-file-compare) FILE_COMPARE="off" ;;
+        --manual-symbols) MANUAL_SYMBOLS="on" ;;
+        --no-manual-symbols) MANUAL_SYMBOLS="off" ;;
+        --plugins) PLUGINS="on" ;;
+        --no-plugins) PLUGINS="off" ;;
         -h|--help) usage; exit 0 ;;
         *) fail "Unknown argument: $1. Run with --help." ;;
     esac
@@ -86,6 +106,12 @@ if ! command -v curl >/dev/null 2>&1; then
 fi
 if ! command -v secret-tool >/dev/null 2>&1; then
     printf '\033[33m[WARN]\033[0m secret-tool is not installed; AI OS-keyring secret storage will be unavailable (environment/session secret still work).\n' >&2
+fi
+if [[ "$JOURNAL_LOGS" == "on" ]] && ! command -v ssh >/dev/null 2>&1; then
+    printf '\033[33m[WARN]\033[0m ssh is not installed; SSH Journal Logs will still compile but live collection will be unavailable at runtime.\n' >&2
+fi
+if ! command -v clang-format >/dev/null 2>&1; then
+    printf '\033[33m[WARN]\033[0m clang-format is not installed; C/C++ Format Document/Selection will be unavailable at runtime.\n' >&2
 fi
 
 if ! pkg-config --exists zlib; then
@@ -144,6 +170,30 @@ CMAKE_ARGS=(
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 )
 
+if [[ "$JOURNAL_LOGS" == "on" ]]; then
+    CMAKE_ARGS+=( -DDODEV_ENABLE_JOURNAL_LOGS=ON )
+else
+    CMAKE_ARGS+=( -DDODEV_ENABLE_JOURNAL_LOGS=OFF )
+fi
+
+if [[ "$FILE_COMPARE" == "on" ]]; then
+    CMAKE_ARGS+=( -DDODEV_ENABLE_FILE_COMPARE=ON )
+else
+    CMAKE_ARGS+=( -DDODEV_ENABLE_FILE_COMPARE=OFF )
+fi
+
+if [[ "$MANUAL_SYMBOLS" == "on" ]]; then
+    CMAKE_ARGS+=( -DDODEV_ENABLE_MANUAL_SYMBOLS=ON )
+else
+    CMAKE_ARGS+=( -DDODEV_ENABLE_MANUAL_SYMBOLS=OFF )
+fi
+
+if [[ "$PLUGINS" == "on" ]]; then
+    CMAKE_ARGS+=( -DDODEV_ENABLE_PLUGINS=ON )
+else
+    CMAKE_ARGS+=( -DDODEV_ENABLE_PLUGINS=OFF )
+fi
+
 case "$LLVM_MODE" in
     required)
         CMAKE_ARGS+=( -DDODEV_ENABLE_LLVM=ON -DDODEV_REQUIRE_LLVM=ON )
@@ -170,6 +220,10 @@ info "Type:       $BUILD_TYPE"
 info "Generator:  $GENERATOR"
 info "Jobs:       $JOBS"
 info "LLVM:       $LLVM_MODE"
+info "Journal logs: $JOURNAL_LOGS"
+info "File compare: $FILE_COMPARE"
+info "Manual symbols: $MANUAL_SYMBOLS"
+info "Plugins:    $PLUGINS"
 
 if [[ "$LLVM_MODE" == "required" ]]; then
     command -v clang >/dev/null 2>&1 || {

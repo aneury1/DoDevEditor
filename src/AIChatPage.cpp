@@ -20,7 +20,7 @@ wxString LimitText(const wxString& text, size_t maxChars)
 
 AIProviderKind ProviderFromSelection(int selection)
 {
-    if (selection < 0 || selection > static_cast<int>(AIProviderKind::Ollama))
+    if (selection < 0 || selection > static_cast<int>(AIProviderKind::Gemini))
         return AIProviderKind::OpenAI;
     return static_cast<AIProviderKind>(selection);
 }
@@ -50,6 +50,8 @@ AIChatPage::AIChatPage(wxWindow* parent)
     m_providerChoice->Append("OpenAI-compatible");
     m_providerChoice->Append("GitHub Copilot CLI");
     m_providerChoice->Append("Ollama (local)");
+    m_providerChoice->Append("llama.cpp (local)");
+    m_providerChoice->Append("Google Gemini");
 
     auto* newChatButton = new wxButton(toolbar, wxID_ANY, "New Chat", wxDefaultPosition, wxSize(82, 28));
     auto* settingsButton = new wxButton(toolbar, wxID_ANY, "Settings", wxDefaultPosition, wxSize(76, 28));
@@ -134,6 +136,8 @@ AIChatPage::AIChatPage(wxWindow* parent)
                 m_settings.secretSource = AISecretSource::ExistingLogin;
             else if (m_settings.provider == AIProviderKind::Ollama)
                 m_settings.secretSource = AISecretSource::None;
+            else if (m_settings.provider == AIProviderKind::LlamaCpp)
+                m_settings.secretSource = AISecretSource::None;
             else
                 m_settings.secretSource = AISecretSource::Environment;
         }
@@ -191,6 +195,8 @@ void AIChatPage::UpdateProviderDisplay()
             text += "  |  auth: Copilot CLI login";
         else if (m_settings.provider == AIProviderKind::Ollama)
             text += "  |  local: " + (m_settings.baseUrl.IsEmpty() ? wxString("http://localhost:11434") : m_settings.baseUrl);
+        else if (m_settings.provider == AIProviderKind::LlamaCpp)
+            text += "  |  local: " + (m_settings.baseUrl.IsEmpty() ? wxString("http://127.0.0.1:8080") : m_settings.baseUrl);
         else if (m_settings.secretSource == AISecretSource::Environment)
             text += "  |  secret: env " + m_settings.environmentVariable;
         else if (m_settings.secretSource == AISecretSource::Session)
@@ -276,7 +282,7 @@ void AIChatPage::AddSystemNotice(const wxString& text, bool error)
 }
 
 
-void AIChatPage::BeginStreamingMessage()
+void AIChatPage::BeginStreamingMessage(const wxString& providerName)
 {
     m_streamingBuffer.clear();
     auto* row = new wxPanel(m_historyWindow);
@@ -286,7 +292,7 @@ void AIChatPage::BeginStreamingMessage()
     auto* bubble = new wxPanel(row);
     bubble->SetBackgroundColour(wxColour(45, 45, 48));
     auto* bubbleSizer = new wxBoxSizer(wxVERTICAL);
-    auto* label = new wxStaticText(bubble, wxID_ANY, "Ollama (streaming)");
+    auto* label = new wxStaticText(bubble, wxID_ANY, providerName + " (streaming)");
     label->SetForegroundColour(wxColour(150, 200, 255));
     wxFont labelFont = label->GetFont();
     labelFont.SetWeight(wxFONTWEIGHT_BOLD);
@@ -419,9 +425,11 @@ void AIChatPage::SendPrompt()
     SetBusy(true);
     m_status->SetLabel("Sending request to " + AISettings::ProviderName(request.settings.provider) + "...");
 
-    const bool streaming = request.settings.provider == AIProviderKind::Ollama && request.settings.ollamaStream;
+    const bool streaming =
+        (request.settings.provider == AIProviderKind::Ollama && request.settings.ollamaStream) ||
+        (request.settings.provider == AIProviderKind::LlamaCpp && request.settings.llamaCppStream);
     if (streaming)
-        BeginStreamingMessage();
+        BeginStreamingMessage(AISettings::ProviderName(request.settings.provider));
 
     wxWeakRef<AIChatPage> weakThis(this);
     std::thread([weakThis, request, streaming]() mutable
