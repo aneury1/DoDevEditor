@@ -1,61 +1,44 @@
- 
-#include <wx/wx.h>
-#include <functional>
-#include <unordered_map>
 
 #include "MenuBar.h"
 
-     DynamicMenuBar::DynamicMenuBar(wxWindow* parent )
-    {
-        m_parent = parent;
-    }
+#include <wx/wx.h>
 
- 
-    wxMenu*  DynamicMenuBar::AddMenu(const wxString& name)
-    {
-        wxMenu* menu = new wxMenu();
-        Append(menu, name);
-        m_menus[name] = menu;
-        return menu;
-    }
- 
-    void  DynamicMenuBar::AddItem(const wxString& menuName,
-                 const wxString& label,
-                 int id,
-                 Callback cb,
-                 const wxString& shortcut )
-    {
-        wxMenu* menu = GetOrCreate(menuName);
+#include <functional>
+#include <unordered_map>
 
-        wxString fullLabel = label;
-        if (!shortcut.empty())
-            fullLabel += "\t" + shortcut;
+DynamicMenuBar::DynamicMenuBar(wxWindow* parent) { m_parent = parent; }
 
-        menu->Append(id, fullLabel);
+wxMenu* DynamicMenuBar::AddMenu(const wxString& name) {
+  wxMenu* menu = new wxMenu();
+  Append(menu, name);
+  m_menus[name] = menu;
+  return menu;
+}
 
-        Bind(wxEVT_MENU, [cb](wxCommandEvent&)
-        {
-            cb();
-        }, id);
+void DynamicMenuBar::AddItem(const wxString& menuName, const wxString& label,
+                             int id, Callback cb, const wxString& shortcut) {
+  wxMenu* menu = GetOrCreate(menuName);
 
-        m_callbacks[id] = cb;
-    }
+  wxString fullLabel = label;
+  if (!shortcut.empty()) fullLabel += "\t" + shortcut;
 
-    // ─────────────────────────────
-    // Add Separator
-    // ─────────────────────────────
-    void  DynamicMenuBar::AddSeparator(const wxString& menuName)
-    {
-        wxMenu* menu = GetOrCreate(menuName);
-        menu->AppendSeparator();
-    }
+  menu->Append(id, fullLabel);
 
- 
-    wxMenu*  DynamicMenuBar::GetOrCreate(const wxString& name)
-    {
-        if (m_menus.count(name))
-            return m_menus[name];
+  Bind(wxEVT_MENU, [cb](wxCommandEvent&) { cb(); }, id);
 
-        return AddMenu(name);
-    }
- 
+  m_callbacks[id] = cb;
+}
+
+// ─────────────────────────────
+// Add Separator
+// ─────────────────────────────
+void DynamicMenuBar::AddSeparator(const wxString& menuName) {
+  wxMenu* menu = GetOrCreate(menuName);
+  menu->AppendSeparator();
+}
+
+wxMenu* DynamicMenuBar::GetOrCreate(const wxString& name) {
+  if (m_menus.count(name)) return m_menus[name];
+
+  return AddMenu(name);
+}

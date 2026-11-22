@@ -1,0 +1,8 @@
+{
+  "executable": "docker",
+  "composeFile": "compose.yaml",
+  "buildTag": "dodev-app:latest",
+  "buildContext": ".",
+  "container": "",
+  "image": "alpine:latest"
+}

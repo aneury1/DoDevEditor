@@ -1,0 +1,12 @@
+{
+  "id": "com.dodev.docker",
+  "name": "Docker Tools",
+  "version": "1.0.0",
+  "description": "Integrated Docker CLI, Compose, images, containers and interactive command prompt",
+  "apiVersion": 1,
+  "entry": {
+    "linux": "libdocker_plugin.so",
+    "windows": "docker_plugin.dll",
+    "macos": "libdocker_plugin.dylib"
+  }
+}

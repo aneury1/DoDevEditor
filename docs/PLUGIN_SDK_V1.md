@@ -58,3 +58,8 @@ On Windows, copy `hello_plugin.dll` alongside `plugin.json`, then enable it thro
 Plugins are **trusted in-process native code**, not sandboxed. Do not enable an untrusted binary. A malicious or crashing plugin may terminate or compromise the editor. Current API supports dynamically registered menu items, on-demand tabs and dock panels, and string-valued settings; it does not yet support hot-unloading on disable, transactional rollback of all contributions from a failed plugin, language servers, compiler debugging interfaces, or arbitrary Raven widget trees. Activation/deactivation is intended to take effect on restart.
 
 The bundled `plugins/examples/HelloPlugin/HelloPlugin.cpp` is the canonical runnable example. `tests/test_plugin.cpp` verifies the example plugin can be discovered, explicitly enabled, loaded, invoked, configured and shut down in the headless core build.
+
+
+## Additive v1 host extension in DoDevEditor 3.3
+
+The host now appends `get_active_document`, `replace_active_document`, `execute_terminal_command`, and `prompt_input` callbacks. No previous `DodevHostAPI` fields were reordered. Use `DODEV_HOST_HAS(host, field)` before calling new callbacks. The editor owns the actual Raven widgets and the terminal. `prompt_input` calls the plugin callback after the user confirms a text value. Both bundled new plugins demonstrate these APIs; see `docs/CUSTOMIZATION_MANUAL.md` sections 12–15.

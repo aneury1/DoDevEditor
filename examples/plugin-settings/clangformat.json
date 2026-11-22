@@ -1,0 +1,4 @@
+{
+  "executable": "clang-format",
+  "style": "LLVM"
+}

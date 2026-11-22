@@ -1,67 +1,59 @@
 #pragma once
 #include <functional>
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "CommandSystem.h"
-struct MenuItemDef
-{
-    std::string label;
-    std::string commandId;
-    std::string shortcut;
-    bool isSeparator = false;
+struct MenuItemDef {
+  std::string label;
+  std::string commandId;
+  std::string shortcut;
+  bool isSeparator = false;
 };
 
-struct MenuDef
-{
-    std::string name;
-    std::vector<MenuItemDef> items;
+struct MenuDef {
+  std::string name;
+  std::vector<MenuItemDef> items;
 };
 
-class CommandRegistry
-{
-public:
- 
-    CommandRegistry() = default;
-    CommandRegistry(const CommandRegistry& oth) = default;
- 
-    using Callback = std::function<void()>;
+class CommandRegistry {
+ public:
+  CommandRegistry() = default;
+  CommandRegistry(const CommandRegistry& oth) = default;
 
-    void Register(const std::string& id, Callback cb);
+  using Callback = std::function<void()>;
 
-    void Execute(const std::string& id);
-    bool Exists(const std::string& id) const;
+  void Register(const std::string& id, Callback cb);
 
-    std::vector<MenuDef> GetTitles();
+  void Execute(const std::string& id);
+  bool Exists(const std::string& id) const;
 
-private:
-    std::unordered_map<std::string, Callback> commands;
+  std::vector<MenuDef> GetTitles();
+
+ private:
+  std::unordered_map<std::string, Callback> commands;
 };
 
+class MenuRegistry {
+ public:
+  void AddMenu(const std::string& name);
 
-class MenuRegistry
-{
-public:
-    void AddMenu(const std::string& name);
+  void AddItem(const std::string& menu, const MenuItemDef& item);
 
-    void AddItem(const std::string& menu,
-                 const MenuItemDef& item);
+  const std::unordered_map<std::string, std::vector<MenuItemDef>>& GetMenus()
+      const;
 
-    const std::unordered_map<std::string, std::vector<MenuItemDef>>& GetMenus() const;
-
-private:
-    std::unordered_map<std::string, std::vector<MenuItemDef>> menus;
+ private:
+  std::unordered_map<std::string, std::vector<MenuItemDef>> menus;
 };
 
+class IPlugin {
+ public:
+  virtual ~IPlugin() = default;
 
-class IPlugin
-{
-public:
-    virtual ~IPlugin() = default;
-
-    virtual void RegisterCommands(CommandRegistry& commands) = 0;
-    virtual void RegisterMenus(MenuRegistry& menus) = 0;
+  virtual void RegisterCommands(CommandRegistry& commands) = 0;
+  virtual void RegisterMenus(MenuRegistry& menus) = 0;
 };
 
 /*

@@ -1,4 +1,28 @@
-# DoDevEditor Raven 3.0
+> **Version 3.3 — Extended plugin bridge + tools + documentation:**
+> Includes a complete customization manual (`docs/CUSTOMIZATION_MANUAL.md`),
+> clang-format and Docker CLI plugins, an embedded Raven input prompt,
+> two source patches and a conflict-aware migration utility.
+
+**Start here:** [Complete 3.3 customization manual](docs/CUSTOMIZATION_MANUAL.md) · [Release notes](docs/RELEASE_3_3.md).
+
+Plugin binaries are built with `DODEV_BUILD_PLUGIN_EXAMPLES=ON` in `build/plugin-examples/{hello,clangformat,docker}`. Install a module and manifest into `<config>/plugins/<folder>/`, enable its plugin ID under Settings → Plugins, and restart. The clang-format and Docker command-line tools themselves are external dependencies, not bundled.
+
+For patch failures against modified 3.1/3.2 trees, use the conflict-aware `scripts/apply_upgrade.py` from the **complete** package. See Section 19 of the manual.
+
+> **Version 3.2 — Configurable Keybindings:** Native Raven shortcuts are now
+> bound dynamically from optional `keybindings.json`. A new Keybindings Settings tab
+> supports search, key recording, conflict detection, unbind/reset, and immediate
+> application. `Ctrl+G` opens Go to Line, `Ctrl+P` opens Quick Open, and
+> `Ctrl+Shift+P` opens the Command Palette. See
+> [`docs/KEYBINDINGS.md`](docs/KEYBINDINGS.md).
+
+> **Version 3.1 — VS Code-style Edit / Selection / Terminal menus:**
+> Added 26 Edit menu items, 19 Selection items and 19 Terminal items. Commands
+> include undo-safe text transforms, line operations, find-in-workspace, PTY/ConPTY
+> terminal splitting, native task loading and build tasks. See
+> [`docs/VSCODE_MENUS.md`](docs/VSCODE_MENUS.md) for details and compatibility limits.
+
+# DoDevEditor Raven 3.3
 
 **Source project — C++17, Raven GUI, embedded XML, persistent IDE terminal, configurable Settings, custom themes, file templates and a native plugin SDK.**
 
@@ -19,8 +43,8 @@ DoDevEditor is an experimental Raven-based code editor derived from the prior Mu
 Prerequisites: CMake 3.21+, C++17 compiler, Git, Vulkan-capable GPU and Raven's build dependencies.
 
 ```bash
-unzip DoDevEditor_Raven_3_0.zip
-cd DoDevEditor_Raven_3_0
+unzip DoDevEditor_Raven_3_2_Keybindings.zip
+cd DoDevEditor_Raven_3_2_Keybindings
 chmod +x scripts/build.sh
 ./scripts/build.sh
 ```

@@ -1,32 +1,31 @@
 #pragma once
 
-
-#include <wx/wx.h>
+#include <wx/artprov.h>
 #include <wx/aui/aui.h>
 #include <wx/aui/auibook.h>
-#include <wx/stc/stc.h>
-#include <wx/treectrl.h>
+#include <wx/colordlg.h>
+#include <wx/config.h>
 #include <wx/dir.h>
+#include <wx/dirdlg.h>
+#include <wx/ffile.h>
+#include <wx/filedlg.h>
 #include <wx/filename.h>
+#include <wx/fontdlg.h>
 #include <wx/imaglist.h>
-#include <wx/artprov.h>
+#include <wx/log.h>
+#include <wx/msgdlg.h>
+#include <wx/settings.h>
 #include <wx/splitter.h>
 #include <wx/statusbr.h>
-#include <wx/fontdlg.h>
-#include <wx/colordlg.h>
-#include <wx/settings.h>
-#include <wx/utils.h>
-#include <wx/ffile.h>
-#include <wx/msgdlg.h>
-#include <wx/filedlg.h>
-#include <wx/dirdlg.h>
+#include <wx/stc/stc.h>
 #include <wx/stdpaths.h>
-#include <wx/config.h>
-#include <wx/log.h>
+#include <wx/treectrl.h>
+#include <wx/utils.h>
+#include <wx/wx.h>
 
 #include <map>
-#include <vector>
 #include <string>
+#include <vector>
 
 #include "JsonStyledTextCtrl.h"
 
@@ -35,30 +34,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 class EditorPage : public JsonStyledTextCtrl {
-public:
-    wxString filepath;   // full path; empty = new unsaved file
-    bool     modified = false;
+ public:
+  wxString filepath;  // full path; empty = new unsaved file
+  bool modified = false;
 
-    EditorPage(wxWindow* parent, const wxString& path = wxEmptyString);
+  EditorPage(wxWindow* parent, const wxString& path = wxEmptyString);
 
-    // ── Tab title: filename or "Untitled" (with leading "●" if modified) ──
-    wxString GetTitle() const;
+  // ── Tab title: filename or "Untitled" (with leading "●" if modified) ──
+  wxString GetTitle() const;
 
-    // ── Load file from disk ──
-    bool LoadFile(const wxString& path) ;
+  // ── Load file from disk ──
+  bool LoadFile(const wxString& path);
 
-    // ── Save to disk ──
-    bool SaveFile(const wxString& path = wxEmptyString);
+  // ── Save to disk ──
+  bool SaveFile(const wxString& path = wxEmptyString);
 
-    // ── Apply VSCode dark theme + syntax ──
-    void ApplyTheme();
+  // ── Apply VSCode dark theme + syntax ──
+  void ApplyTheme();
 
-    void ApplySyntax();
-private:
-    void OnChange(wxStyledTextEvent&);
+  void ApplySyntax();
 
-    void OnUpdateUI(wxStyledTextEvent&);
+ private:
+  void OnChange(wxStyledTextEvent&);
 
-    void OnCharAdded(wxStyledTextEvent& evt) ;
+  void OnUpdateUI(wxStyledTextEvent&);
+
+  void OnCharAdded(wxStyledTextEvent& evt);
 };
-

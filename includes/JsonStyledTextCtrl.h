@@ -1,43 +1,43 @@
 #ifndef JsonStyledTextCtrl_defined
 #define JsonStyledTextCtrl_defined
 
-#include <fstream>
-#include <wx/wx.h>
-#include <wx/stc/stc.h>
 #include <json/json.h>
+#include <wx/stc/stc.h>
+#include <wx/wx.h>
 
-class JsonStyledTextCtrl : public wxStyledTextCtrl
-{
-public:
-    JsonStyledTextCtrl(wxWindow *parent, wxWindowID id = wxID_ANY);
+#include <fstream>
 
-    void OpenFile(const wxString &path);
+class JsonStyledTextCtrl : public wxStyledTextCtrl {
+ public:
+  JsonStyledTextCtrl(wxWindow* parent, wxWindowID id = wxID_ANY);
 
-    void ApplyTheme(const Json::Value &theme);
+  void OpenFile(const wxString& path);
 
-    void ApplyDarkTheme();
+  void ApplyTheme(const Json::Value& theme);
 
-private:
-    wxColour ToColor(const Json::Value &arr);
+  void ApplyDarkTheme();
 
-    void ApplyBase(const Json::Value &theme);
+ private:
+  wxColour ToColor(const Json::Value& arr);
 
-    void ApplyLexer(const Json::Value &theme);
+  void ApplyBase(const Json::Value& theme);
 
-    void ApplyKeywords(const Json::Value &theme);
+  void ApplyLexer(const Json::Value& theme);
 
-    void ApplyStyles(const Json::Value &theme);
-    void ApplyLineNumbers(const Json::Value &theme);
+  void ApplyKeywords(const Json::Value& theme);
 
-    void ApplyCaret(const Json::Value &theme);
+  void ApplyStyles(const Json::Value& theme);
+  void ApplyLineNumbers(const Json::Value& theme);
 
-    void ApplySelection(const Json::Value &theme);
+  void ApplyCaret(const Json::Value& theme);
 
-    void OnCharAdded(wxStyledTextEvent &event);
+  void ApplySelection(const Json::Value& theme);
 
-    wxString GetSuggestions(const wxString &prefix);
-    void ShowAutocomplete();
-    void OnKeyDown(wxKeyEvent &event);
+  void OnCharAdded(wxStyledTextEvent& event);
+
+  wxString GetSuggestions(const wxString& prefix);
+  void ShowAutocomplete();
+  void OnKeyDown(wxKeyEvent& event);
 };
 
-#endif /// JsonStyledTextCtrl_defined
+#endif  /// JsonStyledTextCtrl_defined

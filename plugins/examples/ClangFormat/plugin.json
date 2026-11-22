@@ -1,0 +1,12 @@
+{
+  "id": "com.dodev.clangformat",
+  "name": "clang-format",
+  "version": "1.0.0",
+  "description": "Format the active in-memory editor with a configurable clang-format executable and style",
+  "apiVersion": 1,
+  "entry": {
+    "linux": "libclangformat_plugin.so",
+    "windows": "clangformat_plugin.dll",
+    "macos": "libclangformat_plugin.dylib"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "general": {"language": "en", "restoreSession": true, "autoSave": false},
+  "editor": {"fontFamily": "monospace", "fontFile": "", "fontSize": 14, "tabSize": 4, "insertSpaces": true, "wordWrap": false, "lineNumbers": true},
+  "appearance": {"theme": "VS Code Dark Modern", "uiFontFile": "", "uiFontSize": 13, "customThemesDirectory": "", "preferredThemeFormat": "json"},
+  "terminal": {"fontFamily": "monospace", "fontFile": "", "fontSize": 14, "defaultShell": "", "scrollbackLines": 3000},
+  "templates": {"directory": "", "associations": {".cpp":"cpp17", ".h":"cpp-header", ".py":"python", ".json":"json", ".sql":"sql-query"}},
+  "plugins": {"enabled": true, "directory": "", "safeMode": false, "enabledIds": [], "disabled": []}
+}

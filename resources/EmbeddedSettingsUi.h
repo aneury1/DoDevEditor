@@ -48,6 +48,15 @@ inline constexpr std::string_view kSettingsWindow = R"DODEV_XML(
         <Label Text="Extension associations are configured in settings.json (templates.associations)." Wrap="true"/>
         <Button Text="New file from template..." OnClicked="template.show"/>
       </VBox>
+      <VBox Slot.Title="Keybindings" Spacing="8" Slot.Padding="18,14">
+        <Label Text="KEYBOARD SHORTCUTS" Class="eyebrow" TextSize="16"/>
+        <Label Text="Select a command, enter its shortcut and Apply. Supported: Ctrl, Shift, Alt, Super, arrows, F1–F12." Wrap="true"/>
+        <TextInput Name="kb_filter" Placeholder="Filter commands (e.g. terminal, navigate, save)"/>
+        <ListView Name="kb_command_list" Height="240"/>
+        <HBox Spacing="6"><Label Text="Shortcut"/><TextInput Name="kb_shortcut" Width="225" Placeholder="Ctrl+Shift+P"/><Button Text="Record keys" OnClicked="keybindings.record"/><Button Text="Apply" Style="Primary" OnClicked="keybindings.apply"/></HBox>
+        <HBox Spacing="6"><Button Text="Unbind" OnClicked="keybindings.unbind"/><Button Text="Reset selected" OnClicked="keybindings.reset"/><Button Text="Reset all" OnClicked="keybindings.reset_all"/></HBox>
+        <Label Name="kb_status" Text="Stored in optional keybindings.json. Conflicts are rejected." Wrap="true"/>
+      </VBox>
       <VBox Slot.Title="Plugins" Spacing="8" Slot.Padding="18,14">
         <Label Text="NATIVE PLUGINS · RESTART REQUIRED TO ACTIVATE/DEACTIVATE" Class="eyebrow" TextSize="15" Wrap="true"/>
         <CheckBox Name="settings_plugins_enabled" Text="Enable plugin support"/>
@@ -107,4 +116,4 @@ inline constexpr std::string_view kTemplateWindow = R"DODEV_XML(
   </VBox>
 </Window>
 )DODEV_XML";
-}
+}  // namespace dodev::ui

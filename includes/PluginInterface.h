@@ -1,14 +1,13 @@
 #pragma once
 #include <string>
 
-class PluginLoader
-{
-public:
-    void* Load(const std::string& path);
+class PluginLoader {
+ public:
+  void* Load(const std::string& path);
 
-    void* GetSymbol(void* handle, const std::string& name);
+  void* GetSymbol(void* handle, const std::string& name);
 
-    void Unload(void* handle);
+  void Unload(void* handle);
 };
 
 /*

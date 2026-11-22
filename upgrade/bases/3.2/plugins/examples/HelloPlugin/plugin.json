@@ -1,0 +1,12 @@
+{
+  "id": "com.dodev.hello",
+  "name": "Hello Plugin",
+  "version": "1.0.0",
+  "description": "Native plugin SDK demo: command, menu, tab, dock panel, template and settings",
+  "apiVersion": 1,
+  "entry": {
+    "linux": "libhello_plugin.so",
+    "windows": "hello_plugin.dll",
+    "macos": "libhello_plugin.dylib"
+  }
+}

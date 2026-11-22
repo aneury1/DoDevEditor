@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(DoDevEditor VERSION 3.0.0 LANGUAGES C CXX)
+project(DoDevEditor VERSION 3.3.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -13,13 +13,15 @@ option(DODEV_BUILD_PLUGIN_EXAMPLES "Build bundled native plugin example" ON)
 set(DODEV_RAVEN_REPOSITORY "https://github.com/aneury1/Raven.git" CACHE STRING "Repositorio Git de Raven GUI")
 set(DODEV_RAVEN_GIT_TAG "main" CACHE STRING "Rama/tag/commit de Raven GUI")
 
-add_library(dodev_core STATIC src/EditorData.cpp)
+add_library(dodev_core STATIC src/EditorData.cpp src/editor/EditorCommands.cpp)
 add_library(dodev_services STATIC
     src/settings/Json.cpp
     src/settings/SettingsManager.cpp
+    src/keybindings/KeybindingManager.cpp
     src/templates/TemplateRegistry.cpp
     src/themes/ThemeManager.cpp
     src/plugins/PluginManager.cpp
+    src/terminal/TerminalTasks.cpp
 )
 target_include_directories(dodev_services PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(dodev_services PUBLIC cxx_std_17)
@@ -85,6 +87,10 @@ if(DODEV_BUILD_GUI)
         src/main.cpp
         src/EditorApp.cpp
         src/EditorSettings.cpp
+        src/EditorMenus.cpp
+        src/EditorKeybindings.cpp
+        resources/EmbeddedPluginPromptUi.h
+        resources/EmbeddedNavigationUi.h
         resources/EmbeddedSettingsUi.h
         include/EditorApp.h
         resources/EmbeddedUi.h
@@ -97,7 +103,7 @@ if(DODEV_BUILD_GUI)
         target_compile_options(DoDevEditor PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     install(TARGETS DoDevEditor RUNTIME DESTINATION bin)
-    message(STATUS "[DoDevEditor] GUI Raven 3.0 + 13 themes + JSON Settings + native plugin SDK")
+    message(STATUS "[DoDevEditor] GUI Raven 3.3 + 13 themes + JSON Settings + native plugin tools")
 endif()
 
 if(DODEV_BUILD_PLUGIN_EXAMPLES)
@@ -107,6 +113,17 @@ if(DODEV_BUILD_PLUGIN_EXAMPLES)
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello"
     )
+    foreach(extension IN ITEMS ClangFormat Docker)
+        string(TOLOWER "${extension}" extension_lower)
+        add_library(${extension_lower}_plugin MODULE
+            "plugins/examples/${extension}/${extension}Plugin.cpp")
+        target_include_directories(${extension_lower}_plugin PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+        set_target_properties(${extension_lower}_plugin PROPERTIES
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/${extension_lower}"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/${extension_lower}")
+        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/plugins/examples/${extension}/plugin.json"
+                       "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/${extension_lower}/plugin.json" COPYONLY)
+    endforeach()
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/plugins/examples/HelloPlugin/plugin.json"
         "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello/plugin.json" COPYONLY)
@@ -114,6 +131,9 @@ endif()
 
 if(DODEV_BUILD_TESTS)
     enable_testing()
+    add_executable(dodev_keybindings_tests tests/test_keybindings.cpp)
+    target_link_libraries(dodev_keybindings_tests PRIVATE dodev_services)
+    add_test(NAME vscode_keybinding_settings COMMAND dodev_keybindings_tests)
     add_executable(dodev_settings_tests tests/test_settings.cpp)
     target_link_libraries(dodev_settings_tests PRIVATE dodev_services)
     target_include_directories(dodev_settings_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
@@ -125,6 +145,19 @@ if(DODEV_BUILD_TESTS)
         add_dependencies(dodev_plugin_tests hello_plugin)
         add_test(NAME native_plugin_integration COMMAND dodev_plugin_tests)
     endif()
+    if(DODEV_BUILD_PLUGIN_EXAMPLES)
+        add_executable(dodev_tool_plugins_tests tests/test_tool_plugins.cpp)
+        target_link_libraries(dodev_tool_plugins_tests PRIVATE dodev_services)
+        target_compile_definitions(dodev_tool_plugins_tests PRIVATE DODEV_TEST_PLUGIN_DIR="${CMAKE_CURRENT_BINARY_DIR}/plugin-examples")
+        add_dependencies(dodev_tool_plugins_tests clangformat_plugin docker_plugin)
+        add_test(NAME clangformat_docker_plugin_integration COMMAND dodev_tool_plugins_tests)
+    endif()
+    add_executable(dodev_terminal_tasks_tests tests/test_terminal_tasks.cpp)
+    target_link_libraries(dodev_terminal_tasks_tests PRIVATE dodev_services)
+    add_test(NAME vscode_terminal_tasks COMMAND dodev_terminal_tasks_tests)
+    add_executable(dodev_editor_commands_tests tests/test_editor_commands.cpp)
+    target_link_libraries(dodev_editor_commands_tests PRIVATE dodev_core)
+    add_test(NAME vscode_edit_selection_commands COMMAND dodev_editor_commands_tests)
     add_executable(dodev_core_tests tests/test_core.cpp)
     add_executable(dodev_terminal_tests tests/test_terminal.cpp)
     target_link_libraries(dodev_terminal_tests PRIVATE dodev_terminal)
@@ -133,6 +166,12 @@ if(DODEV_BUILD_TESTS)
     add_test(NAME core_csv_dlt_files COMMAND dodev_core_tests)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME embedded_plugin_prompt_xml
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_plugin_prompt_ui.py")
+        add_test(NAME vscode_keybinding_ui_contract
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_keybinding_ui.py")
+        add_test(NAME vscode_menus_xml_contract
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vscode_menus.py")
         add_test(NAME embedded_music_theme_xml
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_embedded_ui.py")
     endif()

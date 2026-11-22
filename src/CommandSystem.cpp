@@ -1,53 +1,44 @@
 
-#include <functional>
-#include <unordered_map>
-#include <string>
-#include <vector>
-
 #include "CommandSystem.h"
 
-void CommandRegistry::Register(const std::string &id, Callback cb)
-{
-    commands[id] = cb;
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+void CommandRegistry::Register(const std::string& id, Callback cb) {
+  commands[id] = cb;
 }
 
-void CommandRegistry::Execute(const std::string &id)
-{
-    if (commands.count(id))
-        commands[id]();
+void CommandRegistry::Execute(const std::string& id) {
+  if (commands.count(id)) commands[id]();
 }
 
-bool CommandRegistry::Exists(const std::string &id) const
-{
-    return commands.count(id);
+bool CommandRegistry::Exists(const std::string& id) const {
+  return commands.count(id);
 }
 
-std::vector<MenuDef> CommandRegistry::GetTitles()
-{
-    std::vector<MenuDef> ret;
-    for (auto it : commands)
-    {
-        MenuDef def;
-        def.name = it.first;
-        ret.emplace_back(def);
-    }
-    return ret;
+std::vector<MenuDef> CommandRegistry::GetTitles() {
+  std::vector<MenuDef> ret;
+  for (auto it : commands) {
+    MenuDef def;
+    def.name = it.first;
+    ret.emplace_back(def);
+  }
+  return ret;
 }
 
-void MenuRegistry::AddMenu(const std::string &name)
-{
-    menus[name]; // create if not exists
+void MenuRegistry::AddMenu(const std::string& name) {
+  menus[name];  // create if not exists
 }
 
-void MenuRegistry::AddItem(const std::string &menu,
-             const MenuItemDef &item)
-{
-    menus[menu].push_back(item);
+void MenuRegistry::AddItem(const std::string& menu, const MenuItemDef& item) {
+  menus[menu].push_back(item);
 }
 
-const std::unordered_map<std::string, std::vector<MenuItemDef>> &MenuRegistry::GetMenus() const
-{
-    return menus;
+const std::unordered_map<std::string, std::vector<MenuItemDef>>&
+MenuRegistry::GetMenus() const {
+  return menus;
 }
 
 /*

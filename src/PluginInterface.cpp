@@ -8,30 +8,27 @@
 
 #include <string>
 
-void *PluginLoader::Load(const std::string &path)
-{
+void* PluginLoader::Load(const std::string& path) {
 #ifdef _WIN32
-    return (void *)LoadLibraryA(path.c_str());
+  return (void*)LoadLibraryA(path.c_str());
 #else
-    return dlopen(path.c_str(), RTLD_LAZY);
+  return dlopen(path.c_str(), RTLD_LAZY);
 #endif
 }
 
-void *PluginLoader::GetSymbol(void *handle, const std::string &name)
-{
+void* PluginLoader::GetSymbol(void* handle, const std::string& name) {
 #ifdef _WIN32
-    return (void *)GetProcAddress((HMODULE)handle, name.c_str());
+  return (void*)GetProcAddress((HMODULE)handle, name.c_str());
 #else
-    return dlsym(handle, name.c_str());
+  return dlsym(handle, name.c_str());
 #endif
 }
 
-void PluginLoader::Unload(void *handle)
-{
+void PluginLoader::Unload(void* handle) {
 #ifdef _WIN32
-    FreeLibrary((HMODULE)handle);
+  FreeLibrary((HMODULE)handle);
 #else
-    dlclose(handle);
+  dlclose(handle);
 #endif
 }
 

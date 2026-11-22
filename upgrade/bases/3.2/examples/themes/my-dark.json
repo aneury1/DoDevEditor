@@ -1,0 +1,16 @@
+{
+  "formatVersion": 1,
+  "name": "Midnight Studio Custom",
+  "base": "Dark",
+  "accent": "#7E9BEE",
+  "cornerRadius": 12,
+  "colors": {
+    "window": "#18191F",
+    "panel": "#242630",
+    "control": "#313541",
+    "input": "#1E2029",
+    "text": "#E8EAF5",
+    "separator": "#444956"
+  },
+  "syntax": {"keyword": "#8AB4FF", "string": "#B9E0B2", "comment": "#7C869A"}
+}

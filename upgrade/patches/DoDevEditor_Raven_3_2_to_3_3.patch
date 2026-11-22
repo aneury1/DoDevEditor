@@ -1,0 +1,1898 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5e20a85..16d49ac 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,5 +1,5 @@
+ cmake_minimum_required(VERSION 3.21)
+-project(DoDevEditor VERSION 3.2.0 LANGUAGES C CXX)
++project(DoDevEditor VERSION 3.3.0 LANGUAGES C CXX)
+ 
+ set(CMAKE_C_STANDARD 11)
+ set(CMAKE_C_STANDARD_REQUIRED ON)
+@@ -89,6 +89,7 @@ if(DODEV_BUILD_GUI)
+         src/EditorSettings.cpp
+         src/EditorMenus.cpp
+         src/EditorKeybindings.cpp
++        resources/EmbeddedPluginPromptUi.h
+         resources/EmbeddedNavigationUi.h
+         resources/EmbeddedSettingsUi.h
+         include/EditorApp.h
+@@ -102,7 +103,7 @@ if(DODEV_BUILD_GUI)
+         target_compile_options(DoDevEditor PRIVATE -Wall -Wextra -Wpedantic)
+     endif()
+     install(TARGETS DoDevEditor RUNTIME DESTINATION bin)
+-    message(STATUS "[DoDevEditor] GUI Raven 3.2 + 13 themes + JSON Settings + native plugin SDK")
++    message(STATUS "[DoDevEditor] GUI Raven 3.3 + 13 themes + JSON Settings + native plugin tools")
+ endif()
+ 
+ if(DODEV_BUILD_PLUGIN_EXAMPLES)
+@@ -112,6 +113,17 @@ if(DODEV_BUILD_PLUGIN_EXAMPLES)
+         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello"
+         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello"
+     )
++    foreach(extension IN ITEMS ClangFormat Docker)
++        string(TOLOWER "${extension}" extension_lower)
++        add_library(${extension_lower}_plugin MODULE
++            "plugins/examples/${extension}/${extension}Plugin.cpp")
++        target_include_directories(${extension_lower}_plugin PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
++        set_target_properties(${extension_lower}_plugin PROPERTIES
++            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/${extension_lower}"
++            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/${extension_lower}")
++        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/plugins/examples/${extension}/plugin.json"
++                       "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/${extension_lower}/plugin.json" COPYONLY)
++    endforeach()
+     configure_file(
+         "${CMAKE_CURRENT_SOURCE_DIR}/plugins/examples/HelloPlugin/plugin.json"
+         "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello/plugin.json" COPYONLY)
+@@ -133,6 +145,13 @@ if(DODEV_BUILD_TESTS)
+         add_dependencies(dodev_plugin_tests hello_plugin)
+         add_test(NAME native_plugin_integration COMMAND dodev_plugin_tests)
+     endif()
++    if(DODEV_BUILD_PLUGIN_EXAMPLES)
++        add_executable(dodev_tool_plugins_tests tests/test_tool_plugins.cpp)
++        target_link_libraries(dodev_tool_plugins_tests PRIVATE dodev_services)
++        target_compile_definitions(dodev_tool_plugins_tests PRIVATE DODEV_TEST_PLUGIN_DIR="${CMAKE_CURRENT_BINARY_DIR}/plugin-examples")
++        add_dependencies(dodev_tool_plugins_tests clangformat_plugin docker_plugin)
++        add_test(NAME clangformat_docker_plugin_integration COMMAND dodev_tool_plugins_tests)
++    endif()
+     add_executable(dodev_terminal_tasks_tests tests/test_terminal_tasks.cpp)
+     target_link_libraries(dodev_terminal_tasks_tests PRIVATE dodev_services)
+     add_test(NAME vscode_terminal_tasks COMMAND dodev_terminal_tasks_tests)
+@@ -147,6 +166,8 @@ if(DODEV_BUILD_TESTS)
+     add_test(NAME core_csv_dlt_files COMMAND dodev_core_tests)
+     find_package(Python3 QUIET COMPONENTS Interpreter)
+     if(Python3_Interpreter_FOUND)
++        add_test(NAME embedded_plugin_prompt_xml
++            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_plugin_prompt_ui.py")
+         add_test(NAME vscode_keybinding_ui_contract
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_keybinding_ui.py")
+         add_test(NAME vscode_menus_xml_contract
+diff --git a/README.md b/README.md
+index 3aa49ad..40c6817 100644
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,14 @@
++> **Version 3.3 — Extended plugin bridge + tools + documentation:**
++> Includes a complete customization manual (`docs/CUSTOMIZATION_MANUAL.md`),
++> clang-format and Docker CLI plugins, an embedded Raven input prompt,
++> two source patches and a conflict-aware migration utility.
++
++**Start here:** [Complete 3.3 customization manual](docs/CUSTOMIZATION_MANUAL.md) · [Release notes](docs/RELEASE_3_3.md).
++
++Plugin binaries are built with `DODEV_BUILD_PLUGIN_EXAMPLES=ON` in `build/plugin-examples/{hello,clangformat,docker}`. Install a module and manifest into `<config>/plugins/<folder>/`, enable its plugin ID under Settings → Plugins, and restart. The clang-format and Docker command-line tools themselves are external dependencies, not bundled.
++
++For patch failures against modified 3.1/3.2 trees, use the conflict-aware `scripts/apply_upgrade.py` from the **complete** package. See Section 19 of the manual.
++
+ > **Version 3.2 — Configurable Keybindings:** Native Raven shortcuts are now
+ > bound dynamically from optional `keybindings.json`. A new Keybindings Settings tab
+ > supports search, key recording, conflict detection, unbind/reset, and immediate
+@@ -11,7 +22,7 @@
+ > terminal splitting, native task loading and build tasks. See
+ > [`docs/VSCODE_MENUS.md`](docs/VSCODE_MENUS.md) for details and compatibility limits.
+ 
+-# DoDevEditor Raven 3.2
++# DoDevEditor Raven 3.3
+ 
+ **Source project — C++17, Raven GUI, embedded XML, persistent IDE terminal, configurable Settings, custom themes, file templates and a native plugin SDK.**
+ 
+diff --git a/docs/CUSTOMIZATION_MANUAL.md b/docs/CUSTOMIZATION_MANUAL.md
+new file mode 100644
+index 0000000..3606a4d
+--- /dev/null
++++ b/docs/CUSTOMIZATION_MANUAL.md
+@@ -0,0 +1,905 @@
++# DoDevEditor Raven 3.3 — Complete Customization and Plugin Manual
++
++**Audience:** developers, IDE administrators, designers and contributors.
++**Project:** C++17 / Raven GUI / CMake / integrated PTY/ConPTY terminal.
++**Scope:** preferences, file paths, fonts, themes, templates, shortcuts, terminal tasks, plugin manifests, the native plugin API, clang-format, Docker, troubleshooting and upgrades.
++
++> This manual describes the code and configuration shipped in this package, not every VS Code feature. Plugin binaries run **inside** the editor with the current user's privileges. Use only trusted binaries. All external configuration files are optional; you can launch the editor with an empty configuration directory.
++
++## 1. Contents and quick start
++
++1. [Build and run](#2-build-and-run)
++2. [Configuration discovery and safe defaults](#3-configuration-discovery-and-safe-defaults)
++3. [All general settings](#4-settingsjson-reference)
++4. [Fonts, editor and terminal](#5-fonts-and-editor-behavior)
++5. [Themes and theme designer](#6-themes-and-raven-xml)
++6. [Theme JSON and XML examples](#7-author-a-theme-in-json-or-xml)
++7. [Templates](#8-extension-specific-file-templates)
++8. [Keybindings](#9-keybindingsjson)
++9. [Workspace tasks and terminal commands](#10-terminal-and-workspace-tasks)
++10. [Plugin installation](#11-native-plugin-packaging-and-activation)
++11. [Plugin SDK and extension points](#12-plugin-sdk-v1-and-the-additive-host-functions)
++12. [Build a plugin](#13-build-your-own-plugin)
++13. [clang-format plugin](#14-clang-format-plugin)
++14. [Docker plugin](#15-docker-tools-plugin)
++15. [Plugin settings JSON](#16-per-plugin-json-settings)
++16. [Examples and recipes](#17-customization-recipes)
++17. [Testing](#18-build-options-and-tests)
++18. [Upgrade and patch conflicts](#19-upgrading-without-losing-local-changes)
++19. [Security](#20-security-boundaries)
++20. [Known limitations](#21-known-limitations)
++
++## 2. Build and run
++
++### Linux
++
++You need a C++17 compiler, CMake 3.21+, Git, a Vulkan-capable driver and the platform dependencies required by your chosen Raven GUI commit.
++
++```bash
++unzip DoDevEditor_Raven_3_3_Extensions.zip
++cd DoDevEditor_Raven_3_3_Extensions
++cmake -S . -B build -DDODEV_BUILD_GUI=ON \
++  -DDODEV_BUILD_PLUGIN_EXAMPLES=ON -DDODEV_BUILD_TESTS=ON
++cmake --build build --parallel
++ctest --test-dir build --output-on-failure
++```
++
++The build uses `FetchContent_Declare(raven GIT_REPOSITORY https://github.com/aneury1/Raven.git GIT_PROGRESS TRUE)` and explicitly disables the quiet download mode. Git progress is shown during clone/checkout. You need network access during the **first** GUI configure (unless Raven is already cached), not when the editor starts.
++
++For a **headless** verification without fetching Raven:
++
++```bash
++cmake -S . -B build-headless -DDODEV_BUILD_GUI=OFF \
++  -DDODEV_BUILD_PLUGIN_EXAMPLES=ON -DDODEV_BUILD_TESTS=ON
++cmake --build build-headless --parallel
++ctest --test-dir build-headless --output-on-failure
++```
++
++The GUI executable is `build/DoDevEditor` for most single-config generators; Visual Studio and multi-config generators may place it under `build/Debug` or `build/Release`.
++
++### Windows
++
++Use MSVC (Visual Studio C++ build tools), CMake, Git and the Vulkan/Raven prerequisites. From a Developer PowerShell:
++
++```powershell
++cmake -S . -B build -DDODEV_BUILD_GUI=ON -DDODEV_BUILD_PLUGIN_EXAMPLES=ON
++cmake --build build --config Release --parallel
++ctest --test-dir build -C Release --output-on-failure
++```
++
++The terminal uses ConPTY and requires a sufficiently recent Windows build. Native plugins have `.dll` extensions. A project built with different C++ runtimes must still respect the plugin's **C ABI**.
++
++### Run with an isolated configuration
++
++```bash
++DODEV_CONFIG_DIR="$HOME/dodev-sandbox" ./build/DoDevEditor
++```
++
++The editor starts with defaults even when `$HOME/dodev-sandbox` does not exist.
++
++## 3. Configuration discovery and safe defaults
++
++`SettingsManager::defaultDirectory()` resolves the directory as follows:
++
++| OS | Default directory | Override |
++|---|---|---|
++| Linux | `${XDG_CONFIG_HOME:-$HOME/.config}/DoDevEditor` | `DODEV_CONFIG_DIR=/path` |
++| Windows | `%APPDATA%\\DoDevEditor` | `DODEV_CONFIG_DIR=C:\\path` |
++| macOS | `~/Library/Application Support/DoDevEditor` | `DODEV_CONFIG_DIR=/path` |
++
++Configuration hierarchy on disk:
++
++```text
++<config>/
++├── settings.json                   # optional application preferences
++├── keybindings.json                # optional shortcut overrides
++├── settings.ini                     # legacy file, read only for migration
++├── themes/                          # optional external JSON and XML themes
++│   └── my-custom.json
++├── templates/                       # optional extension templates
++│   ├── templates.json
++│   └── cmake.tpl
++└── plugins/                         # optional plugin installation root
++    ├── clangformat/                 # installed native module and manifest
++    │   ├── plugin.json
++    │   ├── libclangformat_plugin.so
++    │   └── settings.json            # plugin preference storage
++    └── docker/
++        ├── plugin.json
++        ├── libdocker_plugin.so
++        └── settings.json
++```
++
++The plugin *installation root* may be customized. Plugin preferences always use `<config>/plugins/<plugin-id>/settings.json`; the installation folder and the per-plugin settings folder can therefore be different.
++
++### Missing or damaged files
++
++- No `settings.json`: built-in defaults are used; the legacy `settings.ini` can seed `theme=` and `folder=`.
++- Invalid whole `settings.json`: defaults are loaded **in memory**; the bad file is preserved and subsequent automatic save is refused until you fix or rename it.
++- Missing `keybindings.json`: default shortcuts apply. Invalid entries and conflicts are ignored.
++- Missing theme or template directory: embedded defaults continue working.
++- Missing plugin folder: editor starts normally, with no external plugins.
++- Missing font file: Raven's available default font is used.
++- Missing `tasks.json`: optional build-task defaults are available through the terminal task subsystem.
++
++**Important:** native plugin settings use their own JSON loader. Corrupt plugin settings may be read as defaults; back up the file before editing it, since updating a plugin setting may replace the file.
++
++## 4. `settings.json` reference
++
++The schema is `schemaVersion: 1` for version 3.3. Unknown keys are generally preserved. Values are validated by `SettingsManager::validate()`.
++
++### Full example
++
++```json
++{
++  "schemaVersion": 1,
++  "general": {
++    "language": "en",
++    "restoreSession": true,
++    "autoSave": false,
++    "lastFolder": "/home/developer/projects/MyApp"
++  },
++  "editor": {
++    "fontFamily": "monospace",
++    "fontFile": "/home/developer/.local/share/fonts/JetBrainsMono-Regular.ttf",
++    "fontSize": 14,
++    "tabSize": 4,
++    "insertSpaces": true,
++    "wordWrap": false,
++    "lineNumbers": true
++  },
++  "appearance": {
++    "theme": "Music Nocturne",
++    "uiFontFile": "",
++    "uiFontSize": 13,
++    "customThemesDirectory": "",
++    "preferredThemeFormat": "json"
++  },
++  "terminal": {
++    "fontFamily": "monospace",
++    "fontFile": "",
++    "fontSize": 14,
++    "defaultShell": "",
++    "scrollbackLines": 5000
++  },
++  "templates": {
++    "directory": "",
++    "associations": {
++      ".cpp": "cpp17",
++      ".h": "cpp-header",
++      ".py": "python",
++      ".json": "json",
++      ".sql": "sql-query"
++    }
++  },
++  "plugins": {
++    "enabled": true,
++    "directory": "",
++    "safeMode": false,
++    "enabledIds": ["com.dodev.clangformat", "com.dodev.docker"],
++    "disabled": []
++  }
++}
++```
++
++### Settings key table
++
++| Key | Type | Default | Allowed or implemented behavior |
++|---|---|---|---|
++| `schemaVersion` | integer | `1` | Only schema v1 is currently understood |
++| `general.language` | string | `en` | Preference; complete UI localization is not implemented |
++| `general.restoreSession` | boolean | `true` | Session preference |
++| `general.autoSave` | boolean | `false` | Editor auto-save preference; check integration for individual document types |
++| `general.lastFolder` | string | `""` | Last opened project folder |
++| `editor.fontFamily` | string | `monospace` | Reserved; custom files are the working font selection mechanism |
++| `editor.fontFile` | string | `""` | Optional TTF/OTF path |
++| `editor.fontSize` | integer | `14` | Clamped to 8–64 |
++| `editor.tabSize` | integer | `4` | Clamped to 1–16 |
++| `editor.insertSpaces` | boolean | `true` | Replace tab input with spaces |
++| `editor.wordWrap` | boolean | `false` | Wrap long lines |
++| `editor.lineNumbers` | boolean | `true` | Show line number gutter |
++| `appearance.theme` | string | `Music Nocturne` | Embedded or imported theme name |
++| `appearance.uiFontFile` | string | `""` | Optional UI TTF/OTF path |
++| `appearance.uiFontSize` | integer | `13` | Clamped to 9–36 |
++| `appearance.customThemesDirectory` | string | `""` | Empty means `<config>/themes` |
++| `appearance.preferredThemeFormat` | string | `json` | `json` or `xml` |
++| `terminal.fontFamily` | string | `monospace` | Reserved family string |
++| `terminal.fontFile` | string | `""` | Optional terminal font |
++| `terminal.fontSize` | integer | `14` | Clamped to 8–48 |
++| `terminal.defaultShell` | string | `""` | Empty means native shell choice |
++| `terminal.scrollbackLines` | integer | `3000` | Clamped to 100–200000 |
++| `templates.directory` | string | `""` | Empty means `<config>/templates` |
++| `templates.associations` | object | defaults | Maps extension → template ID |
++| `plugins.enabled` | boolean | `true` | Enable external native plugin subsystem |
++| `plugins.safeMode` | boolean | `false` | Block loading all external plugins |
++| `plugins.directory` | string | `""` | Empty means `<config>/plugins` |
++| `plugins.enabledIds` | array | `[]` | **Explicit allowlist** of plugin IDs |
++| `plugins.disabled` | array | `[]` | Additional denylist |
++
++### Editing settings through the GUI
++
++Open the Settings dialog from the application menu. The embedded Raven window contains tabs **General**, **Editor & Fonts**, **Appearance**, **Terminal**, **Templates**, **Keybindings**, and **Plugins**. Make changes, then use **Apply / Save**; select **Cancel** to discard unapplied values, or **Restore defaults** for defaults. Plugin enable/disable changes require restarting the editor.
++
++## 5. Fonts and editor behavior
++
++Use a locally installed `.ttf` or `.otf` file. This may be different for the application widgets, editor and terminal. Example:
++
++```json
++{
++  "editor": {"fontFile": "/home/me/fonts/FiraCode-Regular.ttf", "fontSize": 16},
++  "appearance": {"uiFontFile": "/home/me/fonts/Inter-Regular.ttf", "uiFontSize": 13},
++  "terminal": {"fontFile": "/home/me/fonts/JetBrainsMono-Regular.ttf", "fontSize": 14}
++}
++```
++
++Do not replace the entire `settings.json` with only those sections unless you deliberately want defaults for the omitted keys. The Settings window can browse local font files. Font ligatures, per-language font changes and a full installed-font dropdown are not part of the current public contract.
++
++## 6. Themes and Raven XML
++
++The base application ships **13 embedded themes** (`resources/EmbeddedUi.h`). They include `Music Nocturne`, `Music Aurora Glass`, `Music Daylight`, `VS Code Dark Modern`, `VS Code Light Modern`, plus the previous presets. They are always available even with no files in `<config>/themes`.
++
++Custom themes can be authored with **Appearance → Create / edit theme**, given a unique name, previewed, and exported as JSON or XML to a chosen path. Theme names must not collide with a built-in preset when using the editor's theme designer.
++
++The model in `include/dodev/themes/ThemeManager.h` includes:
++
++- `name`: displayed theme name;
++- `base`: Raven `Dark`, `Light`, `GlassDark` or `GlassLight`;
++- `accent`: primary accent color;
++- `window`, `panel`, `control`, `input`, `text`, `separator`;
++- syntax colors: `keyword`, `string`, `comment`;
++- `cornerRadius`: corner radius of common widgets.
++
++Custom files in `<config>/themes` are imported at startup; you can instead specify `appearance.customThemesDirectory` or import an individual file via the dialog. Embedded themes are read-only source assets.
++
++**Round-trip note:** imported Raven XML may carry advanced `<Style>` classes and material configuration that the simplified JSON model does not represent. Keep the XML source if you depend on advanced material effects.
++
++## 7. Author a theme in JSON or XML
++
++### JSON — example `themes/ocean-glass.json`
++
++```json
++{
++  "formatVersion": 1,
++  "name": "Ocean Glass",
++  "base": "GlassDark",
++  "accent": "#5AC8FA",
++  "cornerRadius": 12,
++  "colors": {
++    "window": "#0C1420",
++    "panel": "#162438",
++    "control": "#26394C",
++    "input": "#101C2D",
++    "text": "#EAF7FF",
++    "separator": "#324B62"
++  },
++  "syntax": {
++    "keyword": "#7DC8FF",
++    "string": "#B0E7AF",
++    "comment": "#8199AE"
++  }
++}
++```
++
++Select the imported theme under Appearance. The default JSON file example is also available at `examples/themes/my-dark.json`.
++
++### XML — generated from `ThemeDefinition`
++
++The precise XML vocabulary depends on Raven's theme implementation. **Do not assume an arbitrary QSS, GTK CSS, or HTML stylesheet is accepted.** To generate a valid native file, use **Theme Designer → Save as XML**. For a machine-generated file, construct a `ThemeDefinition` and call `toXml()`. The resulting XML can be loaded by `Rtheme_load_from_memory` and is what the GUI exports.
++
++### Change VS Code-like colors only
++
++Duplicate `VS Code Dark Modern` from the Designer, choose a new name and change the accent, panel, input, separator and syntax colors. Export as JSON for straightforward editing or XML when you need additional Raven-specific controls.
++
++## 8. Extension-specific file templates
++
++Templates can be built in, user-defined or registered dynamically by a native plugin. The default `TemplateRegistry` supports C++17, headers, Python, JSON, XML and CMake templates.
++
++### Create a new `.sql` template
++
++1. Create `<config>/templates/sql.tpl`:
++
++```sql
++-- ${FILE_NAME} | ${PROJECT_NAME} | ${DATE}
++SELECT id, name
++FROM example_table
++WHERE id = ?;
++```
++
++2. Create `<config>/templates/templates.json`:
++
++```json
++{
++  "templates": [
++    {
++      "id": "sql-query",
++      "name": "SQL Query",
++      "extension": ".sql",
++      "file": "sql.tpl"
++    }
++  ]
++}
++```
++
++3. Set the mapping in the main `settings.json`:
++
++```json
++{
++  "templates": {
++    "directory": "",
++    "associations": {
++      ".sql": "sql-query"
++    }
++  }
++}
++```
++
++4. Restart if you created the templates after the initial directory scan. Use **File → New from Template**, select the template and enter the filename.
++
++### Supported placeholders
++
++| Placeholder | Meaning |
++|---|---|
++| `${FILE_NAME}` | Filename entered by the user |
++| `${CLASS_NAME}` | Class-style name derived from filename stem |
++| `${PROJECT_NAME}` | Current workspace/project label |
++| `${DATE}` | Local date generated by the editor |
++| `${AUTHOR}` | Provided template author variable |
++
++The generated file opens as an **unsaved editor tab**; saving is a separate action. A plugin may register new templates using `register_template`.
++
++## 9. `keybindings.json`
++
++This is an optional **JSON array**, not a map. Custom overrides coexist with built-in defaults.
++
++```json
++[
++  { "key": "Ctrl+G", "command": "navigation.go_to_line" },
++  { "key": "Ctrl+P", "command": "navigation.quick_open" },
++  { "key": "Ctrl+Shift+P", "command": "navigation.command_palette" },
++  { "key": "Ctrl+Alt+F", "command": "clangformat.apply" },
++  { "key": "Ctrl+Alt+D", "command": "docker.prompt" },
++  { "key": "", "command": "edit.redo" }
++]
++```
++
++The last entry explicitly **unbinds** `edit.redo`. Plugin commands can receive bindings when their plugins are enabled. A disabled plugin's binding can remain on disk, ready for the next activation.
++
++### Built-in navigation and terminal shortcuts
++
++| Key | Command |
++|---|---|
++| `Ctrl+G` | `navigation.go_to_line` |
++| `Ctrl+P` | `navigation.quick_open` |
++| `Ctrl+Shift+P` | `navigation.command_palette` |
++| `Ctrl+K` | `keybindings.show` |
++| `Ctrl+S` | `file.save` |
++| `Ctrl+Shift+S` | `file.save_as` |
++| `Ctrl+F` | `search.show` |
++| `Ctrl+H` | `search.replace_show` |
++| `Ctrl+Shift+F` | `edit.find_workspace` |
++| `Ctrl+Shift+B` | `terminal.run_build` |
++| `Ctrl+Grave` | `terminal.focus` |
++| `Ctrl+Shift+Grave` | `terminal.new` |
++
++Use **Go → Keyboard Shortcuts** or `Ctrl+K` to record a shortcut physically, filter all registered commands, edit a shortcut, unbind it or restore defaults. The registry detects duplicate shortcuts. Only single-stroke combinations are supported: VS Code's two-stage chords (`Ctrl+K Ctrl+S`) are **not** implemented.
++
++### Shortcut names and parsing
++
++Use names such as `Ctrl`, `Shift`, `Alt`, `Super`, `Grave`, `Enter`, `Tab`, `F1`–`F12`, and arrow keys. Avoid unmodified printable keys because they would interfere with text entry. Check `docs/KEYBINDINGS.md` for the complete parser contract and limitations.
++
++## 10. Terminal and workspace tasks
++
++The integrated terminal offers long-lived PTY shells (Linux/macOS) and ConPTY on compatible Windows systems. It is **not** a process-output-only panel. You can create multiple terminal sessions and split terminal views using the Terminal menu.
++
++### Shell setting
++
++```json
++{
++  "terminal": {
++    "defaultShell": "bash",
++    "scrollbackLines": 7500,
++    "fontSize": 13
++  }
++}
++```
++
++On Windows use `pwsh`, `cmd`, or the default PowerShell configuration supported by `TerminalSession.cpp`.
++
++### Workspace `.vscode/tasks.json`
++
++DoDevEditor implements a **subset** of VS Code task syntax:
++
++```json
++{
++  "version": "2.0.0",
++  "tasks": [
++    {
++      "label": "Configure",
++      "type": "shell",
++      "command": "cmake -S . -B build"
++    },
++    {
++      "label": "Build",
++      "type": "shell",
++      "command": "cmake --build build -j 4",
++      "group": {"kind": "build", "isDefault": true}
++    },
++    {
++      "label": "Test",
++      "type": "shell",
++      "command": "ctest --test-dir build --output-on-failure",
++      "group": "test"
++    }
++  ]
++}
++```
++
++Supported fields are `label`, `type` (`shell` or `process`), `command`, `args` (array of strings), `group` and `options.cwd`. The loader does not implement the entire VS Code variable-substitution, debugger or problem-matcher format. Run tasks from **Terminal → Run Task / Run Build Task**. `Terminal → Configure Tasks` can generate a default task file.
++
++### Safe command injection via plugins
++
++The plugin host's `execute_terminal_command` sends a **single line** to the currently active terminal, starting a terminal if necessary. The host refuses embedded newlines and NULs. A plugin should quote each argument and should not concatenate untrusted values into shell code.
++
++## 11. Native plugin packaging and activation
++
++Plugins are optional shared libraries plus a mandatory `plugin.json` manifest:
++
++```text
++<config>/plugins/my-plugin/
++├── plugin.json
++└── libmy_plugin.so
++```
++
++On Windows the binary is `my_plugin.dll`; on macOS it is `libmy_plugin.dylib`.
++
++### Manifest example
++
++```json
++{
++  "id": "com.example.myplugin",
++  "name": "My Plugin",
++  "version": "1.0.0",
++  "description": "Adds a command, menu and settings",
++  "apiVersion": 1,
++  "entry": {
++    "linux": "libmy_plugin.so",
++    "windows": "my_plugin.dll",
++    "macos": "libmy_plugin.dylib"
++  }
++}
++```
++
++The loader requires a valid plugin ID, API version 1 and a **relative** binary filename without parent directory traversal. Manifests are discovered on startup; **native code does not load automatically**.
++
++### Enable a plugin
++
++1. Build the `.so`/`.dll` and place it next to its manifest.
++2. Open **Settings → Plugins**; choose the directory containing installed plugin folders.
++3. Select the plugin and click **Enable selected**.
++4. Apply and save preferences, then restart.
++5. Check the Plugins menu and Tools/Edit menu for registered actions.
++6. If the plugin is not visible, inspect the manifest ID and filename, confirm that `plugins.safeMode` is false, and check the load diagnostics.
++
++You can also opt in through the main `settings.json`:
++
++```json
++{
++  "plugins": {
++    "enabled": true,
++    "safeMode": false,
++    "enabledIds": ["com.dodev.clangformat", "com.dodev.docker"],
++    "disabled": []
++  }
++}
++```
++
++**Do not enable an unknown binary merely because it came from a ZIP.** Native plugins are in-process and are not sandboxed. Disabling a plugin affects the next restart; the loader does not currently hot-unload it.
++
++## 12. Plugin SDK v1 and the additive host functions
++
++Public header: `include/dodev/sdk/dodev_plugin_api.h`.
++
++```cpp
++extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(
++    const DodevHostAPI* host, DodevPluginAPI* plugin);
++```
++
++The binary boundary is a fixed-layout **C API**, even when the implementation uses C++17. Do not export C++ STL containers, exceptions or native Raven types across the plugin ABI.
++
++### Existing contributions
++
++| Host function | What the plugin can add |
++|---|---|
++| `register_command` | Named executable command |
++| `register_menu` | Item in File, Edit, View, Tools or Plugins |
++| `register_tab` | On-demand tab content |
++| `register_panel` | Docked panel in Left, Right, Bottom or Tab |
++| `register_template` | Extension file template |
++| `register_theme_xml` | In-memory Raven XML theme |
++| `register_setting` | String setting with default and description |
++| `get_setting` / `set_setting` | Plugin preference JSON |
++| `subscribe_event` | Events such as `document.opened` |
++| `log` | Severity-coded plugin diagnostics |
++
++### Additive API v1 capabilities in 3.3
++
++The host struct **appends** these function pointers after `subscribe_event`; existing binaries compiled against earlier v1 layout remain compatible because the preceding fields do not move.
++
++| New host callback | Behavior |
++|---|---|
++| `get_active_document(ctx, &path, &contents)` | Read the active text document buffer; returned pointers are temporary and must be copied |
++| `replace_active_document(ctx, contents)` | Replace active writable text buffer; the Raven editor insertion path preserves undo operations |
++| `execute_terminal_command(ctx, line)` | Send a single command to the active persistent PTY/ConPTY session |
++| `prompt_input(ctx, title, label, initial, callback, data)` | Show embedded-Raven dialog; callback runs when user confirms |
++
++Plugins compiled with the **new** header should check `DODEV_HOST_HAS(host, get_active_document)` or the other optional callbacks before calling them. Plugins compiled with an older v1 header continue to see the same original fields.
++
++```cpp
++if (DODEV_HOST_HAS(host, execute_terminal_command)) {
++    host->execute_terminal_command(host->context, "'docker' 'ps' '-a'");
++}
++```
++
++The prompt callback is asynchronous with respect to the original command invocation. The plugin must not retain the dialog's temporary UI builder, and a callback must not assume the active document remained unchanged while the dialog was open. UI hooks execute on the Raven UI thread; long blocking operations may delay rendering.
++
++### Add a menu item
++
++```cpp
++void hello(const DodevHostAPI* h, void*) {
++    h->log(h->context, 1, "Hello from MyPlugin");
++}
++// Inside dodev_plugin_init:
++host->register_command(host->context, "myplugin.hello", "Say Hello", &hello, nullptr);
++host->register_menu(host->context, "Tools", "Say Hello", "myplugin.hello");
++```
++
++### Add a tab
++
++```cpp
++void createTab(const DodevHostAPI*, const DodevUiBuilder* ui, void*) {
++    ui->label(ui->context, "Plugin settings and tools");
++    ui->button(ui->context, "Execute", "myplugin.hello");
++}
++// Inside init:
++host->register_tab(host->context, "myplugin.main", "My Plugin", &createTab, nullptr);
++```
++
++The tab and panel `DodevUiBuilder` supports **label**, **button** and **read_only_text**. Plugins do not receive direct access to arbitrary Raven widget pointers in API v1.
++
++### Plugin events
++
++Known host events include `app.ready`, `app.shutting_down`, `document.opened`, `document.saved` and `theme.changed`. Payloads are JSON strings, with event-specific keys. A plugin must not assume every payload contains the same structure.
++
++## 13. Build your own plugin
++
++Clone `plugins/examples/HelloPlugin` and adjust its module name, manifest ID and registered commands. Add a CMake MODULE target:
++
++```cmake
++add_library(my_plugin MODULE plugins/examples/MyPlugin/MyPlugin.cpp)
++target_include_directories(my_plugin PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
++set_target_properties(my_plugin PROPERTIES
++    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugin-examples/my-plugin"
++    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugin-examples/my-plugin")
++configure_file(plugins/examples/MyPlugin/plugin.json
++    "${CMAKE_BINARY_DIR}/plugin-examples/my-plugin/plugin.json" COPYONLY)
++```
++
++The exported symbol must be named `dodev_plugin_init`, return nonzero after successful registration, and populate `DodevPluginAPI::api_version`. Check `struct_size` before using fields. Use `shutdown` to release plugin-managed resources; keep Raven widget ownership with the host.
++
++### Plugin settings
++
++```cpp
++host->register_setting(host->context,
++    "message", "Hello", "Greeting displayed by the plugin");
++
++const char* current = host->get_setting(host->context,"message");
++host->set_setting(host->context,"message","Updated greeting");
++```
++
++Settings appear in **Settings → Plugins**, once the plugin has loaded and declared them. The current UI displays **string** values; numeric or boolean settings can be interpreted by the plugin after reading them as strings.
++
++## 14. clang-format plugin
++
++**ID:** `com.dodev.clangformat`
++**Source:** `plugins/examples/ClangFormat/ClangFormatPlugin.cpp`
++**Binary:** `libclangformat_plugin.so` (Linux), `clangformat_plugin.dll` (Windows)
++
++The plugin registers two commands:
++
++| Command ID | Behavior |
++|---|---|
++| `clangformat.apply` | Run clang-format against a copy of the active buffer and replace the in-memory text after success |
++| `clangformat.style_prompt` | Prompt for a clang-format style and save it in the plugin's JSON settings |
++
++The first command is available from **Edit → Format with clang-format** and the second from **Tools → clang-format Style...**. A **clang-format Tools** tab also provides buttons for both.
++
++### Install
++
++Build with `DODEV_BUILD_PLUGIN_EXAMPLES=ON`. The module and manifest are under `build/plugin-examples/clangformat/`.
++
++```bash
++CONFIG="${DODEV_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/DoDevEditor}"
++mkdir -p "$CONFIG/plugins/clangformat"
++cp build/plugin-examples/clangformat/{plugin.json,libclangformat_plugin.so} \
++   "$CONFIG/plugins/clangformat/"
++```
++
++Enable `com.dodev.clangformat` in **Settings → Plugins**, restart and open a text file. You must install the **clang-format executable separately**; it is not downloaded or bundled by this project.
++
++### Plugin JSON preferences
++
++File: `<config>/plugins/com.dodev.clangformat/settings.json`:
++
++```json
++{
++  "executable": "clang-format",
++  "style": "LLVM"
++}
++```
++
++`style` can be `LLVM`, `Google`, `Chromium`, `Mozilla`, `WebKit`, `GNU`, `Microsoft`, or an explicit `file:/absolute/path/to/.clang-format` where supported by the installed clang-format version. The plugin copies content to a temporary file before formatting; plain `file` styling may resolve relative to the temporary directory, **not** your workspace. Prefer an explicit path when depending on a project-specific `.clang-format` file.
++
++The plugin does **not** save the source file automatically and does **not** format binary/CSV/DLT documents. It uses a temporary file and invokes the external process synchronously; very large files may temporarily block the UI. Format failures do not replace the editor buffer.
++
++### Prompt example
++
++1. Open **Tools → clang-format Style...**.
++2. Enter `Google` and click **Execute / Apply**.
++3. Open `example.cpp`, choose **Edit → Format with clang-format**.
++4. Review changes and save with `Ctrl+S`. Use `Ctrl+Z` if you want to undo formatting.
++
++Assign a shortcut by adding `{ "key": "Ctrl+Alt+F", "command": "clangformat.apply" }` to `keybindings.json` or through Keyboard Shortcuts Settings.
++
++## 15. Docker Tools plugin
++
++**ID:** `com.dodev.docker`
++**Source:** `plugins/examples/Docker/DockerPlugin.cpp`
++**Binary:** `libdocker_plugin.so` (Linux), `docker_plugin.dll` (Windows)
++
++The Docker plugin is a **Docker CLI integration**; it does not embed Docker Engine's HTTP API or ship a daemon. Docker must already be installed and usable by the current user.
++
++### Commands
++
++| Command ID | Command or action |
++|---|---|
++| `docker.ps` | `docker ps -a` |
++| `docker.images` | `docker images` |
++| `docker.version` | `docker version` |
++| `docker.compose_up` | `docker compose -f <composeFile> up -d` |
++| `docker.compose_down` | `docker compose -f <composeFile> down` |
++| `docker.build` | `docker build -t <buildTag> <buildContext>` |
++| `docker.logs` | Prompt for a container and follow with `docker logs --tail 200` |
++| `docker.run` | Prompt for an image and run it with `docker run --rm -it` |
++| `docker.prompt` | Prompt for Docker CLI arguments and execute them in the current terminal |
++
++All commands are registered under **Tools** and a **Docker Tools** tab. `docker.compose_down` can stop applications; `docker.run` may pull images and start processes. These actions are initiated by the user, never automatically at startup.
++
++### JSON preferences
++
++File: `<config>/plugins/com.dodev.docker/settings.json`:
++
++```json
++{
++  "executable": "docker",
++  "composeFile": "compose.yaml",
++  "buildTag": "dodev-app:latest",
++  "buildContext": ".",
++  "container": "",
++  "image": "alpine:latest"
++}
++```
++
++You can change these from **Settings → Plugins → Docker Tools → Plugin setting** and save the value. A non-default Docker binary can be configured by absolute path, for example `/usr/local/bin/docker`.
++
++### Execute prompt: examples
++
++Open **Tools → Docker: Execute Command Prompt...**. Enter one of:
++
++```text
++ps -a
++images
++compose ps
++container ls --all
++inspect my-container
++logs --tail 100 my-container
++```
++
++The user input is parsed as literal argument tokens, quoted and sent to the integrated terminal. The plugin does **not** evaluate `;`, `&&`, pipes or `$()` as shell operators from the prompt; it treats them as argument contents. You may also enter the leading `docker` word; it will be removed to avoid duplicate prefixes.
++
++### Compose files and relative paths
++
++Docker commands run in the **terminal session's current working directory**, normally the folder in which the terminal was started. If your `compose.yaml` lives in a different directory, set `composeFile` to a suitable path or change the terminal directory. The plugin does not automatically create Dockerfiles, build contexts or Compose YAML files.
++
++### Linux Docker permissions
++
++```bash
++docker version
++docker ps -a
++```
++
++If you receive `permission denied`, check daemon status and account permissions. Adding a user to the `docker` group grants broad privileges; understand the security implications before doing so. You do not need to run the editor as root.
++
++## 16. Per-plugin JSON settings
++
++For an enabled plugin, the host writes settings under `<config>/plugins/<plugin-id>/settings.json`. Example:
++
++```text
++<config>/plugins/com.dodev.clangformat/settings.json
++<config>/plugins/com.dodev.docker/settings.json
++<config>/plugins/com.dodev.hello/settings.json
++```
++
++This is separate from a plugin's installation folder. The plugin registers settings with `register_setting`, providing a key, string default and description. Settings are loaded at startup; `set_setting` saves immediately. **Do not put passwords, payment keys or access tokens in plain-text plugin JSON.** Current SDK does not provide a secrets vault.
++
++### How to use General Settings for plugin options
++
++1. Enable plugin and restart.
++2. Open **Settings → Plugins**.
++3. Select the installed plugin in the list.
++4. Select a registered **Plugin setting** in the dropdown.
++5. Enter the new string value and click **Save value**.
++6. Execute its command or, if the plugin caches settings during initialization, restart for that plugin's setting to take effect.
++
++The clang-format and Docker examples query settings at command time, so their settings normally apply to subsequent commands immediately.
++
++## 17. Customization recipes
++
++### Recipe A — VS Code-like appearance and shortcuts
++
++Set `appearance.theme` to `VS Code Dark Modern`, `editor.fontSize` to `14`, `editor.tabSize` to `4` and `terminal.scrollbackLines` to `5000`. Leave `keybindings.json` absent to use default `Ctrl+P`, `Ctrl+G`, `Ctrl+Shift+P` and related commands.
++
++### Recipe B — Raven_music glass style
++
++Select `Music Aurora Glass`, then duplicate it in the Theme Designer and choose a new name. Adjust accent and surface colors, preview and export to `<config>/themes/my-music-glass.xml`.
++
++### Recipe C — Format C++ with one keystroke
++
++Enable clang-format; set its executable and style. Bind `Ctrl+Alt+F` to `clangformat.apply`. Open a text file and use the shortcut. Review and save the result.
++
++### Recipe D — Build and test a project
++
++Create `.vscode/tasks.json` from the example in Section 10. Open the project folder, run the build task with `Ctrl+Shift+B`, inspect the PTY output, then run CTest through the Terminal menu.
++
++### Recipe E — Run Docker Compose from the editor
++
++Enable Docker Tools, set `composeFile` to `compose.yaml`, open a workspace containing it and select **Tools → Docker: Compose Up**. The command executes in the active terminal. Use **Compose Down** only when you intend to stop the services.
++
++### Recipe F — Temporary no-plugins mode
++
++To investigate a crash or a suspicious plugin, edit the main JSON:
++
++```json
++{
++  "plugins": {"enabled": true, "safeMode": true}
++}
++```
++
++Restart. Native plugin code is not loaded while safe mode is true. Built-in editing and terminal components are unaffected.
++
++## 18. Build options and tests
++
++| CMake option | Default | Purpose |
++|---|---|---|
++| `DODEV_BUILD_GUI` | `ON` | Fetch Raven and compile the GUI executable |
++| `DODEV_BUILD_TESTS` | `ON` | Compile all headless tests |
++| `DODEV_BUILD_PLUGIN_EXAMPLES` | `ON` | Build Hello, clang-format and Docker native modules |
++| `DODEV_RAVEN_REPOSITORY` | `https://github.com/aneury1/Raven.git` | Override remote source |
++| `DODEV_RAVEN_GIT_TAG` | `main` | Branch, tag or commit to fetch |
++
++Run the headless tests:
++
++```bash
++cmake -S . -B build-headless -DDODEV_BUILD_GUI=OFF
++cmake --build build-headless --parallel
++ctest --test-dir build-headless --output-on-failure
++```
++
++The suite covers settings defaults, JSON import/export, themes, templates, keybindings, editor operations, PTY, task parsing, Hello plugin and format/Docker plugin integration. **Passing headless tests does not prove the Raven/Vulkan GUI has been rendered successfully.** The native GUI must be compiled and visually tested against your chosen Raven revision.
++
++## 19. Upgrading without losing local changes
++
++The reported error:
++
++```text
++git apply --check DoDevEditor_Raven_3_2_Keybindings.patch
++error: patch failed: include/EditorApp.h
++error: patch failed: src/EditorApp.cpp
++error: patch failed: src/EditorSettings.cpp
++```
++
++means the file contents in your local directory **do not match the exact 3.1 source snapshot** used to generate the previous patch. Causes include local edits, different base version, already applied changes, or line-ending transformations.
++
++### Safest: full-source package
++
++Extract `DoDevEditor_Raven_3_3_Extensions.zip` into a **new directory**. Point it at the same user configuration directory or copy your settings and workspace when ready. This does not touch the existing project.
++
++### Clean base: use the correct patch
++
++- If your project matches the original **3.1** source, use `DoDevEditor_Raven_3_1_to_3_3.patch`.
++- If it matches the original **3.2** source, use `DoDevEditor_Raven_3_2_to_3_3.patch`.
++
++```bash
++cd /path/to/your/DoDevEditor
++# Recommended: commit or back up modifications first.
++git status --short
++git apply --check /path/to/DoDevEditor_Raven_3_2_to_3_3.patch
++git apply /path/to/DoDevEditor_Raven_3_2_to_3_3.patch
++```
++
++Do not run the 3.2 → 3.3 patch on version 3.0 or 3.1. If `--check` fails, **do not use `git apply --reject` blindly**; it can leave a half-updated project.
++
++### Locally modified base: conflict-aware updater
++
++The complete package ships `scripts/apply_upgrade.py` and original source snapshots under `upgrade/bases/{3.1,3.2}`. For a working tree with local changes, the script attempts three-way text merges with `git merge-file` and refuses to overwrite a conflicted file. It checks all changes **before writing any destination file** and creates backups of changed files.
++
++```bash
++python3 /path/to/DoDevEditor_Raven_3_3_Extensions/scripts/apply_upgrade.py \
++  --target /path/to/your/existing/DoDevEditor --from 3.1 --dry-run
++
++python3 /path/to/DoDevEditor_Raven_3_3_Extensions/scripts/apply_upgrade.py \
++  --target /path/to/your/existing/DoDevEditor --from 3.1
++```
++
++On conflict, it creates `*.dodev-merge-conflict` files for inspection and does not apply changes. Backups of files it updates are written under `.dodev-upgrade-backup-<timestamp>`.
++
++The updater requires Python 3 and Git. It handles UTF-8 text, and skips internal upgrade metadata. No tool can guarantee conflict-free application to an unknown modified source tree.
++
++### Diagnostic commands
++
++```bash
++git status --short
++git diff -- include/EditorApp.h src/EditorApp.cpp src/EditorSettings.cpp
++grep -n 'project(DoDevEditor VERSION' CMakeLists.txt
++git apply --check --verbose /path/to/upgrade.patch
++```
++
++If your local version is unknown, extract the full package in a new folder and manually reconcile your custom UI or code changes with a file comparison tool.
++
++## 20. Security boundaries
++
++- **Plugins are native code.** A plugin with malicious behavior has access to your files and operating system account; API-based permission declarations are not sandboxing.
++- **Docker is privileged.** A functioning Docker daemon can launch containers with broad host access; inspect third-party images and Compose YAML before executing them.
++- **Formatting is an external process.** `clang-format` is executed as a program and consumes the active document's contents; only install trusted executables and configurations.
++- **Settings are plain-text JSON.** They are not encrypted and are not suitable for passwords, API keys, payment cryptographic keys or other secrets.
++- **Terminal is a real shell.** Commands may modify or delete data. The Docker prompt's argument tokenizer avoids shell operator evaluation for user input, but the Docker CLI itself can perform destructive operations.
++- **Config files are user-controlled.** Keep file permissions appropriate. Never execute untrusted plugin binaries just to inspect their settings.
++
++## 21. Known limitations
++
++1. The GUI depends on a compatible Raven commit and Vulkan stack; it has not been built in a GitHub-disconnected test environment.
++2. Editor selections are contiguous; VS Code-compatible multi-cursor and rectangular selection are not implemented.
++3. Keyboard chords such as `Ctrl+K Ctrl+S` are not implemented; shortcuts are single-step.
++4. JSON themes express a simplified theme model. Advanced Raven XML styling may not round-trip through JSON.
++5. Plugin UI widgets are limited to labels, buttons and read-only text views in v1.
++6. Native plugins cannot be unloaded safely mid-session; activation changes require restart.
++7. clang-format invocation is synchronous; the plugin does not automatically save formatted buffers.
++8. The Docker integration is a terminal CLI wrapper, not an embedded Docker Desktop GUI or remote Docker REST client.
++9. Full VS Code task/problem-matcher/debugger syntax is not implemented.
++10. Plugin settings currently expose string values; a schema-based typed settings UI is a future enhancement.
++
++## 22. Relevant source files
++
++| Feature | Implementation |
++|---|---|
++| Settings schema/loading/saving | `src/settings/SettingsManager.cpp` |
++| JSON parser/serializer | `src/settings/Json.cpp` |
++| Settings Raven window | `resources/EmbeddedSettingsUi.h`, `src/EditorSettings.cpp` |
++| User theme model | `src/themes/ThemeManager.cpp` |
++| Embedded themes | `resources/EmbeddedUi.h` |
++| Editor commands | `src/editor/EditorCommands.cpp` |
++| Shortcut registry | `src/keybindings/KeybindingManager.cpp` |
++| Keybinding integration | `src/EditorKeybindings.cpp` |
++| Template expansion | `src/templates/TemplateRegistry.cpp` |
++| PTY/ConPTY | `src/TerminalSession.cpp` |
++| Task parsing | `src/terminal/TerminalTasks.cpp` |
++| Plugin ABI | `include/dodev/sdk/dodev_plugin_api.h` |
++| Plugin discovery/runtime | `src/plugins/PluginManager.cpp` |
++| Plugin GUI bridge and prompt | `src/EditorSettings.cpp`, `resources/EmbeddedPluginPromptUi.h` |
++| clang-format module | `plugins/examples/ClangFormat/ClangFormatPlugin.cpp` |
++| Docker module | `plugins/examples/Docker/DockerPlugin.cpp` |
++| Example plugin | `plugins/examples/HelloPlugin/HelloPlugin.cpp` |
++| Upgrade utility | `scripts/apply_upgrade.py` |
++
++---
++
++For shorter focused references, read `docs/SETTINGS_V3.md`, `docs/KEYBINDINGS.md`, `docs/THEMES_AND_TEMPLATES.md`, `docs/PLUGIN_SDK_V1.md`, `docs/TERMINAL.md` and `docs/VSCODE_MENUS.md`.
+diff --git a/docs/PLUGIN_SDK_V1.md b/docs/PLUGIN_SDK_V1.md
+index 67b3135..3b03fc1 100644
+--- a/docs/PLUGIN_SDK_V1.md
++++ b/docs/PLUGIN_SDK_V1.md
+@@ -58,3 +58,8 @@ On Windows, copy `hello_plugin.dll` alongside `plugin.json`, then enable it thro
+ Plugins are **trusted in-process native code**, not sandboxed. Do not enable an untrusted binary. A malicious or crashing plugin may terminate or compromise the editor. Current API supports dynamically registered menu items, on-demand tabs and dock panels, and string-valued settings; it does not yet support hot-unloading on disable, transactional rollback of all contributions from a failed plugin, language servers, compiler debugging interfaces, or arbitrary Raven widget trees. Activation/deactivation is intended to take effect on restart.
+ 
+ The bundled `plugins/examples/HelloPlugin/HelloPlugin.cpp` is the canonical runnable example. `tests/test_plugin.cpp` verifies the example plugin can be discovered, explicitly enabled, loaded, invoked, configured and shut down in the headless core build.
++
++
++## Additive v1 host extension in DoDevEditor 3.3
++
++The host now appends `get_active_document`, `replace_active_document`, `execute_terminal_command`, and `prompt_input` callbacks. No previous `DodevHostAPI` fields were reordered. Use `DODEV_HOST_HAS(host, field)` before calling new callbacks. The editor owns the actual Raven widgets and the terminal. `prompt_input` calls the plugin callback after the user confirms a text value. Both bundled new plugins demonstrate these APIs; see `docs/CUSTOMIZATION_MANUAL.md` sections 12–15.
+diff --git a/docs/RELEASE_3_3.md b/docs/RELEASE_3_3.md
+new file mode 100644
+index 0000000..0d1fe3a
+--- /dev/null
++++ b/docs/RELEASE_3_3.md
+@@ -0,0 +1,27 @@
++# DoDevEditor Raven 3.3 — Release notes
++
++## Added
++
++- Extensive 900-line+ Markdown manual in `docs/CUSTOMIZATION_MANUAL.md` describing configuration, themes, fonts, file templates, keybindings, terminal, tasks, plugins and upgrade recovery.
++- New `com.dodev.clangformat` C++17 native plugin, with per-plugin JSON settings (`executable`, `style`), a style input prompt, formatting of the active buffer, undo-friendly editor replacement and Edit/Tools menu integration.
++- New `com.dodev.docker` C++17 native plugin with CLI argument prompt, containers, images, version, Compose Up/Down, build, logs and run commands in the integrated PTY/ConPTY terminal.
++- Additive SDK v1 host function pointers: `get_active_document`, `replace_active_document`, `execute_terminal_command`, and `prompt_input`. No original function pointers were moved.
++- Embedded Raven input dialog XML, no external XML required.
++- Build targets for all three example native plugins (Hello, clang-format and Docker).
++- Two source patches, for original 3.1 and original 3.2 baselines, plus conflict-aware upgrade script preserving local edits and making backups.
++
++## Compatibility and prerequisites
++
++- Plugins are explicit opt-in under Settings → Plugins and need an application restart after enabling.
++- The clang-format plugin expects an external trusted `clang-format` executable; it is **not bundled**.
++- The Docker plugin expects the Docker CLI and a usable daemon; it does **not** install Docker.
++- Plugin settings are stored in plain-text JSON; do not put secrets there.
++- The full GUI depends on a compatible GitHub Raven revision and a Vulkan environment.
++
++## Verification
++
++- CMake headless build completed with GCC/C++17 in this environment.
++- 12 automated tests passed: services, plugin loader, two new native plugins, terminal PTY, tasks, settings, themes, keybindings, editor commands, XML contract.
++- Generated 3.1→3.3 and 3.2→3.3 patches both passed clean `git apply --check` and were applied to pristine extracted baselines.
++- Conflict-aware updater was tested with a non-conflicting README local edit (preserved) and a conflicting README title edit (no project sources changed).
++- **The full Raven/Vulkan GUI was not compiled or run in this environment**; visual GUI and Windows ConPTY behavior require validation on a machine that can fetch Raven and render windows.
+diff --git a/examples/plugin-settings/clangformat.json b/examples/plugin-settings/clangformat.json
+new file mode 100644
+index 0000000..085180f
+--- /dev/null
++++ b/examples/plugin-settings/clangformat.json
+@@ -0,0 +1,4 @@
++{
++  "executable": "clang-format",
++  "style": "LLVM"
++}
+diff --git a/examples/plugin-settings/docker.json b/examples/plugin-settings/docker.json
+new file mode 100644
+index 0000000..8eee7b9
+--- /dev/null
++++ b/examples/plugin-settings/docker.json
+@@ -0,0 +1,8 @@
++{
++  "executable": "docker",
++  "composeFile": "compose.yaml",
++  "buildTag": "dodev-app:latest",
++  "buildContext": ".",
++  "container": "",
++  "image": "alpine:latest"
++}
+diff --git a/include/EditorApp.h b/include/EditorApp.h
+index 69b896d..b59f6d6 100644
+--- a/include/EditorApp.h
++++ b/include/EditorApp.h
+@@ -11,6 +11,7 @@
+ #include "dodev/keybindings/KeybindingManager.h"
+ #include <Raven.h>
+ #include <filesystem>
++#include <functional>
+ #include <memory>
+ #include <map>
+ #include <string>
+@@ -59,6 +60,8 @@ private:
+     Rid settingsWindow_=R_INVALID_ID;
+     Rid designerWindow_=R_INVALID_ID;
+     Rid templateWindow_=R_INVALID_ID;
++    Rid pluginPromptWindow_=R_INVALID_ID;
++    std::function<void(const std::string&)> pendingPluginPrompt_;
+     Rid goToLineWindow_=R_INVALID_ID, quickOpenWindow_=R_INVALID_ID;
+     bool commandPalette_=false, recordingBinding_=false;
+     std::vector<fs::path> quickCandidates_,quickMatches_;
+@@ -173,6 +176,10 @@ private:
+     void loadUserThemes();
+     void refreshThemeChoices();
+     void registerPluginUi();
++    bool showPluginPrompt(const std::string& title,const std::string& label,
++                          const std::string& initial,std::function<void(const std::string&)> completion);
++    void closePluginPrompt(bool accept);
++    void installPluginHooks();
+     void openPluginView(const std::string& id);
+     void applyEditorOptions();
+     void applyFonts();
+diff --git a/include/dodev/plugins/PluginManager.h b/include/dodev/plugins/PluginManager.h
+index cb75f4b..8c050f1 100644
+--- a/include/dodev/plugins/PluginManager.h
++++ b/include/dodev/plugins/PluginManager.h
+@@ -4,6 +4,7 @@
+ #include "dodev/themes/ThemeManager.h"
+ #include "dodev/sdk/dodev_plugin_api.h"
+ #include <filesystem>
++#include <functional>
+ #include <map>
+ #include <memory>
+ #include <string>
+@@ -17,6 +18,14 @@ struct PluginView {std::string id,title,owner,side;bool isPanel=false;DodevViewF
+ struct PluginSetting {std::string owner,key,description,defaultValue;};
+ class PluginManager {
+ public:
++    struct HostHooks {
++        std::function<bool(std::string& path,std::string& contents)> activeDocument;
++        std::function<bool(const std::string& contents)> replaceDocument;
++        std::function<bool(const std::string& command)> terminalCommand;
++        std::function<bool(const std::string& title,const std::string& label,const std::string& initial,
++                           std::function<void(const std::string&)>)> promptInput;
++    };
++    void setHostHooks(HostHooks hooks){hooks_=std::move(hooks);}
+     PluginManager(SettingsManager& settings,TemplateRegistry& templates,ThemeManager& themes);
+     ~PluginManager();
+     void shutdown(); // invoke before the Raven runtime shuts down
+@@ -40,6 +49,7 @@ public:
+ private:
+     struct Instance;
+     struct Subscription{Instance* owner;std::string event;DodevEventFn callback;void* userData;};
++    HostHooks hooks_;
+     SettingsManager& settings_;
+     TemplateRegistry& templates_;
+     ThemeManager& themes_;
+@@ -64,5 +74,9 @@ private:
+     static const char* hostGetSetting(void*,const char*);
+     static int hostSetSetting(void*,const char*,const char*);
+     static int hostEvent(void*,const char*,DodevEventFn,void*);
++    static int hostActiveDocument(void*,const char**,const char**);
++    static int hostReplaceDocument(void*,const char*);
++    static int hostTerminalCommand(void*,const char*);
++    static int hostPromptInput(void*,const char*,const char*,const char*,DodevPromptFn,void*);
+ };
+ }
+diff --git a/include/dodev/sdk/dodev_plugin_api.h b/include/dodev/sdk/dodev_plugin_api.h
+index 939d9a4..0baeca4 100644
+--- a/include/dodev/sdk/dodev_plugin_api.h
++++ b/include/dodev/sdk/dodev_plugin_api.h
+@@ -17,6 +17,8 @@ typedef struct DodevUiBuilder DodevUiBuilder;
+ typedef void (*DodevCommandFn)(const DodevHostAPI* host,void* user_data);
+ typedef void (*DodevEventFn)(const DodevHostAPI* host,const char* event,const char* json_payload,void* user_data);
+ typedef void (*DodevViewFn)(const DodevHostAPI* host,const DodevUiBuilder* ui,void* user_data);
++/* Input callbacks run later on the Raven UI thread.  The plugin must remain loaded. */
++typedef void (*DodevPromptFn)(const DodevHostAPI* host,const char* text,void* user_data);
+ 
+ /* The builder is short lived. Plugins must not store it or its context. */
+ struct DodevUiBuilder {
+@@ -41,7 +43,16 @@ struct DodevHostAPI {
+     const char* (*get_setting)(void* context,const char* key);
+     int (*set_setting)(void* context,const char* key,const char* value);
+     int (*subscribe_event)(void* context,const char* event,DodevEventFn callback,void* user_data);
++    /* Optional additive ABI v1 extension. Check struct_size before dereferencing. */
++    int (*get_active_document)(void* context,const char** path,const char** contents);
++    int (*replace_active_document)(void* context,const char* contents);
++    int (*execute_terminal_command)(void* context,const char* line);
++    int (*prompt_input)(void* context,const char* title,const char* label,
++                        const char* initial,DodevPromptFn callback,void* user_data);
+ };
++/* Test optional host function availability before use; older binaries may not expose it. */
++#define DODEV_HOST_HAS(host, field) ((host) && (host)->struct_size >= \
++    (uint32_t)(offsetof(DodevHostAPI,field)+sizeof((host)->field)) && (host)->field)
+ /* Returned plugin function table: plugin may omit shutdown by leaving NULL. */
+ typedef struct DodevPluginAPI {
+     uint32_t struct_size;
+diff --git a/plugins/examples/ClangFormat/ClangFormatPlugin.cpp b/plugins/examples/ClangFormat/ClangFormatPlugin.cpp
+new file mode 100644
+index 0000000..de56ff7
+--- /dev/null
++++ b/plugins/examples/ClangFormat/ClangFormatPlugin.cpp
+@@ -0,0 +1,103 @@
++#include "dodev/sdk/dodev_plugin_api.h"
++#include <chrono>
++#include <cstdlib>
++#include <filesystem>
++#include <fstream>
++#include <iterator>
++#include <string>
++#include <system_error>
++
++namespace {
++namespace fs=std::filesystem;
++void logMessage(const DodevHostAPI* host,int severity,const std::string& msg){
++    if(host->log)host->log(host->context,severity,msg.c_str());
++}
++std::string setting(const DodevHostAPI* host,const char* name,const char* fallback){
++    const char* value=host->get_setting(host->context,name);
++    return value&&*value?value:fallback;
++}
++std::string quote(const std::string& arg){
++#ifdef _WIN32
++    std::string quoted="\"";for(char c:arg){if(c=='\"')quoted+="\\\"";else if(c=='%'||c=='!'||c=='^'||c=='&'||c=='|'||c=='<'||c=='>')return {};else quoted+=c;}
++    return quoted+'"';
++#else
++    std::string quoted="'";for(char c:arg){if(c=='\'')quoted+="'\\''";else quoted+=c;}return quoted+'\'';
++#endif
++}
++void formatDocument(const DodevHostAPI* host,void*){
++    if(!DODEV_HOST_HAS(host,get_active_document)||!DODEV_HOST_HAS(host,replace_active_document)){
++        logMessage(host,2,"Formatting requires DoDevEditor Plugin SDK v1 document bridge");return;
++    }
++    const char *path=nullptr,*text=nullptr;
++    if(!host->get_active_document(host->context,&path,&text)||!text){
++        logMessage(host,2,"Open a writable text document before formatting");return;
++    }
++    const std::string original(text);
++    if(original.size()>16*1024*1024){logMessage(host,2,"Document is larger than 16 MiB formatting limit");return;}
++    std::string executable=setting(host,"executable","clang-format");
++    std::string style=setting(host,"style","LLVM");
++    if(executable.empty()||executable.size()>1024||style.empty()||style.size()>2048||
++       executable.find('\n')!=std::string::npos||style.find('\n')!=std::string::npos){
++        logMessage(host,2,"Invalid clang-format executable or style setting");return;
++    }
++    std::error_code ec;
++    const fs::path folder=fs::temp_directory_path(ec);
++    if(ec){logMessage(host,2,"Cannot locate temporary directory");return;}
++    std::string extension=path?fs::path(path).extension().string():".cpp";
++    if(extension.empty()||extension.size()>12)extension=".cpp";
++    for(char c:extension)if(!(c=='.'||c=='_'||(c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9'))){extension=".cpp";break;}
++    const auto timestamp=std::chrono::steady_clock::now().time_since_epoch().count();
++    const fs::path temporary=folder/("dodev-clangformat-"+std::to_string(timestamp)+extension);
++    struct Cleaner{fs::path file;~Cleaner(){std::error_code ignored;fs::remove(file,ignored);}} cleaner{temporary};
++    {
++        std::ofstream file(temporary,std::ios::binary);
++        if(!file){logMessage(host,2,"Cannot create formatting scratch file");return;}
++        file.write(original.data(),static_cast<std::streamsize>(original.size()));
++        if(!file){logMessage(host,2,"Cannot write scratch file");return;}
++    }
++    // The executable and its arguments are escaped independently. The source file is not modified.
++    const auto command=quote(executable)+" --style="+quote(style)+" -i "+quote(temporary.string());
++    if(command.empty()||std::system(command.c_str())!=0){
++        logMessage(host,2,"clang-format failed; check executable and style in Settings > Plugins");return;
++    }
++    std::ifstream file(temporary,std::ios::binary);
++    if(!file){logMessage(host,2,"clang-format did not return an output file");return;}
++    const std::string formatted(std::istreambuf_iterator<char>{file},{});
++    if(formatted.size()>32*1024*1024){logMessage(host,2,"Formatted file unexpectedly large");return;}
++    if(formatted==original){logMessage(host,1,"Document is already formatted");return;}
++    if(!host->replace_active_document(host->context,formatted.c_str())){
++        logMessage(host,2,"Cannot apply formatted result to editor (document may be read-only)");return;
++    }
++    logMessage(host,1,"Applied clang-format to active buffer. Save the document when ready.");
++}
++void onStyle(const DodevHostAPI* host,const char* value,void*){
++    if(!value||!*value)return;
++    if(host->set_setting(host->context,"style",value))logMessage(host,1,std::string("clang-format style changed to ")+value);
++}
++void configure(const DodevHostAPI* host,void*){
++    if(!DODEV_HOST_HAS(host,prompt_input)){logMessage(host,2,"Input prompt is unavailable");return;}
++    const auto current=setting(host,"style","LLVM");
++    host->prompt_input(host->context,"clang-format Settings","Style (LLVM, Google, Mozilla, Chromium, Microsoft, file, file:/path)",current.c_str(),&onStyle,nullptr);
++}
++void formatTab(const DodevHostAPI*,const DodevUiBuilder* ui,void*){
++    ui->label(ui->context,"clang-format · C / C++ / Objective-C / JavaScript formatting");
++    ui->label(ui->context,"Formats the active in-memory editor buffer without saving to disk.");
++    ui->button(ui->context,"Format active document","clangformat.apply");
++    ui->button(ui->context,"Choose formatting style...","clangformat.style_prompt");
++    ui->read_only_text(ui->context,"Settings > Plugins: executable, style.\nRequires a local clang-format binary; network access is not required.\nUndo uses the editor's native transaction history.");
++}
++}
++extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,DodevPluginAPI* api){
++    if(!host||!api||host->api_version!=DODEV_PLUGIN_API_VERSION||
++       host->struct_size<offsetof(DodevHostAPI,subscribe_event)+sizeof(host->subscribe_event)||
++       api->struct_size<sizeof(DodevPluginAPI))return 0;
++    api->api_version=DODEV_PLUGIN_API_VERSION;api->shutdown=nullptr;
++    if(!host->register_setting(host->context,"executable","clang-format","Path or command name of clang-format"))return 0;
++    if(!host->register_setting(host->context,"style","LLVM","Preset or file:/path/to/.clang-format"))return 0;
++    if(!host->register_command(host->context,"clangformat.apply","Format Active Document",&formatDocument,nullptr))return 0;
++    if(!host->register_command(host->context,"clangformat.style_prompt","Configure clang-format Style...",&configure,nullptr))return 0;
++    host->register_menu(host->context,"Edit","Format with clang-format","clangformat.apply");
++    host->register_menu(host->context,"Tools","clang-format Style...","clangformat.style_prompt");
++    host->register_tab(host->context,"clangformat.help","clang-format Tools",&formatTab,nullptr);
++    return 1;
++}
+diff --git a/plugins/examples/ClangFormat/plugin.json b/plugins/examples/ClangFormat/plugin.json
+new file mode 100644
+index 0000000..e4ca24a
+--- /dev/null
++++ b/plugins/examples/ClangFormat/plugin.json
+@@ -0,0 +1,12 @@
++{
++  "id": "com.dodev.clangformat",
++  "name": "clang-format",
++  "version": "1.0.0",
++  "description": "Format the active in-memory editor with a configurable clang-format executable and style",
++  "apiVersion": 1,
++  "entry": {
++    "linux": "libclangformat_plugin.so",
++    "windows": "clangformat_plugin.dll",
++    "macos": "libclangformat_plugin.dylib"
++  }
++}
+diff --git a/plugins/examples/Docker/DockerPlugin.cpp b/plugins/examples/Docker/DockerPlugin.cpp
+new file mode 100644
+index 0000000..2a8346a
+--- /dev/null
++++ b/plugins/examples/Docker/DockerPlugin.cpp
+@@ -0,0 +1,140 @@
++#include "dodev/sdk/dodev_plugin_api.h"
++#include <algorithm>
++#include <cctype>
++#include <string>
++#include <vector>
++
++namespace {
++void log(const DodevHostAPI* host,int severity,const std::string& text){
++    if(host->log)host->log(host->context,severity,text.c_str());
++}
++std::string get(const DodevHostAPI* host,const char* key,const char* fallback){
++    const char* result=host->get_setting(host->context,key);return result&&*result?result:fallback;
++}
++std::string quote(std::string value){
++#ifdef _WIN32
++    // Double quotes work for simple literal arguments in both cmd.exe and PowerShell.
++    // Reject metacharacters rather than relying on shell-specific escaping rules.
++    for(char c:value)if(c=='"'||c=='%'||c=='!'||c=='^'||c=='&'||c=='|'||c=='<'||c=='>')return {};
++    return "\""+value+"\"";
++#else
++    std::string result="'";for(char c:value){if(c=='\'')result+="'\\''";else result+=c;}return result+"'";
++#endif
++}
++// Parse user input into literal argv-like tokens; never evaluate shell operators.
++bool splitArgs(const std::string& input,std::vector<std::string>& args){
++    args.clear();std::string token;char quoteChar=0;bool escaped=false,started=false;
++    for(char c:input){
++        if(c=='\0'||c=='\r'||c=='\n')return false;
++        if(escaped){token+=c;escaped=false;started=true;continue;}
++#ifdef _WIN32
++        if(c=='\\'){token+=c;started=true;continue;}
++#else
++        if(c=='\\'&&quoteChar!='\''){escaped=true;started=true;continue;}
++#endif
++        if(quoteChar){if(c==quoteChar)quoteChar=0;else token+=c;started=true;continue;}
++        if(c=='\''||c=='"'){quoteChar=c;started=true;continue;}
++        if(std::isspace(static_cast<unsigned char>(c))){if(started){args.push_back(token);token.clear();started=false;}}
++        else{token+=c;started=true;}
++    }
++    if(escaped||quoteChar)return false;
++    if(started)args.push_back(token);
++    if(args.size()>128)return false;
++    for(const auto& arg:args)if(arg.size()>4096)return false;
++    return true;
++}
++void execute(const DodevHostAPI* host,const std::vector<std::string>& args){
++    if(!DODEV_HOST_HAS(host,execute_terminal_command)){
++        log(host,2,"Terminal command bridge is not available in this host");return;
++    }
++    const std::string executable=get(host,"executable","docker");
++    if(executable.empty()||executable.find_first_of("\r\n")!=std::string::npos){
++        log(host,2,"Invalid docker executable setting");return;
++    }
++    std::string command=quote(executable);
++    if(command.empty()){log(host,2,"Unsupported character in Docker executable path");return;}
++    for(const auto& a:args){const auto literal=quote(a);if(literal.empty()){
++        log(host,2,"Unsupported shell metacharacter in Docker CLI argument");return;
++    }command+=' '+literal;}
++    if(!host->execute_terminal_command(host->context,command.c_str()))log(host,2,"Cannot run Docker command in terminal");
++}
++void ps(const DodevHostAPI* h,void*){execute(h,{"ps","-a"});}
++void images(const DodevHostAPI* h,void*){execute(h,{"images"});}
++void version(const DodevHostAPI* h,void*){execute(h,{"version"});}
++void composeUp(const DodevHostAPI* h,void*){
++    execute(h,{"compose","-f",get(h,"composeFile","compose.yaml"),"up","-d"});
++}
++void composeDown(const DodevHostAPI* h,void*){
++    execute(h,{"compose","-f",get(h,"composeFile","compose.yaml"),"down"});
++}
++void build(const DodevHostAPI* h,void*){
++    execute(h,{"build","-t",get(h,"buildTag","dodev-app:latest"),get(h,"buildContext",".")});
++}
++void logPrompt(const DodevHostAPI* host,const char* answer,void*){
++    if(answer&&*answer)execute(host,{"logs","--tail","200",answer});
++}
++void logs(const DodevHostAPI* host,void*){
++    if(!DODEV_HOST_HAS(host,prompt_input)){log(host,2,"Plugin input dialog unavailable");return;}
++    const auto container=get(host,"container","");
++    host->prompt_input(host->context,"Docker Logs","Container name or ID:",container.c_str(),&logPrompt,nullptr);
++}
++void runPrompt(const DodevHostAPI* host,const char* answer,void*){
++    if(answer&&*answer)execute(host,{"run","--rm","-it",answer});
++}
++void run(const DodevHostAPI* host,void*){
++    if(!DODEV_HOST_HAS(host,prompt_input))return;
++    const auto image=get(host,"image","alpine:latest");
++    host->prompt_input(host->context,"Docker Run","Docker image:",image.c_str(),&runPrompt,nullptr);
++}
++void customDone(const DodevHostAPI* host,const char* text,void*){
++    if(!text||!*text)return;
++    std::vector<std::string> args;
++    if(!splitArgs(text,args)){log(host,2,"Unbalanced quotation or unsupported input");return;}
++    if(!args.empty()&&args.front()=="docker")args.erase(args.begin());
++    if(args.empty()){log(host,2,"Enter Docker arguments, e.g. ps -a");return;}
++    execute(host,args);
++}
++void customPrompt(const DodevHostAPI* host,void*){
++    if(!DODEV_HOST_HAS(host,prompt_input))return;
++    host->prompt_input(host->context,"Docker CLI Prompt","Docker CLI arguments (e.g. ps -a, compose ps, inspect container):",
++                       "ps -a",&customDone,nullptr);
++}
++void dockerTab(const DodevHostAPI*,const DodevUiBuilder* ui,void*){
++    ui->label(ui->context,"Docker · Integrated Terminal Commands");
++    ui->button(ui->context,"List containers","docker.ps");
++    ui->button(ui->context,"List images","docker.images");
++    ui->button(ui->context,"Compose up -d","docker.compose_up");
++    ui->button(ui->context,"Compose down","docker.compose_down");
++    ui->button(ui->context,"Build image","docker.build");
++    ui->button(ui->context,"Container logs...","docker.logs");
++    ui->button(ui->context,"Run image...","docker.run");
++    ui->button(ui->context,"Docker CLI prompt...","docker.prompt");
++    ui->read_only_text(ui->context,"Requires Docker CLI and daemon installed locally.\nAll commands are sent to the selected PTY/ConPTY terminal.\nCompose down stops services; review your Docker environment before use.");
++}
++}
++extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,DodevPluginAPI* plugin){
++    if(!host||!plugin||host->api_version!=DODEV_PLUGIN_API_VERSION||
++       host->struct_size<offsetof(DodevHostAPI,subscribe_event)+sizeof(host->subscribe_event)||
++       plugin->struct_size<sizeof(DodevPluginAPI))return 0;
++    plugin->api_version=DODEV_PLUGIN_API_VERSION;plugin->shutdown=nullptr;
++    const struct {const char* name;const char* def;const char* description;} settings[]={
++        {"executable","docker","Docker CLI executable or absolute path"},
++        {"composeFile","compose.yaml","Docker Compose YAML filename"},
++        {"buildTag","dodev-app:latest","Default docker build -t tag"},
++        {"buildContext",".","docker build context relative to terminal working directory"},
++        {"container","","Default Docker container for logs"},
++        {"image","alpine:latest","Default image for docker run"}
++    };
++    for(const auto& item:settings)if(!host->register_setting(host->context,item.name,item.def,item.description))return 0;
++    const struct {const char* id;const char* label;DodevCommandFn command;} actions[]={
++        {"docker.ps","Docker: List Containers",&ps},{"docker.images","Docker: List Images",&images},
++        {"docker.version","Docker: Version",&version},{"docker.compose_up","Docker: Compose Up",&composeUp},
++        {"docker.compose_down","Docker: Compose Down",&composeDown},{"docker.build","Docker: Build Image",&build},
++        {"docker.logs","Docker: Container Logs...",&logs},{"docker.run","Docker: Run Image...",&run},
++        {"docker.prompt","Docker: Execute Command Prompt...",&customPrompt}
++    };
++    for(const auto& action:actions)if(!host->register_command(host->context,action.id,action.label,action.command,nullptr))return 0;
++    for(const auto& action:actions)host->register_menu(host->context,"Tools",action.label,action.id);
++    host->register_tab(host->context,"docker.dashboard","Docker Tools",&dockerTab,nullptr);
++    return 1;
++}
+diff --git a/plugins/examples/Docker/plugin.json b/plugins/examples/Docker/plugin.json
+new file mode 100644
+index 0000000..9739419
+--- /dev/null
++++ b/plugins/examples/Docker/plugin.json
+@@ -0,0 +1,12 @@
++{
++  "id": "com.dodev.docker",
++  "name": "Docker Tools",
++  "version": "1.0.0",
++  "description": "Integrated Docker CLI, Compose, images, containers and interactive command prompt",
++  "apiVersion": 1,
++  "entry": {
++    "linux": "libdocker_plugin.so",
++    "windows": "docker_plugin.dll",
++    "macos": "libdocker_plugin.dylib"
++  }
++}
+diff --git a/resources/EmbeddedPluginPromptUi.h b/resources/EmbeddedPluginPromptUi.h
+new file mode 100644
+index 0000000..d757c56
+--- /dev/null
++++ b/resources/EmbeddedPluginPromptUi.h
+@@ -0,0 +1,15 @@
++#pragma once
++#include <string_view>
++namespace dodev::ui {
++inline constexpr std::string_view kPluginPromptWindow = R"DODEV_XML(
++<Window Title="DoDevEditor · Plugin Command" Width="625" Height="245" MinWidth="440" MinHeight="210">
++  <VBox Spacing="12" Slot.Padding="18,14">
++    <HeaderBar Title="Plugin command prompt"/>
++    <Label Name="plugin_prompt_label" Text="Enter a value" Wrap="true"/>
++    <TextInput Name="plugin_prompt_input" Placeholder="Value or command" Slot.Fill="1"/>
++    <Label Text="Commands are only executed after confirmation." Class="eyebrow"/>
++    <HBox Spacing="10"><Spacer Slot.Fill="1"/><Button Text="Cancel" OnClicked="plugin.prompt.cancel"/><Button Text="Execute / Apply" Style="Primary" OnClicked="plugin.prompt.accept"/></HBox>
++  </VBox>
++</Window>
++)DODEV_XML";
++}
+diff --git a/scripts/apply_upgrade.py b/scripts/apply_upgrade.py
+new file mode 100755
+index 0000000..caeeb0f
+--- /dev/null
++++ b/scripts/apply_upgrade.py
+@@ -0,0 +1,136 @@
++#!/usr/bin/env python3
++"""Conflict-aware, all-or-nothing source upgrade from original Raven 3.1 or 3.2.
++
++Run from the 3.3 full package; preserve local edits through git merge-file.
++Never overwrite conflicted content. Back up changed files before writing.
++"""
++from __future__ import annotations
++import argparse
++import datetime
++import os
++from pathlib import Path
++import re
++import shutil
++import subprocess
++import sys
++import tempfile
++
++SCRIPT = Path(__file__).resolve()
++PACKAGE = SCRIPT.parent.parent
++EXCLUDES = {".git", "upgrade", "build", "build-headless", "__pycache__"}
++TEXT_EXTENSIONS = {".cpp", ".c", ".cc", ".h", ".hpp", ".md", ".txt", ".json",
++                   ".py", ".sh", ".ps1", ".cmake", ".xml", ".tpl", ".patch", ".yml", ".yaml"}
++
++def list_source_files(root: Path):
++    for base, dirs, files in os.walk(root):
++        dirs[:] = sorted(d for d in dirs if d not in EXCLUDES and not d.startswith(".dodev-upgrade-backup-"))
++        for file in sorted(files):
++            source = Path(base) / file
++            if source.is_symlink() or source.suffix in {".o", ".obj", ".so", ".dll", ".exe", ".a"}:
++                continue
++            if source.is_file():
++                yield source.relative_to(root)
++
++def three_way(current: bytes, base: bytes, new: bytes):
++    if current == base:
++        return new, None
++    if current == new:
++        return current, None
++    # Preserve non-UTF-8 and binary files; never try a line merge on them.
++    try:
++        for blob in (current, base, new):
++            if b"\x00" in blob: raise ValueError("binary content")
++            blob.decode("utf-8")
++    except (ValueError, UnicodeError):
++        return None, b"Local binary/non-UTF8 modification; manual merge required.\n"
++    if not shutil.which("git"):
++        return None, b"Git is required to merge locally modified text files.\n"
++    with tempfile.TemporaryDirectory(prefix="dodev-merge-") as work:
++        a,b,c = (Path(work)/k for k in ("current", "base", "new"))
++        a.write_bytes(current);b.write_bytes(base);c.write_bytes(new)
++        process=subprocess.run(["git","merge-file","-p",str(a),str(b),str(c)],
++                               stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=False)
++    if process.returncode==0:
++        return process.stdout, None
++    return None, process.stdout or process.stderr or b"Unknown merge conflict.\n"
++
++def main():
++    parser=argparse.ArgumentParser(description="Upgrade DoDevEditor 3.1/3.2 to 3.3, preserving local changes")
++    parser.add_argument("--target",required=True,type=Path,help="Existing project directory")
++    parser.add_argument("--from",dest="base_version",choices=("3.1","3.2"),help="Original baseline version")
++    parser.add_argument("--dry-run",action="store_true",help="Check only; do not change anything")
++    options=parser.parse_args()
++    target=options.target.resolve()
++    if not target.is_dir() or target==PACKAGE or not (target/"CMakeLists.txt").is_file():
++        parser.error("target must be a different, existing DoDevEditor project directory")
++    detected=None
++    cmake=(target/"CMakeLists.txt").read_text(encoding="utf-8",errors="replace")
++    version=re.search(r"project\(DoDevEditor\s+VERSION\s+(\d+\.\d+)",cmake)
++    if version:detected=version.group(1)
++    base_version=options.base_version or detected
++    if base_version not in {"3.1","3.2"}:
++        parser.error(f"Could not identify a supported 3.1/3.2 base (detected {detected!r}). Pass --from.")
++    if detected and detected not in {base_version,"3.3"}:
++        parser.error(f"Target appears to be {detected}, not {base_version}. Choose matching --from or use full package.")
++    base_root=PACKAGE/"upgrade"/"bases"/base_version
++    if not base_root.is_dir():
++        parser.error(f"Missing base snapshot {base_root} (use the complete 3.3 ZIP)")
++    updates=[]; conflicts=[]; unchanged=0
++    for rel in list_source_files(PACKAGE):
++        source=PACKAGE/rel
++        dest=target/rel
++        if dest.is_symlink() or (dest.parent.exists() and dest.parent.resolve()!=target and
++                                target not in dest.parent.resolve().parents):
++            conflicts.append((rel,b"Destination traverses an external symlink; refusing update.\n"));continue
++        new=source.read_bytes()
++        old=base_root/rel
++        if not dest.exists():
++            updates.append((rel,None,new));continue
++        if not dest.is_file():
++            conflicts.append((rel,b"Destination exists and is not a regular file.\n"));continue
++        current=dest.read_bytes()
++        if current==new:unchanged+=1;continue
++        if not old.is_file():
++            conflicts.append((rel,b"File exists locally but did not exist in original baseline. Manual merge required.\n"));continue
++        merged,conflict=three_way(current,old.read_bytes(),new)
++        if conflict is not None:conflicts.append((rel,conflict))
++        elif merged!=current:updates.append((rel,current,merged))
++        else:unchanged+=1
++    print(f"Upgrade from {base_version}: {len(updates)} pending changes, {unchanged} unchanged, {len(conflicts)} conflicts")
++    if conflicts:
++        for rel,data in conflicts:
++            print(f"  CONFLICT: {rel}",file=sys.stderr)
++            if not options.dry_run:
++                marker=target/(str(rel)+".dodev-merge-conflict")
++                marker.parent.mkdir(parents=True,exist_ok=True)
++                marker.write_bytes(data)
++        print("No project source file was changed. Inspect the .dodev-merge-conflict outputs.",file=sys.stderr)
++        return 2
++    if options.dry_run:
++        for rel,_,_ in updates:print("  WOULD UPDATE",rel)
++        return 0
++    if not updates:
++        print("Already up to date.");return 0
++    stamp=datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
++    backup=target/(".dodev-upgrade-backup-"+stamp)
++    backup.mkdir(parents=True,exist_ok=False)
++    # All merged contents have been calculated before writing. Save originals first.
++    for rel,previous,_ in updates:
++        if previous is not None:
++            location=backup/rel;location.parent.mkdir(parents=True,exist_ok=True)
++            location.write_bytes(previous)
++    (backup/"UPGRADE_NOTES.txt").write_text(
++        f"Baseline {base_version} -> Raven 3.3\n"
++        "Files absent from this backup were newly created.\n"
++        "If necessary, restore individual backed-up files before retrying.\n",encoding="utf-8")
++    for rel,_,new in updates:
++        location=target/rel
++        location.parent.mkdir(parents=True,exist_ok=True)
++        temp=location.with_name(location.name+".dodev-updating")
++        temp.write_bytes(new)
++        temp.replace(location)
++    print(f"Updated {len(updates)} files. Backups: {backup}")
++    return 0
++
++if __name__=="__main__":
++    sys.exit(main())
+diff --git a/src/EditorApp.cpp b/src/EditorApp.cpp
+index 13fc89e..d41735c 100644
+--- a/src/EditorApp.cpp
++++ b/src/EditorApp.cpp
+@@ -63,6 +63,7 @@ int EditorApp::run(int argc, char** argv) {
+     }
+     try {
+         loadPrefs();
++        installPluginHooks();
+         for(const auto& theme:ui::kThemes) {
+             ThemeDefinition definition;
+             if(ThemeDefinition::fromXml(std::string(theme.xml),definition))themeRegistry_.add(std::move(definition));
+@@ -177,6 +178,7 @@ void EditorApp::bindActions() {
+         "navigation.quick_open","navigation.go_to_line","navigation.command_palette",
+         "navigation.goto_submit","navigation.goto_close","navigation.quick_accept","navigation.quick_close",
+         "keybindings.show","keybindings.record","keybindings.apply","keybindings.unbind","keybindings.reset","keybindings.reset_all",
++        "plugin.prompt.accept","plugin.prompt.cancel",
+         "app.about","app.exit"};
+     for(const char* a:actions) Raction_bind(a,&EditorApp::actionCb,this);
+ }
+@@ -186,7 +188,9 @@ void EditorApp::actionCb(Rid,const char* action,void* user_data) {
+     catch(const std::exception& e) {app.setStatus(e.what());app.log(std::string("ERROR: ")+e.what()+"\n");}
+ }
+ void EditorApp::handleAction(const std::string& name) {
+-    if(name=="navigation.quick_open")openQuickOpen();
++    if(name=="plugin.prompt.accept")closePluginPrompt(true);
++    else if(name=="plugin.prompt.cancel")closePluginPrompt(false);
++    else if(name=="navigation.quick_open")openQuickOpen();
+     else if(name=="navigation.go_to_line")openGoToLine();
+     else if(name=="navigation.command_palette")openQuickOpen(true);
+     else if(name=="navigation.goto_submit")goToLine();
+diff --git a/src/EditorSettings.cpp b/src/EditorSettings.cpp
+index fda5164..5d09744 100644
+--- a/src/EditorSettings.cpp
++++ b/src/EditorSettings.cpp
+@@ -1,6 +1,7 @@
+ #include "EditorApp.h"
+ #include "EmbeddedUi.h"
+ #include "EmbeddedSettingsUi.h"
++#include "EmbeddedPluginPromptUi.h"
+ #include <algorithm>
+ #include <cctype>
+ #include <ctime>
+@@ -355,6 +356,63 @@ void EditorApp::themeDesignerAction(const std::string& action){
+         label(designerWindow_,"designer_status","Saved: "+destination.string());
+     }
+ }
++void EditorApp::installPluginHooks(){
++    PluginManager::HostHooks hooks;
++    hooks.activeDocument=[this](std::string& path,std::string& contents){
++        auto* doc=active();
++        if(!doc||doc->kind!=DocumentKind::Text||doc->editor==R_INVALID_ID||!Rwidget_is_valid(doc->editor))return false;
++        path=doc->path.empty()?doc->title:doc->path.string();
++        const auto* txt=Rtext_editor_get_text(doc->editor);contents=txt?txt:"";
++        return true;
++    };
++    hooks.replaceDocument=[this](const std::string& contents){
++        auto* doc=active();
++        if(!doc||doc->kind!=DocumentKind::Text||doc->read_only||!Rwidget_is_valid(doc->editor))return false;
++        const char* current=Rtext_editor_get_text(doc->editor);
++        const std::string before=current?current:"";
++        if(before==contents)return true;
++        Rtext_editor_select_all(doc->editor);
++        Rtext_editor_insert_text(doc->editor,contents.c_str()); // triggers changed callback, undoable
++        setStatus("Plugin updated active document (Undo available)");return true;
++    };
++    hooks.terminalCommand=[this](const std::string& command){
++        if(command.empty()||command.find('\0')!=std::string::npos||
++           command.find('\n')!=std::string::npos||command.find('\r')!=std::string::npos)return false;
++        auto* tab=activeTerminal();if(!tab||!tab->session.running()){newTerminal();tab=activeTerminal();}
++        if(!tab)return false;
++        const bool sent=tab->session.sendLine(command);
++        if(sent){focusTerminal();setStatus("Sent plugin command to terminal");}
++        return sent;
++    };
++    hooks.promptInput=[this](const std::string& title,const std::string& label,const std::string& initial,
++                             std::function<void(const std::string&)> completion){
++        return showPluginPrompt(title,label,initial,std::move(completion));
++    };
++    pluginManager_.setHostHooks(std::move(hooks));
++}
++bool EditorApp::showPluginPrompt(const std::string& title,const std::string& prompt,
++                                 const std::string& initial,std::function<void(const std::string&)> completion){
++    if(pluginPromptWindow_!=R_INVALID_ID&&Rwindow_is_valid(pluginPromptWindow_))return false;
++    pluginPromptWindow_=Rwindow_create_from_xml(ui::kPluginPromptWindow.data(),ui::kPluginPromptWindow.size());
++    if(pluginPromptWindow_==R_INVALID_ID)return false;
++    Rwindow_set_title(pluginPromptWindow_,title.c_str());
++    auto label=Rwidget_find(pluginPromptWindow_,"plugin_prompt_label");
++    if(label!=R_INVALID_ID)Rlabel_set_text(label,prompt.c_str());
++    auto input=Rwidget_find(pluginPromptWindow_,"plugin_prompt_input");
++    if(input!=R_INVALID_ID){Rtext_input_set_text(input,initial.c_str());Rwidget_focus(input);}
++    pendingPluginPrompt_=std::move(completion);
++    Rwindow_show(pluginPromptWindow_);return true;
++}
++void EditorApp::closePluginPrompt(bool accept){
++    if(pluginPromptWindow_==R_INVALID_ID)return;
++    std::string value;
++    if(accept){const auto input=Rwidget_find(pluginPromptWindow_,"plugin_prompt_input");
++        if(input!=R_INVALID_ID){const char* text=Rtext_input_get_text(input);if(text)value=text;}}
++    if(Rwindow_is_valid(pluginPromptWindow_))Rwindow_destroy(pluginPromptWindow_);
++    pluginPromptWindow_=R_INVALID_ID;
++    auto callback=std::move(pendingPluginPrompt_);pendingPluginPrompt_={};
++    if(accept&&callback)callback(value);
++}
+ void EditorApp::registerPluginUi(){
+     for(const auto& cmd:pluginManager_.commands())Raction_bind(cmd.id.c_str(),&EditorApp::actionCb,this);
+     for(const auto& menu:pluginManager_.menus()){
+diff --git a/src/plugins/PluginManager.cpp b/src/plugins/PluginManager.cpp
+index 1868dd8..f06355c 100644
+--- a/src/plugins/PluginManager.cpp
++++ b/src/plugins/PluginManager.cpp
+@@ -48,6 +48,7 @@ struct PluginManager::Instance {
+     DodevPluginAPI plugin{};
+     Json settings=Json::object();
+     std::string scratch;
++    std::string scratchPath, scratchContents;
+     ~Instance(){if(plugin.shutdown){try{plugin.shutdown();}catch(...){}}closeLibrary(library);}
+ };
+ PluginManager::PluginManager(SettingsManager& s,TemplateRegistry& t,ThemeManager& themes):settings_(s),templates_(t),themes_(themes){}
+@@ -109,7 +110,7 @@ bool PluginManager::activate(PluginManifest manifest,std::string* error){
+     if(!entry->library){if(error)*error=dynamicError();return false;}
+     auto init=reinterpret_cast<DodevPluginInitFn>(symbol(entry->library,"dodev_plugin_init"));
+     if(!init){if(error)*error="Missing dodev_plugin_init symbol";return false;}
+-    entry->host={sizeof(DodevHostAPI),DODEV_PLUGIN_API_VERSION,entry.get(),&hostLog,&hostCommand,&hostMenu,&hostTab,&hostPanel,&hostTemplate,&hostTheme,&hostSetting,&hostGetSetting,&hostSetSetting,&hostEvent};
++    entry->host={sizeof(DodevHostAPI),DODEV_PLUGIN_API_VERSION,entry.get(),&hostLog,&hostCommand,&hostMenu,&hostTab,&hostPanel,&hostTemplate,&hostTheme,&hostSetting,&hostGetSetting,&hostSetSetting,&hostEvent,&hostActiveDocument,&hostReplaceDocument,&hostTerminalCommand,&hostPromptInput};
+     entry->plugin={sizeof(DodevPluginAPI),DODEV_PLUGIN_API_VERSION,nullptr};
+     const size_t commandsBefore=commands_.size(),menusBefore=menus_.size(),viewsBefore=views_.size(),settingsBefore=settingsSpecs_.size(),eventsBefore=subscriptions_.size();
+     int ok=0;try{ok=init(&entry->host,&entry->plugin);}catch(...){ok=0;}
+@@ -151,6 +152,29 @@ int PluginManager::hostSetSetting(void* ctx,const char* key,const char* value){a
+     p->settings[key]=value;std::string error;return p->owner->settings_.savePluginSettings(p->manifest.id,p->settings,&error)?1:0;}
+ int PluginManager::hostEvent(void* ctx,const char* name,DodevEventFn cb,void* data){auto* p=instance(ctx);if(!name||!simpleId(name)||!cb)return 0;
+     p->owner->subscriptions_.push_back({p,name,cb,data});return 1;}
++int PluginManager::hostActiveDocument(void* ctx,const char** path,const char** contents){
++    auto* p=instance(ctx);if(!path||!contents||!p->owner->hooks_.activeDocument)return 0;
++    p->scratchPath.clear();p->scratchContents.clear();
++    if(!p->owner->hooks_.activeDocument(p->scratchPath,p->scratchContents))return 0;
++    *path=p->scratchPath.c_str();*contents=p->scratchContents.c_str();return 1;
++}
++int PluginManager::hostReplaceDocument(void* ctx,const char* contents){
++    auto* p=instance(ctx);return contents&&p->owner->hooks_.replaceDocument&&
++      p->owner->hooks_.replaceDocument(contents)?1:0;
++}
++int PluginManager::hostTerminalCommand(void* ctx,const char* line){
++    auto* p=instance(ctx);return line&&p->owner->hooks_.terminalCommand&&
++      p->owner->hooks_.terminalCommand(line)?1:0;
++}
++int PluginManager::hostPromptInput(void* ctx,const char* title,const char* label,const char* initial,
++                                  DodevPromptFn callback,void* user_data){
++    auto* p=instance(ctx);if(!callback||!p->owner->hooks_.promptInput)return 0;
++    const DodevHostAPI* host=&p->host;
++    return p->owner->hooks_.promptInput(title?title:"Plugin input",label?label:"Enter value",
++       initial?initial:"",[host,callback,user_data](const std::string& value){
++           callback(host,value.c_str(),user_data);
++       })?1:0;
++}
+ bool PluginManager::execute(const std::string& id){for(const auto& c:commands_)if(c.id==id){for(const auto& p:instances_)if(p->manifest.id==c.owner){try{c.callback(&p->host,c.userData);return true;}catch(...){diagnostics_.push_back("Plugin command crashed with exception: "+id);return false;}}}return false;}
+ void PluginManager::buildView(const PluginView& view,const DodevUiBuilder& builder){
+     if(!view.factory)return;
+diff --git a/tests/test_plugin_prompt_ui.py b/tests/test_plugin_prompt_ui.py
+new file mode 100644
+index 0000000..e57e3c7
+--- /dev/null
++++ b/tests/test_plugin_prompt_ui.py
+@@ -0,0 +1,17 @@
++from pathlib import Path
++from xml.etree import ElementTree as ET
++root=Path(__file__).resolve().parents[1]
++source=(root/"resources/EmbeddedPluginPromptUi.h").read_text(encoding="utf-8")
++a=source.index('R"DODEV_XML(')+len('R"DODEV_XML(')
++b=source.index(')DODEV_XML"',a)
++xml=ET.fromstring(source[a:b].strip())
++assert xml.tag=="Window"
++assert xml.find('.//TextInput[@Name="plugin_prompt_input"]') is not None
++assert xml.find('.//Button[@OnClicked="plugin.prompt.accept"]') is not None
++assert xml.find('.//Button[@OnClicked="plugin.prompt.cancel"]') is not None
++app=(root/"src/EditorApp.cpp").read_text(encoding="utf-8")
++assert '"plugin.prompt.accept"' in app and '"plugin.prompt.cancel"' in app
++settings=(root/"src/EditorSettings.cpp").read_text(encoding="utf-8")
++for ident in ('showPluginPrompt','closePluginPrompt','Rtext_editor_select_all','Rwindow_set_title'):
++    assert ident in settings
++print('Embedded plugin prompt XML and event routing verified')
+diff --git a/tests/test_tool_plugins.cpp b/tests/test_tool_plugins.cpp
+new file mode 100644
+index 0000000..695624d
+--- /dev/null
++++ b/tests/test_tool_plugins.cpp
+@@ -0,0 +1,72 @@
++#include "dodev/plugins/PluginManager.h"
++#include <cassert>
++#include <chrono>
++#include <filesystem>
++#include <fstream>
++#include <iostream>
++#include <string>
++#include <vector>
++namespace fs=std::filesystem;
++using namespace dodev;
++namespace {
++void copyPlugin(const fs::path& source,const fs::path& destination){
++    fs::create_directories(destination);
++    for(const auto& file:fs::directory_iterator(source))if(file.is_regular_file())
++        fs::copy_file(file.path(),destination/file.path().filename(),fs::copy_options::overwrite_existing);
++}
++}
++int main(){
++    const auto root=fs::temp_directory_path()/("dodev_tool_plugins_"+
++        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
++    try{
++        copyPlugin(fs::path(DODEV_TEST_PLUGIN_DIR)/"clangformat",root/"plugins"/"clangformat");
++        copyPlugin(fs::path(DODEV_TEST_PLUGIN_DIR)/"docker",root/"plugins"/"docker");
++        SettingsManager settings(root);assert(settings.load());
++        TemplateRegistry templates;ThemeManager themes;PluginManager manager(settings,templates,themes);
++        std::string content="int  example  (  ) { return   1; }\n";
++        std::vector<std::string> terminalCommands;
++        std::string promptTitle;
++        int promptCount=0;
++        PluginManager::HostHooks hooks;
++        hooks.activeDocument=[&](std::string& filename,std::string& document){filename="example.cpp";document=content;return true;};
++        hooks.replaceDocument=[&](const std::string& document){content=document;return true;};
++        hooks.terminalCommand=[&](const std::string& command){terminalCommands.push_back(command);return true;};
++        hooks.promptInput=[&](const std::string& title,const std::string&,const std::string&,
++                            std::function<void(const std::string&)> callback){
++            ++promptCount;promptTitle=title;
++            if(title.find("clang-format")!=std::string::npos)callback("Google");
++            else callback("ps -a");
++            return true;
++        };
++        manager.setHostHooks(std::move(hooks));
++        assert(manager.discoverAndLoad(root/"plugins")==0);
++        manager.setEnabled("com.dodev.clangformat",true);
++        manager.setEnabled("com.dodev.docker",true);
++        assert(manager.discoverAndLoad(root/"plugins")==2);
++        assert(manager.commands().size()>=10);
++        assert(manager.execute("docker.ps"));
++        assert(!terminalCommands.empty());
++        assert(terminalCommands.back().find("ps")!=std::string::npos);
++        assert(manager.execute("docker.compose_up"));
++        assert(terminalCommands.back().find("compose")!=std::string::npos);
++        assert(manager.execute("docker.prompt"));
++        assert(promptCount==1&&promptTitle=="Docker CLI Prompt");
++        assert(terminalCommands.back().find("ps")!=std::string::npos);
++        assert(manager.execute("clangformat.style_prompt"));
++        assert(manager.pluginSetting("com.dodev.clangformat","style")=="Google");
++#ifndef _WIN32
++        // Substitute a fake clang-format executable to test the buffer roundtrip.
++        const auto fake=root/"fake-clang-format";
++        {std::ofstream f(fake);f<<"#!/bin/sh\nfor a in \"$@\"; do case \"$a\" in *.cpp) printf 'int formatted() { return 2; }\\n' > \"$a\" ;; esac; done\n";}
++        fs::permissions(fake,fs::perms::owner_exec|fs::perms::owner_read|fs::perms::owner_write);
++        assert(manager.updatePluginSetting("com.dodev.clangformat","executable",fake.string()));
++        assert(manager.execute("clangformat.apply"));
++        assert(content=="int formatted() { return 2; }\n");
++#endif
++        assert(manager.settingSpecs().size()>=8);
++        assert(manager.views().size()==2);
++        manager.shutdown();
++        fs::remove_all(root);
++        std::cout<<"clang-format and Docker plugin integration passed\n";
++    }catch(...){fs::remove_all(root);throw;}
++}

@@ -1,0 +1,9 @@
+{
+  "venv": ".venv",
+  "pythonVersion": "3.8",
+  "executionEnvironments": [
+    {
+      "root": "src/pydlt"
+    }
+  ]
+}

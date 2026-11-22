@@ -1,16 +1,14 @@
 #ifndef MARKDOWNVIEWER_H
 #define MARKDOWNVIEWER_H
- 
+
 #include <wx/wx.h>
-class MarkdownView : public wxPanel
-{
-public:
-    MarkdownView(wxWindow* parent){}
+class MarkdownView : public wxPanel {
+ public:
+  MarkdownView(wxWindow* parent) {}
 
-    void LoadMarkdown(const wxString& markdown){}
+  void LoadMarkdown(const wxString& markdown) {}
 
-private:
-    
+ private:
 };
 
-#endif // MARKDOWNVIEWER_H
+#endif  // MARKDOWNVIEWER_H

@@ -6,12 +6,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 class FindBar : public wxPanel {
-public:
-    wxTextCtrl*  textCtrl;
-    wxCheckBox*  caseChk;
-    wxCheckBox*  wholeChk;
+ public:
+  wxTextCtrl* textCtrl;
+  wxCheckBox* caseChk;
+  wxCheckBox* wholeChk;
 
-    FindBar(wxWindow* parent);
+  FindBar(wxWindow* parent);
 };
 
 #endif

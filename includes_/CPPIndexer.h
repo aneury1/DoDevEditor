@@ -1,10 +1,10 @@
 #pragma once
 
-
-#if 0 
+#if 0
 #include <clang-c/Index.h>
-#include <vector>
+
 #include <string>
+#include <vector>
 
 
 
@@ -103,239 +103,197 @@ public:
 #endif
 #include <fstream>
 #include <sstream>
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-static std::string Trim(std::string s)
-{
-    size_t b = s.find_first_not_of(" \t");
-    size_t e = s.find_last_not_of(" \t");
-    return (b == std::string::npos) ? "" : s.substr(b, e - b + 1);
+static std::string Trim(std::string s) {
+  size_t b = s.find_first_not_of(" \t");
+  size_t e = s.find_last_not_of(" \t");
+  return (b == std::string::npos) ? "" : s.substr(b, e - b + 1);
 }
 
-static bool StartsWith(const std::string& s, const std::string& p)
-{
-    return s.rfind(p, 0) == 0;
+static bool StartsWith(const std::string& s, const std::string& p) {
+  return s.rfind(p, 0) == 0;
 }
 
-enum class SymbolType
-{
-    Function,
-    Class,
-    Struct,
-    Variable,
-    Member
+enum class SymbolType { Function, Class, Struct, Variable, Member };
+
+struct Symbol {
+  std::string name;
+  std::string scope;  // global / class name
+  SymbolType type;
+  std::string returnType;  // optional
+};
+static std::string ExtractName(const std::string& line,
+                               const std::string& keyword) {
+  // Find keyword position
+  size_t pos = line.find(keyword);
+  if (pos == std::string::npos) return "";
+
+  // Move after keyword
+  pos += keyword.length();
+
+  // Skip spaces / tabs
+  while (pos < line.size() && isspace(line[pos])) pos++;
+
+  // Extract identifier until space, '{', ':', or end
+  size_t start = pos;
+
+  while (pos < line.size()) {
+    char c = line[pos];
+
+    if (isspace(c) || c == '{' || c == ':' || c == ';') break;
+
+    pos++;
+  }
+
+  if (pos <= start) return "";
+
+  return line.substr(start, pos - start);
+}
+class SymbolIndex {
+ public:
+  // prefix -> symbols
+  std::unordered_map<std::string, std::vector<Symbol>> buckets;
+
+  void Add(const Symbol& s) {
+    for (size_t i = 1; i <= s.name.size(); i++) {
+      std::string prefix = s.name.substr(0, i);
+      buckets[prefix].push_back(s);
+    }
+  }
+
+  std::vector<Symbol> Query(const std::string& prefix) {
+    return buckets[prefix];
+  }
+};
+Symbol ExtractFunction(const std::string& line) {
+  Symbol s;
+  s.type = SymbolType::Function;
+
+  size_t nameEnd = line.find('(');
+  if (nameEnd == std::string::npos) return s;
+
+  size_t nameStart = line.find_last_of(" \t", nameEnd);
+  if (nameStart == std::string::npos)
+    nameStart = 0;
+  else
+    nameStart++;
+
+  s.name = line.substr(nameStart, nameEnd - nameStart);
+
+  return s;
+}
+
+bool IsVariable(const std::string& line) {
+  if (line.find('(') != std::string::npos) return false;
+
+  if (line.find('{') != std::string::npos) return false;
+
+  return line.find(';') != std::string::npos;
+}
+
+std::string ExtractVariableName(const std::string& line) {
+  size_t semi = line.find(';');
+  size_t eq = line.find('=');
+
+  size_t end = (eq != std::string::npos) ? eq : semi;
+
+  size_t start = line.find_last_of(" \t", end);
+  if (start == std::string::npos)
+    start = 0;
+  else
+    start++;
+
+  return line.substr(start, end - start);
+}
+
+class LightCppParser {
+ public:
+  SymbolIndex index;
+
+  void ParseFile(const std::string& path) {
+    std::ifstream file(path);
+    std::string line;
+
+    std::string currentScope;
+
+    while (std::getline(file, line)) {
+      ParseLine(line, currentScope);
+    }
+  }
+
+ private:
+  void ParseLine(const std::string& line, std::string& scope) {
+    std::string trimmed = Trim(line);
+
+    // CLASS
+    if (StartsWith(trimmed, "class ")) {
+      std::string name = ExtractName(trimmed, "class");
+      scope = name;
+
+      index.Add({name, "global", SymbolType::Class, ""});
+      return;
+    }
+
+    // STRUCT
+    if (StartsWith(trimmed, "struct ")) {
+      std::string name = ExtractName(trimmed, "struct");
+      scope = name;
+
+      index.Add({name, "global", SymbolType::Struct, ""});
+      return;
+    }
+
+    // FUNCTION (very simplified)
+    if (trimmed.find('(') != std::string::npos &&
+        trimmed.find(')') != std::string::npos &&
+        trimmed.find(';') == std::string::npos) {
+      auto func = ExtractFunction(trimmed);
+      if (!func.name.empty()) {
+        func.scope = scope;
+        index.Add(func);
+      }
+    }
+
+    // VARIABLE (basic heuristic)
+    if (IsVariable(trimmed)) {
+      Symbol s;
+      s.name = ExtractVariableName(trimmed);
+      s.type = SymbolType::Variable;
+      s.scope = scope;
+
+      index.Add(s);
+    }
+  }
 };
 
-struct Symbol
-{
-    std::string name;
-    std::string scope;      // global / class name
-    SymbolType type;
-    std::string returnType; // optional
-};
-static std::string ExtractName(const std::string& line, const std::string& keyword)
-{
-    // Find keyword position
-    size_t pos = line.find(keyword);
-    if (pos == std::string::npos)
-        return "";
+class IntelliSense {
+ public:
+  SymbolIndex* index;
 
-    // Move after keyword
-    pos += keyword.length();
+  std::string Query(const std::string& prefix) {
+    auto symbols = index->Query(prefix);
 
-    // Skip spaces / tabs
-    while (pos < line.size() && isspace(line[pos]))
-        pos++;
+    std::string result;
 
-    // Extract identifier until space, '{', ':', or end
-    size_t start = pos;
+    for (auto& s : symbols) {
+      if (s.name.rfind(prefix, 0) == 0) {
+        if (!result.empty()) result += " ";
 
-    while (pos < line.size())
-    {
-        char c = line[pos];
-
-        if (isspace(c) || c == '{' || c == ':' || c == ';')
-            break;
-
-        pos++;
+        result += s.name;
+      }
     }
 
-    if (pos <= start)
-        return "";
-
-    return line.substr(start, pos - start);
-}
-class SymbolIndex
-{
-public:
-    // prefix -> symbols
-    std::unordered_map<std::string, std::vector<Symbol>> buckets;
-
-    void Add(const Symbol& s)
-    {
-        for (size_t i = 1; i <= s.name.size(); i++)
-        {
-            std::string prefix = s.name.substr(0, i);
-            buckets[prefix].push_back(s);
-        }
-    }
-
-    std::vector<Symbol> Query(const std::string& prefix)
-    {
-        return buckets[prefix];
-    }
-};
-Symbol ExtractFunction(const std::string& line)
-{
-    Symbol s;
-    s.type = SymbolType::Function;
-
-    size_t nameEnd = line.find('(');
-    if (nameEnd == std::string::npos)
-        return s;
-
-    size_t nameStart = line.find_last_of(" \t", nameEnd);
-    if (nameStart == std::string::npos)
-        nameStart = 0;
-    else
-        nameStart++;
-
-    s.name = line.substr(nameStart, nameEnd - nameStart);
-
-    return s;
-}
-
-bool IsVariable(const std::string& line)
-{
-    if (line.find('(') != std::string::npos)
-        return false;
-
-    if (line.find('{') != std::string::npos)
-        return false;
-
-    return line.find(';') != std::string::npos;
-}
-
-std::string ExtractVariableName(const std::string& line)
-{
-    size_t semi = line.find(';');
-    size_t eq = line.find('=');
-
-    size_t end = (eq != std::string::npos) ? eq : semi;
-
-    size_t start = line.find_last_of(" \t", end);
-    if (start == std::string::npos)
-        start = 0;
-    else
-        start++;
-
-    return line.substr(start, end - start);
-}
-
-class LightCppParser
-{
-public:
-    SymbolIndex index;
-
-    void ParseFile(const std::string& path)
-    {
-        std::ifstream file(path);
-        std::string line;
-
-        std::string currentScope;
-
-        while (std::getline(file, line))
-        {
-            ParseLine(line, currentScope);
-        }
-    }
-
-private:
-    void ParseLine(const std::string& line, std::string& scope)
-    {
-        std::string trimmed = Trim(line);
-
-        // CLASS
-        if (StartsWith(trimmed, "class "))
-        {
-            std::string name = ExtractName(trimmed, "class");
-            scope = name;
-
-            index.Add({name, "global", SymbolType::Class, ""});
-            return;
-        }
-
-        // STRUCT
-        if (StartsWith(trimmed, "struct "))
-        {
-            std::string name = ExtractName(trimmed, "struct");
-            scope = name;
-
-            index.Add({name, "global", SymbolType::Struct, ""});
-            return;
-        }
-
-        // FUNCTION (very simplified)
-        if (trimmed.find('(') != std::string::npos &&
-            trimmed.find(')') != std::string::npos &&
-            trimmed.find(';') == std::string::npos)
-        {
-            auto func = ExtractFunction(trimmed);
-            if (!func.name.empty())
-            {
-                func.scope = scope;
-                index.Add(func);
-            }
-        }
-
-        // VARIABLE (basic heuristic)
-        if (IsVariable(trimmed))
-        {
-            Symbol s;
-            s.name = ExtractVariableName(trimmed);
-            s.type = SymbolType::Variable;
-            s.scope = scope;
-
-            index.Add(s);
-        }
-    }
-
+    return result;
+  }
 };
 
-class IntelliSense
-{
-public:
-    SymbolIndex* index;
+void BuildIndex(const std::vector<std::string>& files) {
+  LightCppParser parser;
 
-    std::string Query(const std::string& prefix)
-    {
-        auto symbols = index->Query(prefix);
+  for (auto& f : files) parser.ParseFile(f);
 
-        std::string result;
-
-        for (auto& s : symbols)
-        {
-            if (s.name.rfind(prefix, 0) == 0)
-            {
-                if (!result.empty())
-                    result += " ";
-
-                result += s.name;
-            }
-        }
-
-        return result;
-    }
-};
-
-void BuildIndex(const std::vector<std::string>& files)
-{
-    LightCppParser parser;
-
-    for (auto& f : files)
-        parser.ParseFile(f);
-
-   /// engine.index = &parser.index;
+  /// engine.index = &parser.index;
 }

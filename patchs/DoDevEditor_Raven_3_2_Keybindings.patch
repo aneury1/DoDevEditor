@@ -1,0 +1,1286 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 12c6f85..5e20a85 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,5 +1,5 @@
+ cmake_minimum_required(VERSION 3.21)
+-project(DoDevEditor VERSION 3.1.0 LANGUAGES C CXX)
++project(DoDevEditor VERSION 3.2.0 LANGUAGES C CXX)
+ 
+ set(CMAKE_C_STANDARD 11)
+ set(CMAKE_C_STANDARD_REQUIRED ON)
+@@ -17,6 +17,7 @@ add_library(dodev_core STATIC src/EditorData.cpp src/editor/EditorCommands.cpp)
+ add_library(dodev_services STATIC
+     src/settings/Json.cpp
+     src/settings/SettingsManager.cpp
++    src/keybindings/KeybindingManager.cpp
+     src/templates/TemplateRegistry.cpp
+     src/themes/ThemeManager.cpp
+     src/plugins/PluginManager.cpp
+@@ -87,6 +88,8 @@ if(DODEV_BUILD_GUI)
+         src/EditorApp.cpp
+         src/EditorSettings.cpp
+         src/EditorMenus.cpp
++        src/EditorKeybindings.cpp
++        resources/EmbeddedNavigationUi.h
+         resources/EmbeddedSettingsUi.h
+         include/EditorApp.h
+         resources/EmbeddedUi.h
+@@ -99,7 +102,7 @@ if(DODEV_BUILD_GUI)
+         target_compile_options(DoDevEditor PRIVATE -Wall -Wextra -Wpedantic)
+     endif()
+     install(TARGETS DoDevEditor RUNTIME DESTINATION bin)
+-    message(STATUS "[DoDevEditor] GUI Raven 3.1 + 13 themes + JSON Settings + native plugin SDK")
++    message(STATUS "[DoDevEditor] GUI Raven 3.2 + 13 themes + JSON Settings + native plugin SDK")
+ endif()
+ 
+ if(DODEV_BUILD_PLUGIN_EXAMPLES)
+@@ -116,6 +119,9 @@ endif()
+ 
+ if(DODEV_BUILD_TESTS)
+     enable_testing()
++    add_executable(dodev_keybindings_tests tests/test_keybindings.cpp)
++    target_link_libraries(dodev_keybindings_tests PRIVATE dodev_services)
++    add_test(NAME vscode_keybinding_settings COMMAND dodev_keybindings_tests)
+     add_executable(dodev_settings_tests tests/test_settings.cpp)
+     target_link_libraries(dodev_settings_tests PRIVATE dodev_services)
+     target_include_directories(dodev_settings_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+@@ -141,6 +147,8 @@ if(DODEV_BUILD_TESTS)
+     add_test(NAME core_csv_dlt_files COMMAND dodev_core_tests)
+     find_package(Python3 QUIET COMPONENTS Interpreter)
+     if(Python3_Interpreter_FOUND)
++        add_test(NAME vscode_keybinding_ui_contract
++            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_keybinding_ui.py")
+         add_test(NAME vscode_menus_xml_contract
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vscode_menus.py")
+         add_test(NAME embedded_music_theme_xml
+diff --git a/README.md b/README.md
+index 36e958b..3aa49ad 100644
+--- a/README.md
++++ b/README.md
+@@ -1,10 +1,17 @@
++> **Version 3.2 — Configurable Keybindings:** Native Raven shortcuts are now
++> bound dynamically from optional `keybindings.json`. A new Keybindings Settings tab
++> supports search, key recording, conflict detection, unbind/reset, and immediate
++> application. `Ctrl+G` opens Go to Line, `Ctrl+P` opens Quick Open, and
++> `Ctrl+Shift+P` opens the Command Palette. See
++> [`docs/KEYBINDINGS.md`](docs/KEYBINDINGS.md).
++
+ > **Version 3.1 — VS Code-style Edit / Selection / Terminal menus:**
+ > Added 26 Edit menu items, 19 Selection items and 19 Terminal items. Commands
+ > include undo-safe text transforms, line operations, find-in-workspace, PTY/ConPTY
+ > terminal splitting, native task loading and build tasks. See
+ > [`docs/VSCODE_MENUS.md`](docs/VSCODE_MENUS.md) for details and compatibility limits.
+ 
+-# DoDevEditor Raven 3.1
++# DoDevEditor Raven 3.2
+ 
+ **Source project — C++17, Raven GUI, embedded XML, persistent IDE terminal, configurable Settings, custom themes, file templates and a native plugin SDK.**
+ 
+@@ -25,8 +32,8 @@ DoDevEditor is an experimental Raven-based code editor derived from the prior Mu
+ Prerequisites: CMake 3.21+, C++17 compiler, Git, Vulkan-capable GPU and Raven's build dependencies.
+ 
+ ```bash
+-unzip DoDevEditor_Raven_3_0.zip
+-cd DoDevEditor_Raven_3_0
++unzip DoDevEditor_Raven_3_2_Keybindings.zip
++cd DoDevEditor_Raven_3_2_Keybindings
+ chmod +x scripts/build.sh
+ ./scripts/build.sh
+ ```
+diff --git a/docs/KEYBINDINGS.md b/docs/KEYBINDINGS.md
+new file mode 100644
+index 0000000..440bc17
+--- /dev/null
++++ b/docs/KEYBINDINGS.md
+@@ -0,0 +1,58 @@
++# DoDevEditor Raven 3.2 — Keyboard shortcuts and navigation
++
++DoDevEditor uses a configurable shortcut registry (C++17) and Raven's native `Rwindow_register_shortcut`/`Rwindow_unregister_shortcut` API. The menu XML no longer owns hard-coded shortcut assignments: `MenuItem` labels are updated from the runtime registry, preventing old shortcuts from remaining active after a rebind.
++
++## Default shortcuts
++
++| Shortcut | Command | Action |
++|---|---|---|
++| Ctrl+G | `navigation.go_to_line` | Navigate to a 1-based line and optional column (`42:8`) |
++| Ctrl+P | `navigation.quick_open` | Search and open project files |
++| Ctrl+Shift+P | `navigation.command_palette` | Search commands and execute them |
++| Ctrl+K | `keybindings.show` | Open Settings → Keybindings directly |
++| Ctrl+F / Ctrl+H | `search.show` / `search.replace_show` | Find / replace |
++| Ctrl+Shift+F | `edit.find_workspace` | Search in workspace |
++| Ctrl+S / Ctrl+Shift+S | `file.save` / `file.save_as` | Save / Save As |
++| Ctrl+N / Ctrl+O | `file.new` / `file.open` | New / Open |
++| Ctrl+Shift+B | `terminal.run_build` | Run build task |
++| Ctrl+Grave | `terminal.focus` | Focus integrated terminal |
++| Ctrl+Shift+Grave | `terminal.new` | New terminal |
++| Ctrl+Shift+E | `panel.explorer` | Explorer |
++| F3 / Shift+F3 | `search.next` / `search.prev` | Find next / previous |
++
++Other standard menu shortcuts remain defined by `KeybindingManager::defaults()`. Every registered built-in menu command—including commands without shortcuts—and loaded plugin commands is available in the Keybindings settings UI.
++
++## Editing shortcuts in the GUI
++
++1. Open **Go → Keyboard Shortcuts** or press **Ctrl+K**.
++2. Filter commands by name and select the desired command.
++3. Type `Ctrl+Alt+G` in the shortcut field or select **Record keys** and physically press the combination.
++4. Click **Apply**. The active window and menu label update immediately.
++5. Use **Unbind**, **Reset selected**, or **Reset all** as required.
++
++The editor detects collisions with bindings from other commands and refuses ambiguous assignments. `Esc` cancels shortcut capture. Printable keys without a modifier are rejected to avoid breaking normal editor typing.
++
++## Persistent settings and file formats
++
++The file is `$DODEV_CONFIG_DIR/keybindings.json` if the override environment variable is set, otherwise `SettingsManager::defaultDirectory()/keybindings.json` (normally `$XDG_CONFIG_HOME/DoDevEditor/` on Linux or `%APPDATA%/DoDevEditor/` on Windows).
++
++Example:
++
++```json
++[
++  { "key": "Ctrl+Alt+G", "command": "navigation.go_to_line" },
++  { "key": "", "command": "edit.redo" }
++]
++```
++
++Only overrides are written. If the file is missing, built-in defaults apply. Invalid JSON is not overwritten and does not prevent startup. All custom shortcuts are validated and conflicts fall back to safe defaults. Overrides for disabled plugins are retained for later activation.
++
++## Quick Open details
++
++Quick Open scans up to 20,000 project entries and indexes up to 3,000 paths, skipping `.git`, `build`, `node_modules`, `.venv`, `.cache` and `.idea`. Filtering displays up to 250 matches. It also indexes open files, and works without a folder when documents with on-disk paths are open.
++
++Command Palette contains all registered commands, including active plugin commands. Shortcuts are **single stroke**, such as `Ctrl+G` or `Ctrl+Shift+P`; two-stage VS Code chords such as `Ctrl+K Ctrl+S` are not yet supported. `Ctrl+K` opens keybindings directly instead.
++
++## Scope of tests and compatibility
++
++The keybinding parser, collision detection, persistence, optional/malformed files, plugin override preservation, XML widget contracts, and navigation command wiring are covered in headless tests. Full Raven/Vulkan GUI compilation and rendering still need validation against a live Raven checkout. On layouts using AltGr or locale-specific modifier handling, native shortcut dispatch depends on Raven's platform backend.
+diff --git a/examples/keybindings.json b/examples/keybindings.json
+new file mode 100644
+index 0000000..bc28ea7
+--- /dev/null
++++ b/examples/keybindings.json
+@@ -0,0 +1,4 @@
++[
++  { "key": "Ctrl+Alt+G", "command": "navigation.go_to_line" },
++  { "key": "Ctrl+Alt+P", "command": "navigation.quick_open" }
++]
+diff --git a/include/EditorApp.h b/include/EditorApp.h
+index 47a2422..69b896d 100644
+--- a/include/EditorApp.h
++++ b/include/EditorApp.h
+@@ -8,6 +8,7 @@
+ #include "dodev/plugins/PluginManager.h"
+ #include "dodev/editor/EditorCommands.h"
+ #include "dodev/terminal/TerminalTasks.h"
++#include "dodev/keybindings/KeybindingManager.h"
+ #include <Raven.h>
+ #include <filesystem>
+ #include <memory>
+@@ -50,6 +51,7 @@ public:
+     void filterDlt(Document& doc);
+ private:
+     SettingsManager settings_;
++    keys::KeybindingManager keybindings_{settings_};
+     TemplateRegistry templateRegistry_;
+     ThemeManager themeRegistry_;
+     PluginManager pluginManager_{settings_,templateRegistry_,themeRegistry_};
+@@ -57,6 +59,12 @@ private:
+     Rid settingsWindow_=R_INVALID_ID;
+     Rid designerWindow_=R_INVALID_ID;
+     Rid templateWindow_=R_INVALID_ID;
++    Rid goToLineWindow_=R_INVALID_ID, quickOpenWindow_=R_INVALID_ID;
++    bool commandPalette_=false, recordingBinding_=false;
++    std::vector<fs::path> quickCandidates_,quickMatches_;
++    std::vector<std::string> quickCommands_,keybindingRows_;
++    std::map<std::string,std::string> originalMenuLabels_;
++    std::vector<keys::Shortcut> installedShortcuts_;
+     Rid editorFont_=R_INVALID_ID,uiFont_=R_INVALID_ID,terminalFont_=R_INVALID_ID;
+     std::vector<std::string> templateIds_;
+     std::vector<std::string> pluginCandidates_;
+@@ -132,6 +140,23 @@ private:
+     void applyTheme(int index);
+     void refreshThemeDecor();
+     // Settings, templates and plugin UI are created lazily from embedded XML.
++    void installKeybindings();
++    void refreshShortcutLabels();
++    void openGoToLine();
++    void goToLine();
++    void openQuickOpen(bool commands=false);
++    void refreshQuickOpen();
++    void chooseQuickOpen();
++    void refreshKeybindingRows();
++    void chooseKeybinding();
++    void keybindingAction(const std::string& action);
++    static void quickFilterCb(Rid,const char*,void*);
++    static void quickSelectCb(Rid,int,void*);
++    static void quickCommitCb(Rid,const char*,void*);
++    static void goToLineCommitCb(Rid,const char*,void*);
++    static int keybindingEventCb(Rid,const REvent*,void*);
++    static void keybindingFilterCb(Rid,const char*,void*);
++    static void keybindingSelectCb(Rid,int,void*);
+     void openSettings();
+     void fillSettings();
+     void applySettings(bool restoreDefaults=false);
+diff --git a/include/dodev/keybindings/KeybindingManager.h b/include/dodev/keybindings/KeybindingManager.h
+new file mode 100644
+index 0000000..bcd1669
+--- /dev/null
++++ b/include/dodev/keybindings/KeybindingManager.h
+@@ -0,0 +1,40 @@
++#pragma once
++#include "dodev/settings/SettingsManager.h"
++#include <map>
++#include <string>
++#include <vector>
++namespace dodev::keys {
++struct Binding { std::string command; std::string key; bool customized=false; };
++// Pure C++ shortcut syntax, independent of Raven/OS key codes.
++struct Shortcut { std::string key; unsigned modifiers=0; bool valid=false; };
++// Modifier flags map to CTRL, SHIFT, ALT, SUPER in that order.
++constexpr unsigned Ctrl=1, Shift=2, Alt=4, Super=8;
++Shortcut parseShortcut(const std::string& source);
++std::string formatShortcut(const Shortcut& key);
++std::string normalizeShortcut(const std::string& text);
++class KeybindingManager {
++public:
++    explicit KeybindingManager(SettingsManager& settings);
++    void load();
++    bool save(std::string* error=nullptr)const;
++    // Empty key explicitly unbinds a command. Conflicts are rejected.
++    bool set(const std::string& command,const std::string& key,std::string* error=nullptr);
++    void reset(const std::string& command);
++    void resetAll();
++    const std::map<std::string,std::string>& bindings()const{return bindings_;}
++    std::vector<Binding> all()const;
++    std::string get(const std::string& command)const;
++    const std::vector<std::string>& diagnostics()const{return diagnostics_;}
++    bool maySave()const{return !malformed_;}
++    bool hasCommand(const std::string& command)const;
++    void registerCommand(const std::string& command,const std::string& defaultKey="");
++    static std::map<std::string,std::string> defaults();
++private:
++    SettingsManager& settings_;
++    std::map<std::string,std::string> defaults_;
++    std::map<std::string,std::string> bindings_;
++    std::map<std::string,std::string> dormantOverrides_;
++    bool malformed_=false;
++    std::vector<std::string> diagnostics_;
++};
++} // namespace dodev::keys
+diff --git a/resources/EmbeddedNavigationUi.h b/resources/EmbeddedNavigationUi.h
+new file mode 100644
+index 0000000..e398bf2
+--- /dev/null
++++ b/resources/EmbeddedNavigationUi.h
+@@ -0,0 +1,24 @@
++#pragma once
++#include <string_view>
++namespace dodev::ui {
++inline constexpr std::string_view kGoToLineWindow=R"DODEV_XML(
++<Window Title="Go to Line / Column" Width="510" Height="190" MinWidth="390" MinHeight="150">
++  <VBox Spacing="9" Slot.Padding="16,12">
++    <HeaderBar Title="Go to Line · Ctrl+G"/>
++    <Label Text="Line number, optionally followed by :column (e.g. 42:8)"/>
++    <TextInput Name="goto_position" Placeholder="42:1"/>
++    <HBox Spacing="8"><Label Name="goto_status" Text="Lines are numbered from 1" Slot.Fill="1"/><Button Text="Go" Style="Primary" OnClicked="navigation.goto_submit"/><Button Text="Cancel" OnClicked="navigation.goto_close"/></HBox>
++  </VBox>
++</Window>
++)DODEV_XML";
++inline constexpr std::string_view kQuickOpenWindow=R"DODEV_XML(
++<Window Title="DoDevEditor · Quick Open" Width="750" Height="520" MinWidth="490" MinHeight="340">
++  <VBox Spacing="8" Slot.Padding="13,10">
++    <HeaderBar Title="Quick Open · Ctrl+P"/>
++    <TextInput Name="quick_query" Placeholder="Search project files..."/>
++    <ListView Name="quick_list" Slot.Fill="1"/>
++    <HBox Spacing="8"><Label Name="quick_status" Text="Type to filter files" Slot.Fill="1"/><Button Text="Open" Style="Primary" OnClicked="navigation.quick_accept"/><Button Text="Close" OnClicked="navigation.quick_close"/></HBox>
++  </VBox>
++</Window>
++)DODEV_XML";
++}
+diff --git a/resources/EmbeddedSettingsUi.h b/resources/EmbeddedSettingsUi.h
+index 0164db4..2998647 100644
+--- a/resources/EmbeddedSettingsUi.h
++++ b/resources/EmbeddedSettingsUi.h
+@@ -48,6 +48,15 @@ inline constexpr std::string_view kSettingsWindow = R"DODEV_XML(
+         <Label Text="Extension associations are configured in settings.json (templates.associations)." Wrap="true"/>
+         <Button Text="New file from template..." OnClicked="template.show"/>
+       </VBox>
++      <VBox Slot.Title="Keybindings" Spacing="8" Slot.Padding="18,14">
++        <Label Text="KEYBOARD SHORTCUTS" Class="eyebrow" TextSize="16"/>
++        <Label Text="Select a command, enter its shortcut and Apply. Supported: Ctrl, Shift, Alt, Super, arrows, F1–F12." Wrap="true"/>
++        <TextInput Name="kb_filter" Placeholder="Filter commands (e.g. terminal, navigate, save)"/>
++        <ListView Name="kb_command_list" Height="240"/>
++        <HBox Spacing="6"><Label Text="Shortcut"/><TextInput Name="kb_shortcut" Width="225" Placeholder="Ctrl+Shift+P"/><Button Text="Record keys" OnClicked="keybindings.record"/><Button Text="Apply" Style="Primary" OnClicked="keybindings.apply"/></HBox>
++        <HBox Spacing="6"><Button Text="Unbind" OnClicked="keybindings.unbind"/><Button Text="Reset selected" OnClicked="keybindings.reset"/><Button Text="Reset all" OnClicked="keybindings.reset_all"/></HBox>
++        <Label Name="kb_status" Text="Stored in optional keybindings.json. Conflicts are rejected." Wrap="true"/>
++      </VBox>
+       <VBox Slot.Title="Plugins" Spacing="8" Slot.Padding="18,14">
+         <Label Text="NATIVE PLUGINS · RESTART REQUIRED TO ACTIVATE/DEACTIVATE" Class="eyebrow" TextSize="15" Wrap="true"/>
+         <CheckBox Name="settings_plugins_enabled" Text="Enable plugin support"/>
+diff --git a/resources/EmbeddedUi.h b/resources/EmbeddedUi.h
+index cb136e1..9d3c064 100644
+--- a/resources/EmbeddedUi.h
++++ b/resources/EmbeddedUi.h
+@@ -16,118 +16,125 @@ inline constexpr std::string_view kMainWindow = R"DODEV_XML(
+     </HeaderBar>
+     <MenuBar Class="bar" Native="false">
+       <Menu Text="Archivo" Name="file_menu">
+-        <MenuItem Text="Nuevo" Shortcut="Ctrl+N" OnClicked="file.new"/>
+-        <MenuItem Text="Nuevo desde plantilla..." Shortcut="Ctrl+Alt+N" OnClicked="template.show"/>
+-        <MenuItem Text="Abrir..." Shortcut="Ctrl+O" OnClicked="file.open"/>
+-        <MenuItem Text="Abrir carpeta..." Shortcut="Ctrl+Shift+O" OnClicked="folder.open"/>
++        <MenuItem Text="Nuevo" OnClicked="file.new" Name="kb_file_new"/>
++        <MenuItem Text="Nuevo desde plantilla..." OnClicked="template.show" Name="kb_template_show"/>
++        <MenuItem Text="Abrir..." OnClicked="file.open" Name="kb_file_open"/>
++        <MenuItem Text="Abrir carpeta..." OnClicked="folder.open" Name="kb_folder_open"/>
+         <Separator/>
+-        <MenuItem Text="Guardar" Shortcut="Ctrl+S" OnClicked="file.save"/>
+-        <MenuItem Text="Guardar como..." Shortcut="Ctrl+Shift+S" OnClicked="file.save_as"/>
+-        <MenuItem Text="Cerrar pestaña" Shortcut="Ctrl+W" OnClicked="file.close"/>
++        <MenuItem Text="Guardar" OnClicked="file.save" Name="kb_file_save"/>
++        <MenuItem Text="Guardar como..." OnClicked="file.save_as" Name="kb_file_save_as"/>
++        <MenuItem Text="Cerrar pestaña" OnClicked="file.close" Name="kb_file_close"/>
+         <Separator/>
+-        <MenuItem Text="Salir" Shortcut="Ctrl+Q" OnClicked="app.exit"/>
++        <MenuItem Text="Salir" OnClicked="app.exit" Name="kb_app_exit"/>
++      </Menu>
++      <Menu Text="Go" Name="go_menu">
++        <MenuItem Text="Quick Open..." OnClicked="navigation.quick_open" Name="kb_navigation_quick_open"/>
++        <MenuItem Text="Go to Line/Column..." OnClicked="navigation.go_to_line" Name="kb_navigation_go_to_line"/>
++        <MenuItem Text="Command Palette..." OnClicked="navigation.command_palette" Name="kb_navigation_command_palette"/>
++        <Separator/>
++        <MenuItem Text="Keyboard Shortcuts..." OnClicked="keybindings.show" Name="kb_keybindings_show"/>
+       </Menu>
+       <Menu Text="Edit" Name="edit_menu">
+-        <MenuItem Text="Undo" Shortcut="Ctrl+Z" OnClicked="edit.undo"/>
+-        <MenuItem Text="Redo" Shortcut="Ctrl+Y" OnClicked="edit.redo"/>
++        <MenuItem Text="Undo" OnClicked="edit.undo" Name="kb_edit_undo"/>
++        <MenuItem Text="Redo" OnClicked="edit.redo" Name="kb_edit_redo"/>
+         <Separator/>
+-        <MenuItem Text="Cut" Shortcut="Ctrl+X" OnClicked="edit.cut"/>
+-        <MenuItem Text="Copy" Shortcut="Ctrl+C" OnClicked="edit.copy"/>
+-        <MenuItem Text="Paste" Shortcut="Ctrl+V" OnClicked="edit.paste"/>
+-        <MenuItem Text="Delete" Shortcut="Delete" OnClicked="edit.delete"/>
++        <MenuItem Text="Cut" OnClicked="edit.cut" Name="kb_edit_cut"/>
++        <MenuItem Text="Copy" OnClicked="edit.copy" Name="kb_edit_copy"/>
++        <MenuItem Text="Paste" OnClicked="edit.paste" Name="kb_edit_paste"/>
++        <MenuItem Text="Delete" OnClicked="edit.delete" Name="kb_edit_delete"/>
+         <Separator/>
+-        <MenuItem Text="Find" Shortcut="Ctrl+F" OnClicked="search.show"/>
+-        <MenuItem Text="Find Next" Shortcut="F3" OnClicked="search.next"/>
+-        <MenuItem Text="Find Previous" Shortcut="Shift+F3" OnClicked="search.prev"/>
+-        <MenuItem Text="Replace" Shortcut="Ctrl+H" OnClicked="search.replace_show"/>
+-        <MenuItem Text="Replace All (Current File)" OnClicked="search.replace_all"/>
+-        <MenuItem Text="Find in Workspace" Shortcut="Ctrl+Shift+F" OnClicked="edit.find_workspace"/>
++        <MenuItem Text="Find" OnClicked="search.show" Name="kb_search_show"/>
++        <MenuItem Text="Find Next" OnClicked="search.next" Name="kb_search_next"/>
++        <MenuItem Text="Find Previous" OnClicked="search.prev" Name="kb_search_prev"/>
++        <MenuItem Text="Replace" OnClicked="search.replace_show" Name="kb_search_replace_show"/>
++        <MenuItem Text="Replace All (Current File)" OnClicked="search.replace_all" Name="kb_search_replace_all"/>
++        <MenuItem Text="Find in Workspace" OnClicked="edit.find_workspace" Name="kb_edit_find_workspace"/>
+         <Separator/>
+-        <MenuItem Text="Toggle Line Comment" Shortcut="Ctrl+/" OnClicked="edit.toggle_line_comment"/>
+-        <MenuItem Text="Toggle Block Comment" Shortcut="Shift+Alt+A" OnClicked="edit.toggle_block_comment"/>
++        <MenuItem Text="Toggle Line Comment" OnClicked="edit.toggle_line_comment" Name="kb_edit_toggle_line_comment"/>
++        <MenuItem Text="Toggle Block Comment" OnClicked="edit.toggle_block_comment" Name="kb_edit_toggle_block_comment"/>
+         <Menu Text="Transform Text">
+-          <MenuItem Text="Uppercase" OnClicked="edit.uppercase"/>
+-          <MenuItem Text="Lowercase" OnClicked="edit.lowercase"/>
+-          <MenuItem Text="Title Case" OnClicked="edit.titlecase"/>
++          <MenuItem Text="Uppercase" OnClicked="edit.uppercase" Name="kb_edit_uppercase"/>
++          <MenuItem Text="Lowercase" OnClicked="edit.lowercase" Name="kb_edit_lowercase"/>
++          <MenuItem Text="Title Case" OnClicked="edit.titlecase" Name="kb_edit_titlecase"/>
+         </Menu>
+         <Menu Text="Lines">
+-          <MenuItem Text="Indent Lines" OnClicked="edit.indent"/>
+-          <MenuItem Text="Outdent Lines" OnClicked="edit.outdent"/>
+-          <MenuItem Text="Insert Line Above" OnClicked="edit.insert_above"/>
+-          <MenuItem Text="Insert Line Below" OnClicked="edit.insert_below"/>
+-          <MenuItem Text="Delete Line" OnClicked="edit.delete_line"/>
+-          <MenuItem Text="Join Lines" OnClicked="edit.join_lines"/>
+-          <MenuItem Text="Trim Trailing Whitespace" OnClicked="edit.trim_whitespace"/>
+-          <MenuItem Text="Sort Lines Ascending" OnClicked="edit.sort_asc"/>
+-          <MenuItem Text="Sort Lines Descending" OnClicked="edit.sort_desc"/>
++          <MenuItem Text="Indent Lines" OnClicked="edit.indent" Name="kb_edit_indent"/>
++          <MenuItem Text="Outdent Lines" OnClicked="edit.outdent" Name="kb_edit_outdent"/>
++          <MenuItem Text="Insert Line Above" OnClicked="edit.insert_above" Name="kb_edit_insert_above"/>
++          <MenuItem Text="Insert Line Below" OnClicked="edit.insert_below" Name="kb_edit_insert_below"/>
++          <MenuItem Text="Delete Line" OnClicked="edit.delete_line" Name="kb_edit_delete_line"/>
++          <MenuItem Text="Join Lines" OnClicked="edit.join_lines" Name="kb_edit_join_lines"/>
++          <MenuItem Text="Trim Trailing Whitespace" OnClicked="edit.trim_whitespace" Name="kb_edit_trim_whitespace"/>
++          <MenuItem Text="Sort Lines Ascending" OnClicked="edit.sort_asc" Name="kb_edit_sort_asc"/>
++          <MenuItem Text="Sort Lines Descending" OnClicked="edit.sort_desc" Name="kb_edit_sort_desc"/>
+         </Menu>
+       </Menu>
+       <Menu Text="Selection" Name="selection_menu">
+-        <MenuItem Text="Select All" Shortcut="Ctrl+A" OnClicked="selection.all"/>
+-        <MenuItem Text="Select Line" Shortcut="Ctrl+L" OnClicked="selection.line"/>
+-        <MenuItem Text="Select Word" OnClicked="selection.word"/>
+-        <MenuItem Text="Expand Selection" Shortcut="Shift+Alt+Right" OnClicked="selection.expand"/>
+-        <MenuItem Text="Shrink Selection" Shortcut="Shift+Alt+Left" OnClicked="selection.shrink"/>
+-        <MenuItem Text="Select Next Occurrence" Shortcut="Ctrl+D" OnClicked="selection.next_occurrence"/>
+-        <MenuItem Text="Select Previous Occurrence" OnClicked="selection.prev_occurrence"/>
++        <MenuItem Text="Select All" OnClicked="selection.all" Name="kb_selection_all"/>
++        <MenuItem Text="Select Line" OnClicked="selection.line" Name="kb_selection_line"/>
++        <MenuItem Text="Select Word" OnClicked="selection.word" Name="kb_selection_word"/>
++        <MenuItem Text="Expand Selection" OnClicked="selection.expand" Name="kb_selection_expand"/>
++        <MenuItem Text="Shrink Selection" OnClicked="selection.shrink" Name="kb_selection_shrink"/>
++        <MenuItem Text="Select Next Occurrence" OnClicked="selection.next_occurrence" Name="kb_selection_next_occurrence"/>
++        <MenuItem Text="Select Previous Occurrence" OnClicked="selection.prev_occurrence" Name="kb_selection_prev_occurrence"/>
+         <Separator/>
+-        <MenuItem Text="Copy Line Up" Shortcut="Shift+Alt+Up" OnClicked="edit.copy_line_up"/>
+-        <MenuItem Text="Copy Line Down" Shortcut="Shift+Alt+Down" OnClicked="edit.copy_line_down"/>
+-        <MenuItem Text="Move Line Up" Shortcut="Alt+Up" OnClicked="edit.move_line_up"/>
+-        <MenuItem Text="Move Line Down" Shortcut="Alt+Down" OnClicked="edit.move_line_down"/>
+-        <MenuItem Text="Duplicate Selection" OnClicked="edit.duplicate"/>
++        <MenuItem Text="Copy Line Up" OnClicked="edit.copy_line_up" Name="kb_edit_copy_line_up"/>
++        <MenuItem Text="Copy Line Down" OnClicked="edit.copy_line_down" Name="kb_edit_copy_line_down"/>
++        <MenuItem Text="Move Line Up" OnClicked="edit.move_line_up" Name="kb_edit_move_line_up"/>
++        <MenuItem Text="Move Line Down" OnClicked="edit.move_line_down" Name="kb_edit_move_line_down"/>
++        <MenuItem Text="Duplicate Selection" OnClicked="edit.duplicate" Name="kb_edit_duplicate"/>
+         <Separator/>
+-        <MenuItem Text="Select to Line Start" OnClicked="selection.line_start"/>
+-        <MenuItem Text="Select to Line End" OnClicked="selection.line_end"/>
+-        <MenuItem Text="Select to Beginning of File" OnClicked="selection.to_start"/>
+-        <MenuItem Text="Select to End of File" OnClicked="selection.to_end"/>
+-        <MenuItem Text="Swap Anchor and Caret" OnClicked="selection.swap_anchor"/>
+-        <MenuItem Text="Move Cursor Up" OnClicked="selection.cursor_up"/>
+-        <MenuItem Text="Move Cursor Down" OnClicked="selection.cursor_down"/>
++        <MenuItem Text="Select to Line Start" OnClicked="selection.line_start" Name="kb_selection_line_start"/>
++        <MenuItem Text="Select to Line End" OnClicked="selection.line_end" Name="kb_selection_line_end"/>
++        <MenuItem Text="Select to Beginning of File" OnClicked="selection.to_start" Name="kb_selection_to_start"/>
++        <MenuItem Text="Select to End of File" OnClicked="selection.to_end" Name="kb_selection_to_end"/>
++        <MenuItem Text="Swap Anchor and Caret" OnClicked="selection.swap_anchor" Name="kb_selection_swap_anchor"/>
++        <MenuItem Text="Move Cursor Up" OnClicked="selection.cursor_up" Name="kb_selection_cursor_up"/>
++        <MenuItem Text="Move Cursor Down" OnClicked="selection.cursor_down" Name="kb_selection_cursor_down"/>
+       </Menu>
+       <Menu Text="Terminal" Name="terminal_menu">
+-        <MenuItem Text="New Terminal" Shortcut="Ctrl+Shift+Grave" OnClicked="terminal.new"/>
+-        <MenuItem Text="Split Terminal" Shortcut="Ctrl+Shift+5" OnClicked="terminal.split"/>
+-        <MenuItem Text="Kill Terminal" OnClicked="terminal.close"/>
+-        <MenuItem Text="Restart Terminal" OnClicked="terminal.restart"/>
+-        <MenuItem Text="Next Terminal" OnClicked="terminal.next"/>
+-        <MenuItem Text="Previous Terminal" OnClicked="terminal.previous"/>
+-        <MenuItem Text="Rename Terminal" OnClicked="terminal.rename"/>
+-        <MenuItem Text="Focus Terminal" OnClicked="terminal.focus"/>
+-        <MenuItem Text="Show Terminal Panel" OnClicked="panel.output"/>
++        <MenuItem Text="New Terminal" OnClicked="terminal.new" Name="kb_terminal_new"/>
++        <MenuItem Text="Split Terminal" OnClicked="terminal.split" Name="kb_terminal_split"/>
++        <MenuItem Text="Kill Terminal" OnClicked="terminal.close" Name="kb_terminal_close"/>
++        <MenuItem Text="Restart Terminal" OnClicked="terminal.restart" Name="kb_terminal_restart"/>
++        <MenuItem Text="Next Terminal" OnClicked="terminal.next" Name="kb_terminal_next"/>
++        <MenuItem Text="Previous Terminal" OnClicked="terminal.previous" Name="kb_terminal_previous"/>
++        <MenuItem Text="Rename Terminal" OnClicked="terminal.rename" Name="kb_terminal_rename"/>
++        <MenuItem Text="Focus Terminal" OnClicked="terminal.focus" Name="kb_terminal_focus"/>
++        <MenuItem Text="Show Terminal Panel" OnClicked="panel.output" Name="kb_panel_output"/>
+         <Separator/>
+-        <MenuItem Text="Run Task..." OnClicked="terminal.run_task"/>
+-        <MenuItem Text="Run Build Task" Shortcut="Ctrl+Shift+B" OnClicked="terminal.run_build"/>
+-        <MenuItem Text="Run Active File" OnClicked="terminal.run_file"/>
+-        <MenuItem Text="Run Selected Text" OnClicked="terminal.run_selected"/>
+-        <MenuItem Text="Configure Tasks..." OnClicked="terminal.configure_tasks"/>
+-        <MenuItem Text="Configure Default Build Task..." OnClicked="terminal.configure_build"/>
++        <MenuItem Text="Run Task..." OnClicked="terminal.run_task" Name="kb_terminal_run_task"/>
++        <MenuItem Text="Run Build Task" OnClicked="terminal.run_build" Name="kb_terminal_run_build"/>
++        <MenuItem Text="Run Active File" OnClicked="terminal.run_file" Name="kb_terminal_run_file"/>
++        <MenuItem Text="Run Selected Text" OnClicked="terminal.run_selected" Name="kb_terminal_run_selected"/>
++        <MenuItem Text="Configure Tasks..." OnClicked="terminal.configure_tasks" Name="kb_terminal_configure_tasks"/>
++        <MenuItem Text="Configure Default Build Task..." OnClicked="terminal.configure_build" Name="kb_terminal_configure_build"/>
+         <Separator/>
+-        <MenuItem Text="Copy" OnClicked="terminal.copy"/>
+-        <MenuItem Text="Paste" OnClicked="terminal.paste"/>
+-        <MenuItem Text="Clear" OnClicked="terminal.clear"/>
+-        <MenuItem Text="Interrupt (Ctrl+C)" OnClicked="terminal.interrupt"/>
++        <MenuItem Text="Copy" OnClicked="terminal.copy" Name="kb_terminal_copy"/>
++        <MenuItem Text="Paste" OnClicked="terminal.paste" Name="kb_terminal_paste"/>
++        <MenuItem Text="Clear" OnClicked="terminal.clear" Name="kb_terminal_clear"/>
++        <MenuItem Text="Interrupt (Ctrl+C)" OnClicked="terminal.interrupt" Name="kb_terminal_interrupt"/>
+       </Menu>
+       <Menu Text="Herramientas" Name="tools_menu">
+-        <MenuItem Text="Abrir CSV" OnClicked="tool.csv"/>
+-        <MenuItem Text="Abrir DLT" OnClicked="tool.dlt"/>
++        <MenuItem Text="Abrir CSV" OnClicked="tool.csv" Name="kb_tool_csv"/>
++        <MenuItem Text="Abrir DLT" OnClicked="tool.dlt" Name="kb_tool_dlt"/>
+         <MenuItem Text="Terminal integrada" OnClicked="panel.output"/>
+-        <MenuItem Text="Historial Git" OnClicked="git.refresh"/>
+-        <MenuItem Text="Data Server" OnClicked="tool.data_server"/>
++        <MenuItem Text="Historial Git" OnClicked="git.refresh" Name="kb_git_refresh"/>
++        <MenuItem Text="Data Server" OnClicked="tool.data_server" Name="kb_tool_data_server"/>
+       </Menu>
+       <Menu Text="Ver" Name="view_menu">
+-        <MenuItem Text="Explorador" OnClicked="panel.explorer"/>
+-        <MenuItem Text="Git" OnClicked="panel.git"/>
++        <MenuItem Text="Explorador" OnClicked="panel.explorer" Name="kb_panel_explorer"/>
++        <MenuItem Text="Git" OnClicked="panel.git" Name="kb_panel_git"/>
+         <MenuItem Text="Terminal" OnClicked="panel.output"/>
+-        <MenuItem Text="Siguiente tema" Shortcut="Ctrl+Shift+T" OnClicked="theme.next"/>
+-        <MenuItem Text="Preferencias..." Shortcut="Ctrl+Alt+S" OnClicked="settings.show"/>
+-        <MenuItem Text="Diseñador de temas..." OnClicked="theme.designer"/>
++        <MenuItem Text="Siguiente tema" OnClicked="theme.next" Name="kb_theme_next"/>
++        <MenuItem Text="Preferencias..." OnClicked="settings.show" Name="kb_settings_show"/>
++        <MenuItem Text="Diseñador de temas..." OnClicked="theme.designer" Name="kb_theme_designer"/>
+       </Menu>
+       <Menu Text="Plugins" Name="plugins_menu">
+         <MenuItem Text="Gestionar plugins..." OnClicked="settings.show"/>
+       </Menu>
+       <Menu Text="Ayuda">
+-        <MenuItem Text="Acerca de" OnClicked="app.about"/>
++        <MenuItem Text="Acerca de" OnClicked="app.about" Name="kb_app_about"/>
+       </Menu>
+     </MenuBar>
+     <Border Class="glass-toolbar music-toolbar bar" Padding="10,8" CornerRadius="14" BorderWidth="0" Slot.Padding="4,4">
+diff --git a/src/EditorApp.cpp b/src/EditorApp.cpp
+index 3812336..13fc89e 100644
+--- a/src/EditorApp.cpp
++++ b/src/EditorApp.cpp
+@@ -74,6 +74,8 @@ int EditorApp::run(int argc, char** argv) {
+         else templateRegistry_.loadDirectory(settings_.directory()/"templates",&warnings);
+         const auto pluginsPath=settings_.getString("plugins.directory");
+         pluginManager_.discoverAndLoad(pluginsPath.empty()?settings_.directory()/"plugins":fs::u8path(pluginsPath));
++        for(const auto& cmd:pluginManager_.commands())keybindings_.registerCommand(cmd.id);
++        keybindings_.load();
+         for(const auto& name:themeRegistry_.names()) {
+             if(const auto* th=themeRegistry_.find(name)){
+                 const auto xml=th->toXml();
+@@ -86,6 +88,7 @@ int EditorApp::run(int argc, char** argv) {
+         initUi();
+         refreshThemeDecor();
+         bindActions();
++        installKeybindings();
+         registerPluginUi();
+         applyEditorOptions();
+         if(!folder_.empty()) setFolder(folder_);
+@@ -146,7 +149,7 @@ void EditorApp::initUi() {
+     Rcombo_box_set_changed_callback(themes_,&EditorApp::themeCb,this);
+     Rdock_area_set_close_hides(dock_,R_TRUE);
+     Rdock_area_set_panel_closable(dock_,explorer_,R_FALSE);
+-    setStatus("DoDevEditor Raven 3.1 · VS Code menus · JSON Settings · Themes · Templates · Plugins");
++    setStatus("DoDevEditor Raven 3.2 · Configurable Keybindings · JSON Settings · Themes · Templates · Plugins");
+ }
+ void EditorApp::bindActions() {
+     static constexpr const char* actions[]={
+@@ -171,6 +174,9 @@ void EditorApp::bindActions() {
+         "settings.browse_themes","settings.browse_templates","settings.browse_plugins",
+         "theme.designer","theme.import","theme.export","designer.preview","designer.save_json","designer.save_xml","designer.close",
+         "template.show","template.create","template.cancel", "plugin.enable","plugin.disable","plugin.rescan","plugin.setting.save",
++        "navigation.quick_open","navigation.go_to_line","navigation.command_palette",
++        "navigation.goto_submit","navigation.goto_close","navigation.quick_accept","navigation.quick_close",
++        "keybindings.show","keybindings.record","keybindings.apply","keybindings.unbind","keybindings.reset","keybindings.reset_all",
+         "app.about","app.exit"};
+     for(const char* a:actions) Raction_bind(a,&EditorApp::actionCb,this);
+ }
+@@ -180,7 +186,15 @@ void EditorApp::actionCb(Rid,const char* action,void* user_data) {
+     catch(const std::exception& e) {app.setStatus(e.what());app.log(std::string("ERROR: ")+e.what()+"\n");}
+ }
+ void EditorApp::handleAction(const std::string& name) {
+-    if(name=="settings.show")openSettings();
++    if(name=="navigation.quick_open")openQuickOpen();
++    else if(name=="navigation.go_to_line")openGoToLine();
++    else if(name=="navigation.command_palette")openQuickOpen(true);
++    else if(name=="navigation.goto_submit")goToLine();
++    else if(name=="navigation.goto_close"){if(Rwindow_is_valid(goToLineWindow_))Rwindow_destroy(goToLineWindow_);goToLineWindow_=R_INVALID_ID;}
++    else if(name=="navigation.quick_accept")chooseQuickOpen();
++    else if(name=="navigation.quick_close"){if(Rwindow_is_valid(quickOpenWindow_))Rwindow_destroy(quickOpenWindow_);quickOpenWindow_=R_INVALID_ID;}
++    else if(name.rfind("keybindings.",0)==0)keybindingAction(name);
++    else if(name=="settings.show")openSettings();
+     else if(name=="settings.apply")applySettings();
+     else if(name=="settings.cancel"){if(settingsWindow_!=R_INVALID_ID&&Rwindow_is_valid(settingsWindow_)){Rwindow_destroy(settingsWindow_);settingsWindow_=R_INVALID_ID;}}
+     else if(name=="settings.defaults")applySettings(true);
+diff --git a/src/EditorKeybindings.cpp b/src/EditorKeybindings.cpp
+new file mode 100644
+index 0000000..b34b665
+--- /dev/null
++++ b/src/EditorKeybindings.cpp
+@@ -0,0 +1,305 @@
++#include "EditorApp.h"
++#include "EmbeddedNavigationUi.h"
++#include <algorithm>
++#include <cctype>
++#include <set>
++#include <sstream>
++#include <limits>
++#include <system_error>
++namespace dodev {
++namespace {
++Rid widget(Rid win,const char* name){return win==R_INVALID_ID?R_INVALID_ID:Rwidget_find(win,name);}
++std::string textInput(Rid win,const char* name){const auto w=widget(win,name);if(w==R_INVALID_ID)return {};const char* s=Rtext_input_get_text(w);return s?s:"";}
++void setLabel(Rid win,const char* name,const std::string& value){const auto w=widget(win,name);if(w!=R_INVALID_ID)Rlabel_set_text(w,value.c_str());}
++std::string lower(std::string s){for(char& c:s)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return s;}
++std::string trim(const std::string& s){const auto a=s.find_first_not_of(" \r\t\n");if(a==std::string::npos)return {};auto b=s.find_last_not_of(" \r\t\n");return s.substr(a,b-a+1);}
++RKey ravenKey(const std::string& key){
++    if(key.size()==1){const auto c=key[0];if((c>='A'&&c<='Z')||(c>='0'&&c<='9'))return static_cast<RKey>(c);}
++    static const std::map<std::string,RKey> keys={
++        {"Grave",R_KEY_GRAVE},{"Slash",R_KEY_SLASH},{"Space",R_KEY_SPACE},
++        {"Delete",R_KEY_DELETE},{"Up",R_KEY_UP},{"Down",R_KEY_DOWN},
++        {"Left",R_KEY_LEFT},{"Right",R_KEY_RIGHT},{"Home",R_KEY_HOME},{"End",R_KEY_END},
++        {"Tab",R_KEY_TAB},{"Enter",R_KEY_ENTER},{"Escape",R_KEY_ESCAPE},
++        {"Backspace",R_KEY_BACKSPACE},{"PageUp",R_KEY_PAGE_UP},{"PageDown",R_KEY_PAGE_DOWN},
++        {"Insert",R_KEY_INSERT},{"Minus",R_KEY_MINUS},{"Equal",R_KEY_EQUAL},
++        {"Comma",R_KEY_COMMA},{"Period",R_KEY_PERIOD},{"Semicolon",R_KEY_SEMICOLON},
++        {"Backslash",R_KEY_BACKSLASH},{"LeftBracket",R_KEY_LEFT_BRACKET},{"RightBracket",R_KEY_RIGHT_BRACKET},
++        {"F1",R_KEY_F1},{"F2",R_KEY_F2},{"F3",R_KEY_F3},{"F4",R_KEY_F4},
++        {"F5",R_KEY_F5},{"F6",R_KEY_F6},{"F7",R_KEY_F7},{"F8",R_KEY_F8},
++        {"F9",R_KEY_F9},{"F10",R_KEY_F10},{"F11",R_KEY_F11},{"F12",R_KEY_F12}
++    };
++    auto it=keys.find(key);return it==keys.end()?R_KEY_UNKNOWN:it->second;
++}
++Ruint ravenMods(unsigned m){
++    Ruint flags=0;
++    if(m&keys::Ctrl)flags|=R_MOD_CTRL;
++    if(m&keys::Shift)flags|=R_MOD_SHIFT;
++    if(m&keys::Alt)flags|=R_MOD_ALT;
++    if(m&keys::Super)flags|=R_MOD_SUPER;
++    return flags;
++}
++}
++void EditorApp::installKeybindings(){
++    if(window_==R_INVALID_ID)return;
++    for(const auto& shortcut:installedShortcuts_){
++        const auto key=ravenKey(shortcut.key);
++        if(key!=R_KEY_UNKNOWN)Rwindow_unregister_shortcut(window_,key,ravenMods(shortcut.modifiers));
++    }
++    installedShortcuts_.clear();
++    for(const auto& binding:keybindings_.all()){
++        if(binding.key.empty())continue;
++        const auto parsed=keys::parseShortcut(binding.key);
++        const auto key=ravenKey(parsed.key);
++        if(!parsed.valid||key==R_KEY_UNKNOWN)continue;
++        Rwindow_register_shortcut(window_,key,ravenMods(parsed.modifiers),binding.command.c_str());
++        installedShortcuts_.push_back(parsed);
++    }
++    refreshShortcutLabels();
++}
++void EditorApp::refreshShortcutLabels(){
++    if(window_==R_INVALID_ID)return;
++    for(const auto& b:keybindings_.all()){
++        std::string item="kb_"+b.command;
++        std::replace(item.begin(),item.end(),'.','_');
++        auto id=Rwidget_find(window_,item.c_str());if(id==R_INVALID_ID)continue;
++        auto it=originalMenuLabels_.find(b.command);
++        if(it==originalMenuLabels_.end()){
++            const char* label=Rmenu_item_get_text(id);
++            it=originalMenuLabels_.emplace(b.command,label?label:"").first;
++        }
++        std::string display=it->second;
++        if(!b.key.empty())display+="    "+b.key;
++        Rmenu_item_set_text(id,display.c_str());
++    }
++}
++void EditorApp::openGoToLine(){
++    auto* doc=active();if(!doc||doc->editor==R_INVALID_ID){setStatus("Open a text file to use Go to Line");return;}
++    if(goToLineWindow_==R_INVALID_ID||!Rwindow_is_valid(goToLineWindow_))
++        goToLineWindow_=Rwindow_create_from_xml(ui::kGoToLineWindow.data(),ui::kGoToLineWindow.size());
++    if(goToLineWindow_==R_INVALID_ID){setStatus("Cannot open Go to Line");return;}
++    int line=0,col=0;Rtext_editor_get_cursor(doc->editor,&line,&col);
++    const auto position=std::to_string(line+1)+":"+std::to_string(col+1);
++    Rtext_input_set_text(widget(goToLineWindow_,"goto_position"),position.c_str());
++    Rtext_input_set_committed_callback(widget(goToLineWindow_,"goto_position"),&EditorApp::goToLineCommitCb,this);
++    Rwindow_show(goToLineWindow_);Rwidget_focus(widget(goToLineWindow_,"goto_position"));
++    Rtext_input_select_all(widget(goToLineWindow_,"goto_position"));
++}
++void EditorApp::goToLineCommitCb(Rid,const char*,void* user){static_cast<EditorApp*>(user)->goToLine();}
++void EditorApp::goToLine(){
++    auto* doc=active();if(!doc||doc->editor==R_INVALID_ID)return;
++    const auto v=trim(textInput(goToLineWindow_,"goto_position"));
++    const auto delim=v.find(':');
++    auto parsePositive=[](const std::string& text,int& number)->bool{
++        if(text.empty()||text.size()>9)return false;
++        for(unsigned char c:text)if(!std::isdigit(c))return false;
++        try{number=std::stoi(text);return number>=1;}catch(...){return false;}
++    };
++    int line=0,col=1;
++    if(!parsePositive(v.substr(0,delim),line)||(delim!=std::string::npos&&!parsePositive(v.substr(delim+1),col))){
++        setLabel(goToLineWindow_,"goto_status","Invalid position. Example: 42:8");return;
++    }
++    const int count=Rtext_editor_get_line_count(doc->editor);
++    line=std::clamp(line,1,std::max(count,1));
++    const char* content=Rtext_editor_get_line(doc->editor,line-1);
++    const int length=content?static_cast<int>(std::string(content).size()):0;
++    col=std::clamp(col-1,0,length);
++    Rtext_editor_set_cursor(doc->editor,line-1,col);
++    Rtext_editor_scroll_to_line(doc->editor,line-1);
++    Rwidget_focus(doc->editor);
++    if(Rwindow_is_valid(goToLineWindow_))Rwindow_destroy(goToLineWindow_);
++    goToLineWindow_=R_INVALID_ID;
++    setStatus("Go to line "+std::to_string(line)+", column "+std::to_string(col+1));
++}
++void EditorApp::openQuickOpen(bool commands){
++    commandPalette_=commands;
++    quickCandidates_.clear();quickCommands_.clear();
++    if(commands){for(const auto& b:keybindings_.all())quickCommands_.push_back(b.command);}
++    else {
++        std::set<fs::path> unique;
++        for(const auto& doc:docs_)if(!doc->path.empty())unique.insert(doc->path);
++        std::error_code ec;
++        if(!folder_.empty()&&fs::is_directory(folder_,ec)){
++            std::size_t scanned=0;
++            for(auto it=fs::recursive_directory_iterator(folder_,fs::directory_options::skip_permission_denied,ec);
++                !ec&&it!=fs::recursive_directory_iterator()&&scanned<20000&&unique.size()<3000;it.increment(ec)){
++                if(it->is_directory(ec)){
++                    const auto name=it->path().filename().string();
++                    if(name==".git"||name=="build"||name=="node_modules"||name==".cache"||name==".venv"||name==".idea")it.disable_recursion_pending();
++                    continue;
++                }
++                ++scanned;if(it->is_regular_file(ec))unique.insert(it->path());
++            }
++        }
++        quickCandidates_.assign(unique.begin(),unique.end());
++    }
++    if(quickOpenWindow_==R_INVALID_ID||!Rwindow_is_valid(quickOpenWindow_))
++        quickOpenWindow_=Rwindow_create_from_xml(ui::kQuickOpenWindow.data(),ui::kQuickOpenWindow.size());
++    if(quickOpenWindow_==R_INVALID_ID){setStatus("Cannot open Quick Open");return;}
++    Rtext_input_set_text(widget(quickOpenWindow_,"quick_query"),"");
++    Rtext_input_set_placeholder(widget(quickOpenWindow_,"quick_query"),commands?"Search commands...":"Search file names...");
++    Rtext_input_set_changed_callback(widget(quickOpenWindow_,"quick_query"),&EditorApp::quickFilterCb,this);
++    Rtext_input_set_committed_callback(widget(quickOpenWindow_,"quick_query"),&EditorApp::quickCommitCb,this);
++    Rlist_view_set_activated_callback(widget(quickOpenWindow_,"quick_list"),&EditorApp::quickSelectCb,this);
++    refreshQuickOpen();Rwindow_show(quickOpenWindow_);Rwidget_focus(widget(quickOpenWindow_,"quick_query"));
++}
++void EditorApp::quickFilterCb(Rid,const char*,void* user){static_cast<EditorApp*>(user)->refreshQuickOpen();}
++void EditorApp::quickCommitCb(Rid,const char*,void* user){static_cast<EditorApp*>(user)->chooseQuickOpen();}
++void EditorApp::quickSelectCb(Rid,int,void* user){static_cast<EditorApp*>(user)->chooseQuickOpen();}
++void EditorApp::refreshQuickOpen(){
++    if(quickOpenWindow_==R_INVALID_ID)return;
++    const auto query=lower(trim(textInput(quickOpenWindow_,"quick_query")));
++    const auto list=widget(quickOpenWindow_,"quick_list");
++    Rlist_view_clear_items(list);quickMatches_.clear();
++    if(commandPalette_){
++        std::size_t count=0;
++        for(const auto& command:quickCommands_){
++            if(lower(command).find(query)==std::string::npos)continue;
++            std::string display=command;const auto key=keybindings_.get(command);
++            if(!key.empty())display+="    "+key;
++            Rlist_view_add_item(list,display.c_str());++count;
++            if(count>=250)break;
++        }
++        setLabel(quickOpenWindow_,"quick_status",std::to_string(count)+" commands");
++    }else{
++        for(const auto& path:quickCandidates_){
++            const auto file=lower(path.filename().string());
++            const auto full=lower(path.string());
++            if(!query.empty()&&file.find(query)==std::string::npos&&full.find(query)==std::string::npos)continue;
++            std::error_code ec;const auto relative=folder_.empty()?path:fs::relative(path,folder_,ec);
++            Rlist_view_add_item(list,(ec?path.string():relative.string()).c_str());
++            quickMatches_.push_back(path);if(quickMatches_.size()>=250)break;
++        }
++        setLabel(quickOpenWindow_,"quick_status",std::to_string(quickMatches_.size())+" files (max 250 shown)");
++    }
++    if(Rlist_view_get_item_count(list)>0)Rlist_view_set_selected(list,0);
++}
++void EditorApp::chooseQuickOpen(){
++    if(quickOpenWindow_==R_INVALID_ID)return;
++    const auto list=widget(quickOpenWindow_,"quick_list");
++    const int idx=Rlist_view_get_selected(list);
++    if(idx<0)return;
++    std::string action;
++    fs::path path;
++    if(commandPalette_){
++        const char* row=Rlist_view_get_item_text(list,idx);
++        if(!row)return;
++        action=std::string(row);auto space=action.find(' ');if(space!=std::string::npos)action.resize(space);
++    }else{
++        if(idx>=static_cast<int>(quickMatches_.size()))return;
++        path=quickMatches_[static_cast<size_t>(idx)];
++    }
++    if(Rwindow_is_valid(quickOpenWindow_))Rwindow_destroy(quickOpenWindow_);
++    quickOpenWindow_=R_INVALID_ID;
++    if(!action.empty())handleAction(action);
++    else if(!path.empty())opened(path);
++}
++void EditorApp::keybindingFilterCb(Rid,const char*,void* user){static_cast<EditorApp*>(user)->refreshKeybindingRows();}
++void EditorApp::keybindingSelectCb(Rid,int,void* user){static_cast<EditorApp*>(user)->chooseKeybinding();}
++void EditorApp::refreshKeybindingRows(){
++    if(settingsWindow_==R_INVALID_ID||!Rwindow_is_valid(settingsWindow_))return;
++    const auto list=widget(settingsWindow_,"kb_command_list");if(list==R_INVALID_ID)return;
++    const auto filter=lower(trim(textInput(settingsWindow_,"kb_filter")));
++    keybindingRows_.clear();Rlist_view_clear_items(list);
++    for(const auto& binding:keybindings_.all()){
++        const auto search=lower(binding.command+" "+binding.key);
++        if(!filter.empty()&&search.find(filter)==std::string::npos)continue;
++        std::string name=binding.command;
++        if(binding.customized)name+="  *";
++        name+="    "+(binding.key.empty()?"(unbound)":binding.key);
++        Rlist_view_add_item(list,name.c_str());keybindingRows_.push_back(binding.command);
++    }
++    if(!keybindingRows_.empty()){Rlist_view_set_selected(list,0);chooseKeybinding();}
++}
++void EditorApp::chooseKeybinding(){
++    if(settingsWindow_==R_INVALID_ID||!Rwindow_is_valid(settingsWindow_))return;
++    const auto list=widget(settingsWindow_,"kb_command_list");
++    const int idx=Rlist_view_get_selected(list);
++    if(idx<0||idx>=static_cast<int>(keybindingRows_.size()))return;
++    Rtext_input_set_text(widget(settingsWindow_,"kb_shortcut"),keybindings_.get(keybindingRows_[static_cast<size_t>(idx)]).c_str());
++}
++int EditorApp::keybindingEventCb(Rid,const REvent* event,void* user){
++    auto* app=static_cast<EditorApp*>(user);
++    if(!app->recordingBinding_||!event||event->type!=R_EVENT_KEY_DOWN)return R_FALSE;
++    const auto key=event->key;
++    if(key==R_KEY_ESCAPE){
++        app->recordingBinding_=false;
++        setLabel(app->settingsWindow_,"kb_status","Recording cancelled");
++        return R_TRUE;
++    }
++    if(key==R_KEY_LEFT_CTRL||key==R_KEY_RIGHT_CTRL||key==R_KEY_LEFT_SHIFT||key==R_KEY_RIGHT_SHIFT||
++       key==R_KEY_LEFT_ALT||key==R_KEY_RIGHT_ALT||key==R_KEY_LEFT_SUPER||key==R_KEY_RIGHT_SUPER)
++        return R_TRUE;
++    std::string name;
++    if((key>=R_KEY_A&&key<=R_KEY_Z)||(key>=R_KEY_0&&key<=R_KEY_9))name=std::string(1,static_cast<char>(key));
++    else if(key>=R_KEY_F1&&key<=R_KEY_F12)name="F"+std::to_string(static_cast<int>(key-R_KEY_F1+1));
++    else{
++        static const std::map<RKey,std::string> special={
++            {R_KEY_GRAVE,"Grave"},{R_KEY_SLASH,"Slash"},{R_KEY_SPACE,"Space"},
++            {R_KEY_DELETE,"Delete"},{R_KEY_UP,"Up"},{R_KEY_DOWN,"Down"},
++            {R_KEY_LEFT,"Left"},{R_KEY_RIGHT,"Right"},{R_KEY_HOME,"Home"},{R_KEY_END,"End"},
++            {R_KEY_TAB,"Tab"},{R_KEY_ENTER,"Enter"},{R_KEY_BACKSPACE,"Backspace"},
++            {R_KEY_PAGE_UP,"PageUp"},{R_KEY_PAGE_DOWN,"PageDown"},{R_KEY_INSERT,"Insert"},
++            {R_KEY_MINUS,"Minus"},{R_KEY_EQUAL,"Equal"},{R_KEY_COMMA,"Comma"},{R_KEY_PERIOD,"Period"},
++            {R_KEY_SEMICOLON,"Semicolon"},{R_KEY_BACKSLASH,"Backslash"},
++            {R_KEY_LEFT_BRACKET,"LeftBracket"},{R_KEY_RIGHT_BRACKET,"RightBracket"}
++        };
++        auto found=special.find(key);if(found!=special.end())name=found->second;
++    }
++    if(name.empty())return R_TRUE;
++    keys::Shortcut shortcut;
++    shortcut.valid=true;
++    shortcut.key=name;
++    if(event->modifiers&R_MOD_CTRL)shortcut.modifiers|=keys::Ctrl;
++    if(event->modifiers&R_MOD_SHIFT)shortcut.modifiers|=keys::Shift;
++    if(event->modifiers&R_MOD_ALT)shortcut.modifiers|=keys::Alt;
++    if(event->modifiers&R_MOD_SUPER)shortcut.modifiers|=keys::Super;
++    const auto sequence=keys::formatShortcut(shortcut);
++    const auto normalized=keys::normalizeShortcut(sequence);
++    if(normalized.empty()){
++        setLabel(app->settingsWindow_,"kb_status","Use a modifier with letters/numbers, or a function/navigation key");
++        return R_TRUE;
++    }
++    Rtext_input_set_text(widget(app->settingsWindow_,"kb_shortcut"),normalized.c_str());
++    app->recordingBinding_=false;
++    setLabel(app->settingsWindow_,"kb_status","Captured "+normalized+". Click Apply to save.");
++    return R_TRUE;
++}
++void EditorApp::keybindingAction(const std::string& action){
++    if(action=="keybindings.show"){
++        openSettings();const auto tabs=widget(settingsWindow_,"settings_sections");
++        if(tabs!=R_INVALID_ID)Rtab_view_set_active(tabs,5);
++        Rwidget_focus(widget(settingsWindow_,"kb_filter"));return;
++    }
++    if(settingsWindow_==R_INVALID_ID||!Rwindow_is_valid(settingsWindow_))return;
++    if(action=="keybindings.record"){
++        recordingBinding_=true;
++        setLabel(settingsWindow_,"kb_status","Press your desired key combination (Esc to cancel)");
++        Rwidget_focus(widget(settingsWindow_,"kb_shortcut"));
++        return;
++    }
++    recordingBinding_=false;
++    const auto list=widget(settingsWindow_,"kb_command_list");
++    const int idx=Rlist_view_get_selected(list);
++    const auto command=idx>=0&&idx<static_cast<int>(keybindingRows_.size())?keybindingRows_[static_cast<size_t>(idx)]:"";
++    std::string error;
++    if(action=="keybindings.reset_all")keybindings_.resetAll();
++    else if(command.empty())return;
++    else if(action=="keybindings.unbind")keybindings_.set(command,"",&error);
++    else if(action=="keybindings.reset"){
++        // A default shortcut may be occupied by a custom binding. Reject the collision.
++        const auto defaults=keys::KeybindingManager::defaults();
++        const auto it=defaults.find(command);
++        if(it==defaults.end())keybindings_.reset(command); // plugin command has no built-in key
++        else if(!keybindings_.set(command,it->second,&error)){
++            setLabel(settingsWindow_,"kb_status",error);return;
++        }
++    }else if(action=="keybindings.apply"){
++        keybindings_.set(command,trim(textInput(settingsWindow_,"kb_shortcut")),&error);
++    }else return;
++    if(!error.empty()){setLabel(settingsWindow_,"kb_status",error);return;}
++    installKeybindings();
++    if(!keybindings_.save(&error))setLabel(settingsWindow_,"kb_status","Applied for this session; cannot save: "+error);
++    else setLabel(settingsWindow_,"kb_status","Keybindings applied and saved in keybindings.json");
++    refreshKeybindingRows();
++}
++} // namespace dodev
+diff --git a/src/EditorSettings.cpp b/src/EditorSettings.cpp
+index c2f1b1a..fda5164 100644
+--- a/src/EditorSettings.cpp
++++ b/src/EditorSettings.cpp
+@@ -86,7 +86,10 @@ void EditorApp::openSettings(){
+     Rtext_editor_set_read_only(find(settingsWindow_,"settings_font_preview"),R_TRUE);
+     Rlist_view_set_selection_changed_callback(find(settingsWindow_,"settings_plugin_list"),&EditorApp::pluginListCb,this);
+     Rcombo_box_set_changed_callback(find(settingsWindow_,"settings_plugin_key"),&EditorApp::pluginKeyCb,this);
+-    fillSettings();Rwindow_show(settingsWindow_);
++    Rlist_view_set_selection_changed_callback(find(settingsWindow_,"kb_command_list"),&EditorApp::keybindingSelectCb,this);
++    Rtext_input_set_changed_callback(find(settingsWindow_,"kb_filter"),&EditorApp::keybindingFilterCb,this);
++    Rwidget_set_event_callback(find(settingsWindow_,"kb_shortcut"),&EditorApp::keybindingEventCb,this);
++    fillSettings();refreshKeybindingRows();Rwindow_show(settingsWindow_);
+ }
+ void EditorApp::fillSettings(){if(settingsWindow_==R_INVALID_ID||!Rwindow_is_valid(settingsWindow_))return;
+     label(settingsWindow_,"settings_config_directory","Configuration: "+settings_.directory().string());
+@@ -111,6 +114,7 @@ void EditorApp::fillSettings(){if(settingsWindow_==R_INVALID_ID||!Rwindow_is_val
+     check(settingsWindow_,"settings_plugins_enabled",settings_.getBool("plugins.enabled",true));
+     check(settingsWindow_,"settings_safe_mode",settings_.getBool("plugins.safeMode"));
+     populatePluginSettings();
++    refreshKeybindingRows();
+ }
+ void EditorApp::applySettings(bool reset){
+     if(settingsWindow_==R_INVALID_ID||!Rwindow_is_valid(settingsWindow_))return;
+diff --git a/src/keybindings/KeybindingManager.cpp b/src/keybindings/KeybindingManager.cpp
+new file mode 100644
+index 0000000..c155d09
+--- /dev/null
++++ b/src/keybindings/KeybindingManager.cpp
+@@ -0,0 +1,261 @@
++#include "dodev/keybindings/KeybindingManager.h"
++#include <algorithm>
++#include <cctype>
++#include <fstream>
++#include <iterator>
++#include <sstream>
++#include <set>
++namespace dodev::keys {
++namespace {
++std::string strip(const std::string& text){
++    auto b=text.find_first_not_of(" \t\r\n");if(b==std::string::npos)return {};
++    auto e=text.find_last_not_of(" \t\r\n");return text.substr(b,e-b+1);
++}
++std::string up(std::string s){for(char& c:s)c=static_cast<char>(std::toupper(static_cast<unsigned char>(c)));return s;}
++std::string keyName(const std::string& candidate){
++    const std::string n=up(strip(candidate));
++    if(n.size()==1&&((n[0]>='A'&&n[0]<='Z')||(n[0]>='0'&&n[0]<='9')))return n;
++    static const std::map<std::string,std::string> alias={
++        {"`","Grave"},{"GRAVE","Grave"},{"BACKTICK","Grave"},{"/","Slash"},
++        {"SLASH","Slash"},{"DELETE","Delete"},{"DEL","Delete"},{"SPACE","Space"},
++        {"UP","Up"},{"DOWN","Down"},{"LEFT","Left"},{"RIGHT","Right"},
++        {"HOME","Home"},{"END","End"},{"TAB","Tab"},{"ENTER","Enter"},
++        {"ESCAPE","Escape"},{"ESC","Escape"},{"BACKSPACE","Backspace"},
++        {"PAGEUP","PageUp"},{"PAGEDOWN","PageDown"},{"INSERT","Insert"},
++        {"MINUS","Minus"},{"-","Minus"},{"EQUAL","Equal"},{"=","Equal"},
++        {"SEMICOLON","Semicolon"},{";","Semicolon"},{"COMMA","Comma"},{",","Comma"},
++        {"PERIOD","Period"},{".","Period"},{"BACKSLASH","Backslash"},
++        {"[","LeftBracket"},{"]","RightBracket"},
++        {"F1","F1"},{"F2","F2"},{"F3","F3"},{"F4","F4"},
++        {"F5","F5"},{"F6","F6"},{"F7","F7"},{"F8","F8"},
++        {"F9","F9"},{"F10","F10"},{"F11","F11"},{"F12","F12"}
++    };
++    const auto it=alias.find(n);return it==alias.end()?"":it->second;
++}
++}
++Shortcut parseShortcut(const std::string& source){
++    Shortcut s;const auto raw=strip(source);if(raw.empty())return s;
++    std::istringstream segments(raw);std::string piece;bool keyFound=false;
++    while(std::getline(segments,piece,'+')){
++        const auto x=up(strip(piece));
++        if(x.empty())return {};
++        unsigned mod=0;
++        if(x=="CTRL"||x=="CONTROL")mod=Ctrl;
++        else if(x=="SHIFT")mod=Shift;
++        else if(x=="ALT"||x=="OPTION")mod=Alt;
++        else if(x=="SUPER"||x=="META"||x=="CMD"||x=="COMMAND")mod=Super;
++        if(mod){if(keyFound||(s.modifiers&mod))return {};s.modifiers|=mod;}
++        else {if(keyFound)return {};s.key=keyName(x);if(s.key.empty())return {};keyFound=true;}
++    }
++    // Block bare printable keys: those would interfere with normal text entry.
++    s.valid=keyFound && (s.modifiers!=0 || s.key.size()>1);
++    return s.valid?s:Shortcut{};
++}
++std::string formatShortcut(const Shortcut& k){if(!k.valid)return {};
++    std::string s;
++    if(k.modifiers&Ctrl)s+="Ctrl+";
++    if(k.modifiers&Shift)s+="Shift+";
++    if(k.modifiers&Alt)s+="Alt+";
++    if(k.modifiers&Super)s+="Super+";
++    return s+k.key;
++}
++std::string normalizeShortcut(const std::string& source){return formatShortcut(parseShortcut(source));}
++std::map<std::string,std::string> KeybindingManager::defaults(){return {
++    {"app.about",""},
++    {"designer.close",""},
++    {"designer.preview",""},
++    {"designer.save_json",""},
++    {"designer.save_xml",""},
++    {"edit.duplicate",""},
++    {"edit.indent",""},
++    {"edit.insert_above",""},
++    {"edit.insert_below",""},
++    {"edit.join_lines",""},
++    {"edit.lowercase",""},
++    {"edit.outdent",""},
++    {"edit.sort_asc",""},
++    {"edit.sort_desc",""},
++    {"edit.titlecase",""},
++    {"edit.trim_whitespace",""},
++    {"edit.uppercase",""},
++    {"folder.refresh",""},
++    {"git.details",""},
++    {"git.refresh",""},
++    {"keybindings.apply",""},
++    {"keybindings.reset",""},
++    {"keybindings.reset_all",""},
++    {"keybindings.unbind",""},
++    {"navigation.goto_close",""},
++    {"navigation.goto_submit",""},
++    {"navigation.quick_accept",""},
++    {"navigation.quick_close",""},
++    {"panel.git",""},
++    {"panel.output",""},
++    {"plugin.disable",""},
++    {"plugin.enable",""},
++    {"plugin.rescan",""},
++    {"plugin.setting.save",""},
++    {"search.hide",""},
++    {"search.replace",""},
++    {"search.replace_all",""},
++    {"selection.cursor_down",""},
++    {"selection.cursor_up",""},
++    {"selection.line_end",""},
++    {"selection.line_start",""},
++    {"selection.prev_occurrence",""},
++    {"selection.swap_anchor",""},
++    {"selection.to_end",""},
++    {"selection.to_start",""},
++    {"selection.word",""},
++    {"settings.apply",""},
++    {"settings.browse_editor_font",""},
++    {"settings.browse_plugins",""},
++    {"settings.browse_templates",""},
++    {"settings.browse_terminal_font",""},
++    {"settings.browse_themes",""},
++    {"settings.browse_ui_font",""},
++    {"settings.cancel",""},
++    {"settings.defaults",""},
++    {"template.cancel",""},
++    {"template.create",""},
++    {"terminal.clear",""},
++    {"terminal.close",""},
++    {"terminal.configure_build",""},
++    {"terminal.configure_tasks",""},
++    {"terminal.copy",""},
++    {"terminal.interrupt",""},
++    {"terminal.next",""},
++    {"terminal.paste",""},
++    {"terminal.previous",""},
++    {"terminal.rename",""},
++    {"terminal.restart",""},
++    {"terminal.run_file",""},
++    {"terminal.run_selected",""},
++    {"theme.designer",""},
++    {"theme.export",""},
++    {"theme.import",""},
++    {"tool.csv",""},
++    {"tool.data_server",""},
++    {"tool.dlt",""},
++    {"file.new","Ctrl+N"},
++    {"template.show","Ctrl+Alt+N"},
++    {"file.open","Ctrl+O"},
++    {"folder.open","Ctrl+Shift+O"},
++    {"file.save","Ctrl+S"},
++    {"file.save_as","Ctrl+Shift+S"},
++    {"file.close","Ctrl+W"},
++    {"app.exit","Ctrl+Q"},
++    {"edit.undo","Ctrl+Z"},
++    {"edit.redo","Ctrl+Y"},
++    {"edit.cut","Ctrl+X"},
++    {"edit.copy","Ctrl+C"},
++    {"edit.paste","Ctrl+V"},
++    {"edit.delete","Delete"},
++    {"search.show","Ctrl+F"},
++    {"search.next","F3"},
++    {"search.prev","Shift+F3"},
++    {"search.replace_show","Ctrl+H"},
++    {"edit.find_workspace","Ctrl+Shift+F"},
++    {"edit.toggle_line_comment","Ctrl+/"},
++    {"edit.toggle_block_comment","Shift+Alt+A"},
++    {"selection.all","Ctrl+A"},
++    {"selection.line","Ctrl+L"},
++    {"selection.expand","Shift+Alt+Right"},
++    {"selection.shrink","Shift+Alt+Left"},
++    {"selection.next_occurrence","Ctrl+D"},
++    {"edit.copy_line_up","Shift+Alt+Up"},
++    {"edit.copy_line_down","Shift+Alt+Down"},
++    {"edit.move_line_up","Alt+Up"},
++    {"edit.move_line_down","Alt+Down"},
++    {"terminal.new","Ctrl+Shift+Grave"},
++    {"terminal.split","Ctrl+Shift+5"},
++    {"terminal.run_build","Ctrl+Shift+B"},
++    {"theme.next","Ctrl+Shift+T"},
++    {"settings.show","Ctrl+Alt+S"},
++    {"navigation.quick_open","Ctrl+P"},
++    {"navigation.go_to_line","Ctrl+G"},
++    {"navigation.command_palette","Ctrl+Shift+P"},
++    {"keybindings.show","Ctrl+K"},
++    {"terminal.focus","Ctrl+Grave"},
++    {"terminal.run_task","Ctrl+Shift+R"},
++    {"panel.explorer","Ctrl+Shift+E"},
++    {"edit.delete_line","Ctrl+Shift+K"},
++};}
++KeybindingManager::KeybindingManager(SettingsManager& settings):settings_(settings),defaults_(defaults()),bindings_(defaults_){}
++bool KeybindingManager::hasCommand(const std::string& command)const{return defaults_.count(command)>0;}
++void KeybindingManager::registerCommand(const std::string& command,const std::string& key){
++    if(command.empty()||command.size()>128||hasCommand(command))return;
++    const auto normalized=normalizeShortcut(key);
++    defaults_[command]=normalized;bindings_[command]=normalized;
++}
++void KeybindingManager::load(){
++    bindings_=defaults_;dormantOverrides_.clear();diagnostics_.clear();malformed_=false;
++    const auto file=settings_.directory()/"keybindings.json";
++    std::error_code ec;if(!std::filesystem::exists(file,ec))return;
++    std::ifstream in(file,std::ios::binary);if(!in){malformed_=true;diagnostics_.push_back("Cannot read keybindings.json");return;}
++    std::string source{std::istreambuf_iterator<char>(in),std::istreambuf_iterator<char>()};
++    Json j;std::string error;if(source.size()>1024*1024||!Json::parse(source,j,&error)||!j.isArray()){
++        malformed_=true;diagnostics_.push_back("Invalid keybindings.json: "+error);return;
++    }
++    auto candidate=bindings_;
++    for(const auto& entry:j.asArray()){
++        const auto command=entry["command"].string(),key=entry["key"].string();
++        if(!entry.isObject()||!entry["command"].isString()||!entry["key"].isString()){
++            diagnostics_.push_back("Ignoring malformed keybinding entry");continue;
++        }
++        const auto normalized=key.empty()?"":normalizeShortcut(key);
++        if(!key.empty()&&normalized.empty()){
++            diagnostics_.push_back("Invalid shortcut for "+command+": "+key);continue;
++        }
++        if(!hasCommand(command)){
++            // Preserve disabled plugin keybindings without registering their actions.
++            if(SettingsManager::validPluginId(command))dormantOverrides_[command]=normalized;
++            diagnostics_.push_back("Inactive/unknown shortcut command: "+command);continue;
++        }
++        candidate[command]=normalized;
++    }
++    std::map<std::string,std::string> assigned;
++    bool collision=false;
++    for(const auto& kv:candidate){
++        if(kv.second.empty())continue;
++        const auto other=assigned.find(kv.second);
++        if(other!=assigned.end()){
++            collision=true;diagnostics_.push_back("Conflict: "+kv.second+" for "+other->second+" and "+kv.first);
++        }else assigned[kv.second]=kv.first;
++    }
++    if(collision){
++        // Fail open: a conflicting configuration cannot hide built-in shortcuts.
++        diagnostics_.push_back("Conflicting overrides ignored; using safe defaults");
++        bindings_=defaults_;
++    }else bindings_=std::move(candidate);
++}
++bool KeybindingManager::set(const std::string& command,const std::string& key,std::string* error){
++    if(!hasCommand(command)){if(error)*error="Unknown command";return false;}
++    const auto normalized=key.empty()?"":normalizeShortcut(key);
++    if(!key.empty()&&normalized.empty()){if(error)*error="Use one valid shortcut, e.g. Ctrl+G, Ctrl+Shift+P or F3";return false;}
++    if(!normalized.empty())for(const auto& pair:bindings_)
++        if(pair.first!=command&&pair.second==normalized){if(error)*error="Shortcut already assigned to "+pair.first;return false;}
++    bindings_[command]=normalized;
++    if(error)error->clear();
++    return true;
++}
++void KeybindingManager::reset(const std::string& command){if(hasCommand(command))bindings_[command]=defaults_.at(command);}
++void KeybindingManager::resetAll(){bindings_=defaults_;}
++std::string KeybindingManager::get(const std::string& command)const{const auto it=bindings_.find(command);return it==bindings_.end()?"":it->second;}
++std::vector<Binding> KeybindingManager::all()const{
++    std::vector<Binding> out;
++    for(const auto& kv:bindings_){const auto it=defaults_.find(kv.first);out.push_back({kv.first,kv.second,it==defaults_.end()||it->second!=kv.second});}
++    return out;
++}
++bool KeybindingManager::save(std::string* error)const{
++    if(malformed_){if(error)*error="Refusing to overwrite invalid keybindings.json; repair or rename the file";return false;}
++    Json::Array changes;
++    for(const auto& kv:dormantOverrides_){
++        Json obj=Json::object();obj["key"]=kv.second;obj["command"]=kv.first;changes.emplace_back(std::move(obj));
++    }
++    for(const auto& kv:bindings_)if(kv.second!=defaults_.at(kv.first)){
++        Json obj=Json::object();obj["key"]=kv.second;obj["command"]=kv.first;changes.emplace_back(std::move(obj));
++    }
++    return SettingsManager::writeAtomic(settings_.directory()/"keybindings.json",Json(std::move(changes)).dump(2)+"\n",error);
++}
++} // namespace dodev::keys
+diff --git a/tests/test_keybinding_ui.py b/tests/test_keybinding_ui.py
+new file mode 100644
+index 0000000..80b9bfc
+--- /dev/null
++++ b/tests/test_keybinding_ui.py
+@@ -0,0 +1,24 @@
++from pathlib import Path
++import re
++from xml.etree import ElementTree as ET
++root=Path(__file__).resolve().parents[1]
++main=(root/'resources/EmbeddedUi.h').read_text()
++xml=ET.fromstring(re.search(r'kMainWindow = R"DODEV_XML\((.*?)\)DODEV_XML";',main,re.S).group(1))
++assert xml.find('.//*[@Name="go_menu"]') is not None
++for action in ('navigation.go_to_line','navigation.quick_open','navigation.command_palette','keybindings.show'):
++    assert any(i.get('OnClicked')==action for i in xml.iter('MenuItem'))
++assert not any('Shortcut' in i.attrib for i in xml.iter('MenuItem')), 'static shortcuts conflict with runtime settings'
++settings=(root/'resources/EmbeddedSettingsUi.h').read_text()
++settings_xml=ET.fromstring(re.search(r'kSettingsWindow=R"DODEV_XML\((.*?)\)DODEV_XML";',settings,re.S).group(1)) if 'kSettingsWindow=R"' in settings else ET.fromstring(re.search(r'kSettingsWindow = R"DODEV_XML\((.*?)\)DODEV_XML";',settings,re.S).group(1))
++for item in ('kb_filter','kb_command_list','kb_shortcut','kb_status'):
++    assert settings_xml.find(f'.//*[@Name="{item}"]') is not None
++navigation=(root/'resources/EmbeddedNavigationUi.h').read_text()
++for name in ('kGoToLineWindow','kQuickOpenWindow'):
++    raw=re.search(name+r'=R"DODEV_XML\((.*?)\)DODEV_XML"',navigation,re.S).group(1)
++    ET.fromstring(raw)
++source=(root/'src/EditorKeybindings.cpp').read_text()
++assert 'Rwindow_register_shortcut' in source and 'Rwindow_unregister_shortcut' in source
++assert 'Rtext_editor_set_cursor' in source
++assert 'Rlist_view_add_item' in source
++assert 'keybindingEventCb' in source and 'Rwidget_set_event_callback' in (root/'src/EditorSettings.cpp').read_text()
++print('PASS: dynamic keyboard shortcuts UI, Quick Open, Go to Line, embedded XML')
+diff --git a/tests/test_keybindings.cpp b/tests/test_keybindings.cpp
+new file mode 100644
+index 0000000..5a5e794
+--- /dev/null
++++ b/tests/test_keybindings.cpp
+@@ -0,0 +1,62 @@
++#include "dodev/keybindings/KeybindingManager.h"
++#include <cassert>
++#include <chrono>
++#include <filesystem>
++#include <fstream>
++#include <iostream>
++using namespace dodev;
++int main(){
++    const auto directory=std::filesystem::temp_directory_path()/
++        ("dodev-keybindings-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
++    std::filesystem::create_directories(directory);
++    SettingsManager settings(directory);settings.load();
++    keys::KeybindingManager bindings(settings);bindings.load();
++    assert(bindings.get("navigation.go_to_line")=="Ctrl+G");
++    assert(bindings.get("navigation.quick_open")=="Ctrl+P");
++    assert(bindings.get("navigation.command_palette")=="Ctrl+Shift+P");
++    assert(keys::normalizeShortcut(" shift + ctrl + p ")=="Ctrl+Shift+P");
++    assert(keys::normalizeShortcut("ctrl+alt+up")=="Ctrl+Alt+Up");
++    assert(keys::normalizeShortcut("F3")=="F3");
++    assert(keys::normalizeShortcut("ctrl+ctrl+P").empty());
++    assert(keys::normalizeShortcut("P").empty());
++    assert(keys::normalizeShortcut("Ctrl+wrong").empty());
++    std::string error;
++    assert(!bindings.set("navigation.go_to_line","Ctrl+P",&error));
++    assert(error.find("navigation.quick_open")!=std::string::npos);
++    assert(!bindings.set("navigation.go_to_line","Q",&error));
++    assert(bindings.set("navigation.go_to_line","Ctrl+Alt+G",&error));
++    assert(bindings.set("edit.redo","",&error));
++    assert(bindings.save(&error));
++    assert(std::filesystem::exists(directory/"keybindings.json"));
++    keys::KeybindingManager reloaded(settings);reloaded.load();
++    assert(reloaded.get("navigation.go_to_line")=="Ctrl+Alt+G");
++    assert(reloaded.get("edit.redo").empty());
++    reloaded.resetAll();assert(reloaded.get("navigation.go_to_line")=="Ctrl+G");
++    assert(reloaded.save(&error));
++    // A swap must be validated after all user overrides are applied, not one by one.
++    {
++        std::ofstream out(directory/"keybindings.json");
++        out<<R"([{"key":"Ctrl+P","command":"navigation.go_to_line"},{"key":"Ctrl+G","command":"navigation.quick_open"},{"key":"Ctrl+Alt+1","command":"com.acme.disabledPlugin"}])";
++    }
++    keys::KeybindingManager swapped(settings);swapped.load();
++    assert(swapped.get("navigation.go_to_line")=="Ctrl+P");
++    assert(swapped.get("navigation.quick_open")=="Ctrl+G");
++    assert(swapped.save(&error));
++    {
++        std::ifstream in(directory/"keybindings.json");
++        std::string content{std::istreambuf_iterator<char>(in),std::istreambuf_iterator<char>()};
++        assert(content.find("com.acme.disabledPlugin")!=std::string::npos);
++    }
++    {
++        std::ofstream file(directory/"keybindings.json",std::ios::trunc);file<<"{bad json";
++    }
++    keys::KeybindingManager invalid(settings);invalid.load();
++    assert(invalid.get("navigation.go_to_line")=="Ctrl+G");
++    assert(!invalid.maySave());
++    assert(!invalid.save(&error));
++    {
++        std::ifstream file(directory/"keybindings.json");std::string s;std::getline(file,s);assert(s=="{bad json");
++    }
++    std::filesystem::remove_all(directory);
++    std::cout<<"PASS: default keys, parser, conflict detection, JSON persistence, fail-open and malformed preservation\n";
++}
