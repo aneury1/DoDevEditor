@@ -1,168 +1,139 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
+project(DoDevEditor VERSION 3.0.0 LANGUAGES C CXX)
 
-option(BUILD_WINDOWS "Cross-compile for Windows using MinGW-w64" OFF)
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-set(CMAKE_THREAD_LIBS_INIT "-lpthread")
-set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)
-
-if(BUILD_WINDOWS)
-    find_program(_MCC NAMES x86_64-w64-mingw32-gcc-posix x86_64-w64-mingw32-gcc REQUIRED)
-    find_program(_MCX NAMES x86_64-w64-mingw32-g++-posix x86_64-w64-mingw32-g++ REQUIRED)
-    find_program(_MRC NAMES x86_64-w64-mingw32-windres REQUIRED)
-    find_program(_MST NAMES x86_64-w64-mingw32-strip)
-    set(CMAKE_SYSTEM_NAME      Windows CACHE INTERNAL "")
-    set(CMAKE_SYSTEM_PROCESSOR x86_64  CACHE INTERNAL "")
-    set(CMAKE_C_COMPILER   "${_MCC}" CACHE FILEPATH "" FORCE)
-    set(CMAKE_CXX_COMPILER "${_MCX}" CACHE FILEPATH "" FORCE)
-    set(CMAKE_RC_COMPILER  "${_MRC}" CACHE FILEPATH "" FORCE)
-    if(_MST)
-        set(CMAKE_STRIP "${_MST}" CACHE FILEPATH "" FORCE)
-    endif()
-    set(CMAKE_FIND_ROOT_PATH /usr/x86_64-w64-mingw32)
-    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
-else()
-  # add_compile_defintion(LINUX_PLATFORM)
-endif()
-
-project(DoDevEditor VERSION 1.0.0 LANGUAGES C CXX)
-
-if(BUILD_WINDOWS)
-    enable_language(RC)
-endif()
-
-set(CMAKE_CXX_STANDARD          17)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS        OFF)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
-endif()
- 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+option(DODEV_BUILD_GUI "Compilar la interfaz nativa Raven GUI" ON)
+option(DODEV_BUILD_TESTS "Compilar pruebas del nucleo CSV/DLT/archivos" ON)
+option(DODEV_BUILD_PLUGIN_EXAMPLES "Build bundled native plugin example" ON)
+set(DODEV_RAVEN_REPOSITORY "https://github.com/aneury1/Raven.git" CACHE STRING "Repositorio Git de Raven GUI")
+set(DODEV_RAVEN_GIT_TAG "main" CACHE STRING "Rama/tag/commit de Raven GUI")
 
-include(FetchContent)
-set(FETCHCONTENT_QUIET               OFF)
-set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
-
-set(wxBUILD_SHARED          OFF  CACHE BOOL   "" FORCE)
-set(wxBUILD_TESTS           OFF CACHE STRING "" FORCE)
-set(wxBUILD_SAMPLES         OFF  CACHE BOOL   "" FORCE)
-set(wxBUILD_DEMOS           OFF  CACHE BOOL   "" FORCE)
-set(wxBUILD_INSTALL         OFF  CACHE BOOL   "" FORCE)
-set(wxBUILD_MONOLITHIC      OFF  CACHE BOOL   "" FORCE)
-set(wxUSE_STC               ON   CACHE BOOL   "" FORCE)
-set(wxUSE_AUI               ON   CACHE BOOL   "" FORCE)
-set(wxUSE_OPENGL            OFF  CACHE BOOL   "" FORCE)
-set(wxUSE_WEBVIEW           OFF  CACHE BOOL   "" FORCE)
-set(wxUSE_MEDIACTRL         OFF  CACHE BOOL   "" FORCE)
-set(wxUSE_LIBLZMA           OFF  CACHE BOOL   "" FORCE)
-set(wxUSE_EXPAT             builtin CACHE STRING "" FORCE)
-set(wxUSE_LIBJPEG           builtin CACHE STRING "" FORCE)
-set(wxUSE_LIBPNG            builtin CACHE STRING "" FORCE)
-set(wxUSE_LIBTIFF           builtin CACHE STRING "" FORCE)
-set(wxUSE_ZLIB              builtin CACHE STRING "" FORCE)
-set(wxUSE_REGEX             builtin CACHE STRING "" FORCE)
-set(wxUSE_NANOSVG           builtin CACHE STRING "" FORCE)
-
-FetchContent_Declare(wxWidgets
-    URL https://github.com/wxWidgets/wxWidgets/releases/download/v3.2.4/wxWidgets-3.2.4.tar.bz2
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+add_library(dodev_core STATIC src/EditorData.cpp)
+add_library(dodev_services STATIC
+    src/settings/Json.cpp
+    src/settings/SettingsManager.cpp
+    src/templates/TemplateRegistry.cpp
+    src/themes/ThemeManager.cpp
+    src/plugins/PluginManager.cpp
 )
-FetchContent_MakeAvailable(wxWidgets)
-
-set(JSONCPP_WITH_TESTS               OFF CACHE BOOL "" FORCE)
-set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL "" FORCE)
-set(JSONCPP_WITH_PKGCONFIG_SUPPORT   OFF CACHE BOOL "" FORCE)
-set(JSONCPP_WITH_CMAKE_PACKAGE       OFF CACHE BOOL "" FORCE)
-set(JSONCPP_WITH_EXAMPLE             OFF CACHE BOOL "" FORCE)
-
-FetchContent_Declare(jsoncpp
-    GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
-    GIT_TAG        1.9.5
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(jsoncpp)
-
-file(GLOB_RECURSE SI_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/src/*.cpp"
-    "${CMAKE_SOURCE_DIR}/src/*.c")
-
-if(NOT SI_SOURCES)
-    message(FATAL_ERROR "No source files found in ${CMAKE_SOURCE_DIR}/src/")
+target_include_directories(dodev_services PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(dodev_services PUBLIC cxx_std_17)
+if(UNIX)
+    target_link_libraries(dodev_services PUBLIC ${CMAKE_DL_LIBS})
 endif()
-
-if(BUILD_WINDOWS)
-    add_executable(${PROJECT_NAME} WIN32 ${SI_SOURCES})
+if(MSVC)
+    target_compile_options(dodev_services PRIVATE /W4 /utf-8)
 else()
-    add_executable(${PROJECT_NAME} ${SI_SOURCES})
+    target_compile_options(dodev_services PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-if(BUILD_WINDOWS)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+add_library(dodev_terminal STATIC src/TerminalSession.cpp src/TerminalScreen.cpp)
+target_include_directories(dodev_terminal PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+if(WIN32)
+    target_compile_definitions(dodev_terminal PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+elseif(UNIX)
+    find_library(DODEV_UTIL_LIBRARY NAMES util)
+    if(DODEV_UTIL_LIBRARY)
+        target_link_libraries(dodev_terminal PUBLIC "${DODEV_UTIL_LIBRARY}")
+    endif()
 endif()
+find_package(Threads REQUIRED)
+target_link_libraries(dodev_terminal PUBLIC Threads::Threads)
 
-target_include_directories(${PROJECT_NAME} PRIVATE
-    "${CMAKE_SOURCE_DIR}/includes")
-
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    wx::stc
-    wx::aui
-    wx::adv
-    wx::core
-    wx::base
-    vterm
-    jsoncpp_static)
-
-target_compile_options(${PROJECT_NAME} PRIVATE
-    $<$<CXX_COMPILER_ID:GNU,Clang>:
-        -Wall -Wextra
-        -Wno-unused-parameter
-        -Wno-deprecated-declarations>
-    $<$<CONFIG:Release>:        -O2>
-    $<$<CONFIG:MinSizeRel>:     -Os>
-    $<$<CONFIG:Debug>:          -g -O0>
-    $<$<CONFIG:RelWithDebInfo>: -O2 -g>)
-
-if(BUILD_WINDOWS)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE
-        WINVER=0x0601
-        _WIN32_WINNT=0x0601
-        UNICODE
-        _UNICODE)
-   
-   # shared Settings
-   #     target_link_options(${PROJECT_NAME} PRIVATE
-   #     -static-libgcc
-   #     -static-libstdc++
-   #     -Wl,-subsystem,windows
-   #     -Wl,--gc-sections)
-   
-   target_link_options(${PROJECT_NAME} PRIVATE
-    -static
-    -static-libgcc
-    -static-libstdc++
-    -Wl,-subsystem,windows
-    -Wl,--gc-sections
-    -Wl,--as-needed
-)
-   
-   
-   
-        target_link_libraries(${PROJECT_NAME} PRIVATE
-        comctl32 ole32 oleaut32 uuid winspool winmm
-        shell32 shlwapi gdi32 comdlg32 wsock32)
+target_include_directories(dodev_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+if(MSVC)
+    target_compile_options(dodev_core PRIVATE /W4 /utf-8)
 else()
-    target_link_options(${PROJECT_NAME} PRIVATE -Wl,--gc-sections)
+    target_compile_options(dodev_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-if(CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$" AND CMAKE_STRIP)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND "${CMAKE_STRIP}" --strip-all "$<TARGET_FILE:${PROJECT_NAME}>"
-        VERBATIM)
+if(DODEV_BUILD_GUI)
+    include(FetchContent)
+    # Mostrar realmente las lineas de progreso de 'git clone', no ocultarlas con FetchContent.
+    set(FETCHCONTENT_QUIET OFF CACHE BOOL "Mostrar progreso de dependencias" FORCE)
+    set(FETCHCONTENT_UPDATES_DISCONNECTED OFF)
+    set(RAVEN_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(RAVEN_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(RAVEN_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+
+    message(STATUS "[DoDevEditor] Descargando Raven GUI desde: ${DODEV_RAVEN_REPOSITORY}")
+    message(STATUS "[DoDevEditor] Revision: ${DODEV_RAVEN_GIT_TAG}")
+    message(STATUS "[DoDevEditor] Git clone / checkout: progreso habilitado (GIT_PROGRESS=TRUE)")
+    FetchContent_Declare(raven
+        GIT_REPOSITORY "${DODEV_RAVEN_REPOSITORY}"
+        GIT_TAG "${DODEV_RAVEN_GIT_TAG}"
+        GIT_SHALLOW TRUE
+        GIT_PROGRESS TRUE
+        GIT_SUBMODULES_RECURSE TRUE
+        USES_TERMINAL_DOWNLOAD TRUE
+    )
+    FetchContent_MakeAvailable(raven)
+    if(NOT TARGET raven::raven)
+        if(TARGET raven)
+            add_library(raven::raven ALIAS raven)
+        else()
+            message(FATAL_ERROR "No se encontro target raven::raven tras el FetchContent")
+        endif()
+    endif()
+
+    add_executable(DoDevEditor
+        src/main.cpp
+        src/EditorApp.cpp
+        src/EditorSettings.cpp
+        resources/EmbeddedSettingsUi.h
+        include/EditorApp.h
+        resources/EmbeddedUi.h
+    )
+    target_include_directories(DoDevEditor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+    target_link_libraries(DoDevEditor PRIVATE dodev_core dodev_services dodev_terminal raven::raven)
+    if(MSVC)
+        target_compile_options(DoDevEditor PRIVATE /W4 /utf-8)
+    else()
+        target_compile_options(DoDevEditor PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    install(TARGETS DoDevEditor RUNTIME DESTINATION bin)
+    message(STATUS "[DoDevEditor] GUI Raven 3.0 + 13 themes + JSON Settings + native plugin SDK")
+endif()
+
+if(DODEV_BUILD_PLUGIN_EXAMPLES)
+    add_library(hello_plugin MODULE plugins/examples/HelloPlugin/HelloPlugin.cpp)
+    target_include_directories(hello_plugin PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    set_target_properties(hello_plugin PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello"
+    )
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/plugins/examples/HelloPlugin/plugin.json"
+        "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello/plugin.json" COPYONLY)
+endif()
+
+if(DODEV_BUILD_TESTS)
+    enable_testing()
+    add_executable(dodev_settings_tests tests/test_settings.cpp)
+    target_link_libraries(dodev_settings_tests PRIVATE dodev_services)
+    target_include_directories(dodev_settings_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+    add_test(NAME settings_themes_templates_json COMMAND dodev_settings_tests)
+    if(DODEV_BUILD_PLUGIN_EXAMPLES)
+        add_executable(dodev_plugin_tests tests/test_plugin.cpp)
+        target_link_libraries(dodev_plugin_tests PRIVATE dodev_services)
+        target_compile_definitions(dodev_plugin_tests PRIVATE DODEV_TEST_PLUGIN_DIR="${CMAKE_CURRENT_BINARY_DIR}/plugin-examples")
+        add_dependencies(dodev_plugin_tests hello_plugin)
+        add_test(NAME native_plugin_integration COMMAND dodev_plugin_tests)
+    endif()
+    add_executable(dodev_core_tests tests/test_core.cpp)
+    add_executable(dodev_terminal_tests tests/test_terminal.cpp)
+    target_link_libraries(dodev_terminal_tests PRIVATE dodev_terminal)
+    add_test(NAME terminal_pty_interactive COMMAND dodev_terminal_tests)
+    target_link_libraries(dodev_core_tests PRIVATE dodev_core)
+    add_test(NAME core_csv_dlt_files COMMAND dodev_core_tests)
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME embedded_music_theme_xml
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_embedded_ui.py")
+    endif()
 endif()
