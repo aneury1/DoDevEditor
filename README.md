@@ -1,3 +1,19 @@
+# DoDevEditor Raven 3.8 — AI Provider Profiles and Model Discovery
+
+Version 3.8 adds **local llama.cpp model discovery**, Ollama model discovery, and configurable per-server remote provider profiles to the AI Assistant. See [`docs/AI_PROVIDER_PROFILES.md`](docs/AI_PROVIDER_PROFILES.md) for installation, server commands, JSON settings and authentication.
+
+The AI panel offers `Save Profile`, `+ Remote`, `+ Local`, `Delete`, `Refresh Models`, a detected-model dropdown and a manual model-ID input. Open from **Herramientas → AI Assistant...**, or **Settings → Plugins → AI Provider Profiles...**. The plugin must be enabled in Settings → Plugins and the editor restarted to activate it.
+
+All existing bundled plugins and Clang/Regex symbol extraction from 3.7 are retained. Configuration files remain optional; missing AI profiles fall back to built-in local presets.
+
+---
+
+# DoDevEditor Raven 3.7 — AI Assistant + Clang-first Source Symbols
+
+**New in 3.7:** a bundled, opt-in AI Assistant with local Ollama / OpenAI-compatible HTTPS providers, asynchronous chat and explicit active-file/selection context actions; Source Symbols now uses Clang's AST when available, with regex fallback and detailed parser diagnostics. The corrected embedded journal XML is retained.
+
+Read [the complete 3.7 instructions](docs/RELEASE_3_7.md), [Clang parser notes](docs/SYMBOLS_CLANG.md), and [AI plugin guide](docs/AI_ASSISTANT.md).
+
 # DoDevEditor Raven 3.6 — Serial Console, Symbols & Remote Journal
 
 **New in 3.6:** interactive (bidirectional) serial console, bundled Source Symbols and Remote Journal plugins, and full retained terminal export. See [docs/RELEASE_3_6.md](docs/RELEASE_3_6.md) for installation, UI workflows, permissions and limitations.
@@ -162,3 +178,19 @@ The five tests cover JSON and missing-file defaults, settings migration/malforme
 The **Herramientas → Capturar QR del archivo actual...** menu entry is always visible.
 Enable `com.dodev.qrcode` in **Settings → Plugins**, restart, and select an active text
 document to export as PNG/SVG. Details: `docs/QR_CAPTURE_MENU.md`.
+
+## Raven 3.9 — VS Code-style desktop launcher and workspace explorer tabs
+
+See [`docs/RELEASE_3_9.md`](docs/RELEASE_3_9.md) for the complete guide.
+
+- `dodeveditor .` / `dodeveditor main.cpp` launch the GUI without leaving the
+  shell attached. `--foreground` and `--wait` are available when needed.
+- `cmake --install build` installs a Linux desktop entry for file-manager
+  **Open With → DoDevEditor** and accepts selected files through `%F`.
+- **BUSCAR** is a searchable, dockable panel next to **ARCHIVOS** and **GIT**:
+  literal/regex search, include/exclude globs, case/whole-word options, result
+  navigation, and confirmed replace-selected/replace-all operations.
+- **SYMBOLS** is another tab beside the file manager, showing **Entity name**,
+  **Type**, and **Filepath : line**. Double-click navigates to source.
+- Built-in XML remains embedded in C++ and all bundled third-party plugins
+  are preserved.

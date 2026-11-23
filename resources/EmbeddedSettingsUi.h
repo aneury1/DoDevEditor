@@ -65,6 +65,7 @@ inline constexpr std::string_view kSettingsWindow = R"DODEV_XML(
         <HBox Spacing="5"><TextInput Name="settings_plugin_directory" Slot.Fill="1"/><Button Text="Folder..." OnClicked="settings.browse_plugins"/></HBox>
         <ListView Name="settings_plugin_list" Height="155"/>
         <HBox Spacing="6"><Button Text="Enable selected" OnClicked="plugin.enable"/><Button Text="Disable selected" OnClicked="plugin.disable"/><Button Text="Rescan" OnClicked="plugin.rescan"/></HBox>
+        <Button Text="AI Provider Profiles..." OnClicked="ai.configure"/>
         <HBox Spacing="6"><Label Text="Plugin setting"/><ComboBox Name="settings_plugin_key" Width="240"/><TextInput Name="settings_plugin_value" Width="240"/><Button Text="Save value" OnClicked="plugin.setting.save"/></HBox>
         <Label Text="Plugin binaries are trusted code with your user privileges; explicitly approve each plugin." Wrap="true"/>
       </VBox>
@@ -116,4 +117,4 @@ inline constexpr std::string_view kTemplateWindow = R"DODEV_XML(
   </VBox>
 </Window>
 )DODEV_XML";
-} // namespace dodev::ui
+}

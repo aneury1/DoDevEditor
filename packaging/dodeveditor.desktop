@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=DoDevEditor
+GenericName=Source Code Editor
+Comment=Open files and folders in DoDevEditor Raven GUI
+Exec=dodeveditor %F
+TryExec=dodeveditor
+Icon=accessories-text-editor
+Terminal=false
+StartupNotify=true
+Categories=Development;TextEditor;IDE;
+MimeType=text/plain;inode/directory;text/x-csrc;text/x-c++src;text/x-chdr;text/x-c++hdr;text/x-python;application/json;application/xml;text/xml;application/x-shellscript;text/markdown;
+Keywords=editor;source;code;IDE;

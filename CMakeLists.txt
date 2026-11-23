@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(DoDevEditor VERSION 3.5.0 LANGUAGES C CXX)
+project(DoDevEditor VERSION 3.9.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -12,10 +12,25 @@ option(DODEV_BUILD_TESTS "Compilar pruebas del nucleo CSV/DLT/archivos" ON)
 option(DODEV_BUILD_PLUGIN_EXAMPLES "Build bundled native plugin example" ON)
 option(DODEV_BUILD_QRCODE_PLUGIN "Build and install the bundled QR Code plugin" ON)
 include(GNUInstallDirs)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/packaging/install_desktop.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/dodev_install_desktop.cmake" @ONLY)
 set(DODEV_RAVEN_REPOSITORY "https://github.com/aneury1/Raven.git" CACHE STRING "Repositorio Git de Raven GUI")
 set(DODEV_RAVEN_GIT_TAG "main" CACHE STRING "Rama/tag/commit de Raven GUI")
 
-add_library(dodev_core STATIC src/EditorData.cpp src/editor/EditorCommands.cpp)
+# The CLI launcher is a separate executable: it returns the invoking shell
+# immediately while the Raven window keeps running in its own session.
+add_library(dodev_launch STATIC src/launch/LaunchArgs.cpp)
+target_include_directories(dodev_launch PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(dodev_launch PUBLIC cxx_std_17)
+add_executable(dodeveditor src/launch/Launcher.cpp)
+target_link_libraries(dodeveditor PRIVATE dodev_launch)
+if(MSVC)
+    target_compile_options(dodeveditor PRIVATE /W4 /utf-8)
+else()
+    target_compile_options(dodeveditor PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_library(dodev_core STATIC src/EditorData.cpp src/editor/EditorCommands.cpp src/search/WorkspaceSearch.cpp)
 add_library(dodev_services STATIC
     src/settings/Json.cpp
     src/settings/SettingsManager.cpp
@@ -94,7 +109,9 @@ if(DODEV_BUILD_GUI)
         src/EditorKeybindings.cpp
         src/EditorSerial.cpp
         src/EditorSymbols.cpp
+        src/EditorWorkspace.cpp
         src/EditorJournal.cpp
+        src/EditorAI.cpp
         resources/EmbeddedJournalUi.h
         resources/EmbeddedSerialUi.h
         resources/EmbeddedPluginPromptUi.h
@@ -104,15 +121,21 @@ if(DODEV_BUILD_GUI)
         resources/EmbeddedUi.h
     )
     target_include_directories(DoDevEditor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
-    target_link_libraries(DoDevEditor PRIVATE dodev_core dodev_services dodev_terminal raven::raven)
-    target_link_libraries(DoDevEditor PRIVATE dodev_serial_core dodev_symbols_core dodev_journal_core)
+    target_link_libraries(DoDevEditor PRIVATE dodev_core dodev_services dodev_terminal dodev_launch raven::raven)
+    target_link_libraries(DoDevEditor PRIVATE dodev_serial_core dodev_symbols_core dodev_journal_core dodev_ai_core)
     if(MSVC)
         target_compile_options(DoDevEditor PRIVATE /W4 /utf-8)
     else()
         target_compile_options(DoDevEditor PRIVATE -Wall -Wextra -Wpedantic)
     endif()
-    install(TARGETS DoDevEditor RUNTIME DESTINATION bin)
-    message(STATUS "[DoDevEditor] GUI Raven 3.3 + 13 themes + JSON Settings + native plugin tools")
+    install(TARGETS DoDevEditor dodeveditor RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    if(UNIX AND NOT APPLE)
+        # An actual desktop entry makes DoDevEditor available in "Open With".
+        # Exec=dodeveditor %F supports multiple selected files (and folders).
+        install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/dodev_install_desktop.cmake")
+        message(STATUS "[DoDevEditor][Launch] Installing dodeveditor + desktop Open With entry")
+    endif()
+    message(STATUS "[DoDevEditor] GUI Raven 3.9 + 13 themes + JSON Settings + native plugin tools")
 endif()
 
 if(DODEV_BUILD_QRCODE_PLUGIN)
@@ -122,6 +145,7 @@ endif()
 add_subdirectory(thirdparty/SerialMonitor)
 add_subdirectory(thirdparty/SourceSymbols)
 add_subdirectory(thirdparty/RemoteJournal)
+add_subdirectory(thirdparty/AIAssistant)
 
 if(DODEV_BUILD_PLUGIN_EXAMPLES)
     add_library(hello_plugin MODULE plugins/examples/HelloPlugin/HelloPlugin.cpp)
@@ -148,9 +172,23 @@ endif()
 
 if(DODEV_BUILD_TESTS)
     enable_testing()
+    add_executable(dodev_workspace_tests tests/test_workspace_search.cpp)
+    target_link_libraries(dodev_workspace_tests PRIVATE dodev_core)
+    add_test(NAME workspace_search_replace_core COMMAND dodev_workspace_tests)
+    add_executable(dodev_launch_tests tests/test_launch_args.cpp)
+    target_link_libraries(dodev_launch_tests PRIVATE dodev_launch)
+    add_test(NAME launcher_paths_and_flags COMMAND dodev_launch_tests)
     if(DODEV_BUILD_QRCODE_PLUGIN)
         add_subdirectory(thirdparty/QRCode/tests)
     endif()
+    add_executable(dodev_ai_plugin_tests tests/test_ai_plugin.cpp)
+    target_link_libraries(dodev_ai_plugin_tests PRIVATE dodev_services)
+    target_compile_definitions(dodev_ai_plugin_tests PRIVATE DODEV_AI_TEST_ROOT="${PROJECT_BINARY_DIR}/plugins")
+    add_dependencies(dodev_ai_plugin_tests dodev_ai_assistant_plugin)
+    add_test(NAME ai_assistant_native_plugin_registration COMMAND dodev_ai_plugin_tests)
+    add_executable(dodev_ai_tests thirdparty/AIAssistant/tests/test_ai.cpp)
+    target_link_libraries(dodev_ai_tests PRIVATE dodev_ai_core)
+    add_test(NAME ai_chat_provider_json COMMAND dodev_ai_tests)
     add_executable(dodev_symbols_tests thirdparty/SourceSymbols/tests/test_symbols.cpp)
     target_link_libraries(dodev_symbols_tests PRIVATE dodev_symbols_core)
     add_test(NAME source_symbols_outline_csv COMMAND dodev_symbols_tests)
@@ -212,6 +250,19 @@ if(DODEV_BUILD_TESTS)
     add_test(NAME core_csv_dlt_files COMMAND dodev_core_tests)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME workspace_sidebar_xml_contract COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_workspace_ui.py")
+        if(UNIX AND NOT APPLE)
+            add_test(NAME detached_cli_and_open_with
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_launcher.py"
+                    "$<TARGET_FILE:dodeveditor>" "${CMAKE_CURRENT_SOURCE_DIR}/packaging/dodeveditor.desktop")
+        endif()
+        if(AI_LIBCURL_FOUND OR CURL_FOUND)
+            add_executable(dodev_ai_http_tests thirdparty/AIAssistant/tests/test_ai_http.cpp)
+            target_link_libraries(dodev_ai_http_tests PRIVATE dodev_ai_core)
+            add_test(NAME ai_local_http_transport COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/AIAssistant/tests/test_ai_http.py"
+                $<TARGET_FILE:dodev_ai_http_tests>)
+        endif()
         add_test(NAME journal_symbols_terminal_ui_contract
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_new_ui.py")
         add_test(NAME embedded_serial_ui_contract

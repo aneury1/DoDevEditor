@@ -116,4 +116,4 @@ inline constexpr std::string_view kTemplateWindow = R"DODEV_XML(
   </VBox>
 </Window>
 )DODEV_XML";
-} // namespace dodev::ui
+}

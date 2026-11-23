@@ -1,6 +1,11 @@
 #ifndef EXTENSIONMANAGER_H_DEFINED
 #define EXTENSIONMANAGER_H_DEFINED
 
+
+
 Editor *GetEditorInstanceForFiles()
+
+
+
 
 #endif // EXTENSIONMANAGER_H_DEFINED

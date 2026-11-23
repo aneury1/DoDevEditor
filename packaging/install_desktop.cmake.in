@@ -1,0 +1,16 @@
+# Invoked by "cmake --install". CMAKE_INSTALL_PREFIX here honors --prefix,
+# unlike a configured-in absolute Exec path.
+set(_dodev_executable "${CMAKE_INSTALL_PREFIX}/@CMAKE_INSTALL_BINDIR@/dodeveditor")
+set(_dodev_destination "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/@CMAKE_INSTALL_DATADIR@/applications")
+file(READ "@CMAKE_CURRENT_SOURCE_DIR@/packaging/dodeveditor.desktop" _dodev_desktop)
+# Freedesktop desktop-file quoting: escape paths containing whitespace.
+string(REPLACE "\\" "\\\\" _dodev_quoted "${_dodev_executable}")
+string(REPLACE "\"" "\\\"" _dodev_quoted "${_dodev_quoted}")
+string(REPLACE "`" "\\`" _dodev_quoted "${_dodev_quoted}")
+string(REPLACE "$" "\\$" _dodev_quoted "${_dodev_quoted}")
+string(REPLACE "Exec=dodeveditor %F" "Exec=\"${_dodev_quoted}\" %F" _dodev_desktop "${_dodev_desktop}")
+string(REPLACE "TryExec=dodeveditor" "TryExec=${_dodev_executable}" _dodev_desktop "${_dodev_desktop}")
+file(MAKE_DIRECTORY "${_dodev_destination}")
+file(WRITE "${_dodev_destination}/dodeveditor.desktop" "${_dodev_desktop}")
+message(STATUS "[DoDevEditor][Desktop] Open With entry: ${_dodev_destination}/dodeveditor.desktop")
+message(STATUS "[DoDevEditor][Desktop] Exec: ${_dodev_executable}")

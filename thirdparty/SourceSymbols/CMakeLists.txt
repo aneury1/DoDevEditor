@@ -1,4 +1,5 @@
-add_library(dodev_symbols_core STATIC src/SourceSymbols.cpp)
+add_library(dodev_symbols_core STATIC src/SourceSymbols.cpp src/ClangSymbols.cpp)
+target_link_libraries(dodev_symbols_core PUBLIC dodev_services)
 target_include_directories(dodev_symbols_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(dodev_symbols_core PUBLIC cxx_std_17)
 add_library(dodev_source_symbols_plugin MODULE src/SourceSymbolsPlugin.cpp)

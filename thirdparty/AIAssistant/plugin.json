@@ -1,0 +1,6 @@
+{
+  "id": "com.dodev.aiassistant", "name": "AI Assistant / Code Chat",
+  "description": "Configurable llama.cpp, Ollama, or remote OpenAI-compatible assistant, explicit editor context, async chat panel",
+  "version": "1.1.0", "apiVersion": 1,
+  "entry": {"linux": "libdodev_ai_assistant_plugin.so", "windows": "dodev_ai_assistant_plugin.dll", "macos": "libdodev_ai_assistant_plugin.dylib"}
+}
