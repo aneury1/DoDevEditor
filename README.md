@@ -1,3 +1,7 @@
+# DoDevEditor Raven 3.6 — Serial Console, Symbols & Remote Journal
+
+**New in 3.6:** interactive (bidirectional) serial console, bundled Source Symbols and Remote Journal plugins, and full retained terminal export. See [docs/RELEASE_3_6.md](docs/RELEASE_3_6.md) for installation, UI workflows, permissions and limitations.
+
 # DoDevEditor Raven 3.5 — Bundled Serial Monitor
 
 **New in 3.5:** `thirdparty/SerialMonitor` is built and installed automatically with the editor. Enable `com.dodev.serialmonitor` in Settings → Plugins and restart, then open **Herramientas → Monitor serie...**. Configure a serial port, capture logs in **Tasks · Serial** alongside Terminal, apply fixed/regex filters and export TXT via a Save dialog. Optional Polkit authorization on Linux does not ask for passwords inside the IDE.

@@ -23,6 +23,7 @@ inline constexpr std::string_view kSerialMonitorWindow = R"DODEV_SERIAL_XML(
       <Label Text="Stop bits" Slot.VAlign="Center"/>
       <ComboBox Name="serial_stop_bits" Width="85"/>
     </HBox>
+    <Label Text="Interactive console: click Focus Keyboard in Tasks and type directly (Enter, arrows, Ctrl+C). The command field can send full lines." Wrap="true"/>
     <Label Text="Live log filter" Class="eyebrow"/>
     <HBox Spacing="8">
       <ComboBox Name="serial_filter_mode" Width="145"/>
@@ -49,4 +50,4 @@ inline constexpr std::string_view kSerialMonitorWindow = R"DODEV_SERIAL_XML(
   </VBox>
 </Window>
 )DODEV_SERIAL_XML";
-}
+} // namespace dodev::ui

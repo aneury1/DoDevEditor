@@ -1,44 +1,36 @@
 #ifndef __TAB_CONTAINER_H_DEFINED
 #define __TAB_CONTAINER_H_DEFINED
-#include <wx/wx.h>
-#include "frame.h"
 #include "EditorTab.h"
+#include "frame.h"
+#include <wx/wx.h>
 
+struct TabContainer : public wxPanel {
 
-struct TabContainer : public wxPanel{
-     
+  EditorTab *currentTab = nullptr;
 
-    EditorTab *currentTab = nullptr;
+  wxBoxSizer *mainSizer;
 
-    wxBoxSizer *mainSizer;
+  wxPanel *toolPanel;
 
-    wxPanel *toolPanel;
-   
-    wxAuiNotebook *editorTabs;
-   
-    TabContainer(wxWindow *parent);
-   
-    void AddEmptyTextPage();
+  wxAuiNotebook *editorTabs;
 
-    void AddPage(const std::string file);
- 
-    void AddEmptyTextPage(wxCommandEvent& ev);
+  TabContainer(wxWindow *parent);
 
-    void OnCloseTabEvent(wxAuiNotebookEvent& ev);
-    
-    void SetTitleToCurrentPage(const std::string &title);
+  void AddEmptyTextPage();
 
-    void SetDataToCurrentContainer(std::vector<uint8_t> da);
+  void AddPage(const std::string file);
 
-    void addCustomEditorTab(EditorTab *tab);
+  void AddEmptyTextPage(wxCommandEvent &ev);
 
-    EditorTab *GetCurrentTab(){
-        return currentTab;
-    }
+  void OnCloseTabEvent(wxAuiNotebookEvent &ev);
 
-    
-   
+  void SetTitleToCurrentPage(const std::string &title);
+
+  void SetDataToCurrentContainer(std::vector<uint8_t> da);
+
+  void addCustomEditorTab(EditorTab *tab);
+
+  EditorTab *GetCurrentTab() { return currentTab; }
 };
-
 
 #endif // __TAB_CONTAINER_H_DEFINED

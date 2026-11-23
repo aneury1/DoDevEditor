@@ -1,0 +1,6 @@
+{
+  "id": "com.dodev.remotejournal", "name": "Remote Journal (SSH)",
+  "description": "Read and filter a remote systemd journal using configured OpenSSH keys",
+  "version": "1.0.0", "apiVersion": 1,
+  "entry": {"linux": "libdodev_remote_journal_plugin.so", "windows": "dodev_remote_journal_plugin.dll", "macos": "libdodev_remote_journal_plugin.dylib"}
+}

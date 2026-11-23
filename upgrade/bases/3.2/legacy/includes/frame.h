@@ -1,65 +1,59 @@
 #ifndef FRAME_H_DEFINED
 #define FRAME_H_DEFINED
+#include "EditorTab.h"
+#include "FileExplorerTab.h"
+#include "TabContainer.h"
+#include "constant.h"
+#include "structures.h"
 #include <functional>
 #include <map>
-#include <wx/wx.h>
 #include <wx/aui/aui.h>
-#include "structures.h"
-#include "constant.h"
-#include "EditorTab.h"
-#include "TabContainer.h"
-#include "FileExplorerTab.h"
+#include <wx/wx.h>
 
 struct TabContainer;
 struct FileExplorerTabContainer;
 
-struct WindowFrame : public wxFrame{
+struct WindowFrame : public wxFrame {
 
-    
+  WindowFrame();
 
-    WindowFrame();
+  void add_panel(panel_info *panel);
 
-    void add_panel(panel_info *panel);
+  void AddDefaultEvent();
 
-    void AddDefaultEvent();
+  void SetDefaultPanel();
 
-    void SetDefaultPanel();
+  void SetUpMenu();
 
-    void SetUpMenu();
+  void OnEventHappened(wxCommandEvent &ev);
 
-    void OnEventHappened(wxCommandEvent& ev);
+  void OnExit(wxCommandEvent &ev);
 
-    void OnExit(wxCommandEvent &ev); 
+  EditorTab *GetCurrentEditorTab();
 
-    EditorTab *GetCurrentEditorTab();
+  EditorTab *AddNewPage();
 
-    EditorTab* AddNewPage();
+  EditorTab *AddNewPage(std::string filename);
 
-    EditorTab* AddNewPage(std::string filename);
+  void AddCMDCallback(int id, std::function<void(WindowFrame *)> cb);
 
+  TabContainer *GetTabContainer();
 
-    void AddCMDCallback(int id, std::function<void(WindowFrame*)> cb);
-
-    TabContainer* GetTabContainer();
-
-    static WindowFrame* get(){
-        static WindowFrame* inst = nullptr;
-        if(!inst){
-            inst =new WindowFrame();
-        }
-        return inst;
+  static WindowFrame *get() {
+    static WindowFrame *inst = nullptr;
+    if (!inst) {
+      inst = new WindowFrame();
     }
- 
-    TabContainer* tabContainer = nullptr;
-    
-    FileExplorerTabContainer* explorerTabContainer = nullptr;
-    
-    std::map<int, std::function<void(WindowFrame*)>> commandEventFunctions;
+    return inst;
+  }
 
-    wxAuiManager auiManager;
+  TabContainer *tabContainer = nullptr;
 
+  FileExplorerTabContainer *explorerTabContainer = nullptr;
+
+  std::map<int, std::function<void(WindowFrame *)>> commandEventFunctions;
+
+  wxAuiManager auiManager;
 };
 
-
-
-#endif  /// FRAME_H_DEFINED
+#endif /// FRAME_H_DEFINED

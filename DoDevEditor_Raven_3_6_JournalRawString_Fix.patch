@@ -1,0 +1,19 @@
+diff --git a/resources/EmbeddedJournalUi.h b/resources/EmbeddedJournalUi.h
+--- a/resources/EmbeddedJournalUi.h
++++ b/resources/EmbeddedJournalUi.h
+@@ -1,7 +1,7 @@
+ #pragma once
+ #include <string_view>
+ namespace dodev::ui {
+-inline constexpr std::string_view kRemoteJournalWindow=R"DODEV_REMOTE_JOURNAL_XML(
++inline constexpr std::string_view kRemoteJournalWindow=R"JOURNAL(
+ <Window Title="Remote Journal · DoDevEditor" Width="740" Height="515" MinWidth="570" MinHeight="420">
+  <VBox Spacing="10" Slot.Padding="15,13">
+   <HeaderBar Title="Remote Systemd Journal (SSH)"/>
+@@ -43,5 +43,5 @@
+   <Label Text="Security: validates remote host, user and unit; uses OpenSSH with host-key verification and BatchMode. The application never stores SSH passwords. First connect using ssh in Terminal to accept the host key." Wrap="true" TextSize="11"/>
+  </VBox>
+ </Window>
+-)DODEV_REMOTE_JOURNAL_XML";
++)JOURNAL";
+ }

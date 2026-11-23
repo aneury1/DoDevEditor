@@ -93,6 +93,9 @@ if(DODEV_BUILD_GUI)
         src/EditorMenus.cpp
         src/EditorKeybindings.cpp
         src/EditorSerial.cpp
+        src/EditorSymbols.cpp
+        src/EditorJournal.cpp
+        resources/EmbeddedJournalUi.h
         resources/EmbeddedSerialUi.h
         resources/EmbeddedPluginPromptUi.h
         resources/EmbeddedNavigationUi.h
@@ -102,7 +105,7 @@ if(DODEV_BUILD_GUI)
     )
     target_include_directories(DoDevEditor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
     target_link_libraries(DoDevEditor PRIVATE dodev_core dodev_services dodev_terminal raven::raven)
-    target_link_libraries(DoDevEditor PRIVATE dodev_serial_core)
+    target_link_libraries(DoDevEditor PRIVATE dodev_serial_core dodev_symbols_core dodev_journal_core)
     if(MSVC)
         target_compile_options(DoDevEditor PRIVATE /W4 /utf-8)
     else()
@@ -117,6 +120,8 @@ if(DODEV_BUILD_QRCODE_PLUGIN)
 endif()
 
 add_subdirectory(thirdparty/SerialMonitor)
+add_subdirectory(thirdparty/SourceSymbols)
+add_subdirectory(thirdparty/RemoteJournal)
 
 if(DODEV_BUILD_PLUGIN_EXAMPLES)
     add_library(hello_plugin MODULE plugins/examples/HelloPlugin/HelloPlugin.cpp)
@@ -146,6 +151,17 @@ if(DODEV_BUILD_TESTS)
     if(DODEV_BUILD_QRCODE_PLUGIN)
         add_subdirectory(thirdparty/QRCode/tests)
     endif()
+    add_executable(dodev_symbols_tests thirdparty/SourceSymbols/tests/test_symbols.cpp)
+    target_link_libraries(dodev_symbols_tests PRIVATE dodev_symbols_core)
+    add_test(NAME source_symbols_outline_csv COMMAND dodev_symbols_tests)
+    add_executable(dodev_journal_tests thirdparty/RemoteJournal/tests/test_journal.cpp)
+    target_link_libraries(dodev_journal_tests PRIVATE dodev_journal_core)
+    add_test(NAME remote_journal_ssh_filter COMMAND dodev_journal_tests)
+    add_executable(dodev_new_plugins_tests tests/test_new_plugins.cpp)
+    target_link_libraries(dodev_new_plugins_tests PRIVATE dodev_services)
+    target_compile_definitions(dodev_new_plugins_tests PRIVATE DODEV_NEW_PLUGIN_ROOT="${PROJECT_BINARY_DIR}/plugins")
+    add_dependencies(dodev_new_plugins_tests dodev_source_symbols_plugin dodev_remote_journal_plugin)
+    add_test(NAME new_symbol_and_remote_journal_plugins COMMAND dodev_new_plugins_tests)
     add_executable(dodev_serial_tests thirdparty/SerialMonitor/tests/test_serial.cpp)
         target_link_libraries(dodev_serial_tests PRIVATE dodev_serial_core)
         if(UNIX AND NOT APPLE)
@@ -196,6 +212,8 @@ if(DODEV_BUILD_TESTS)
     add_test(NAME core_csv_dlt_files COMMAND dodev_core_tests)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME journal_symbols_terminal_ui_contract
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_new_ui.py")
         add_test(NAME embedded_serial_ui_contract
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_serial_ui.py")
         add_test(NAME embedded_plugin_prompt_xml
