@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(DoDevEditor VERSION 3.3.0 LANGUAGES C CXX)
+project(DoDevEditor VERSION 3.5.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -10,6 +10,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(DODEV_BUILD_GUI "Compilar la interfaz nativa Raven GUI" ON)
 option(DODEV_BUILD_TESTS "Compilar pruebas del nucleo CSV/DLT/archivos" ON)
 option(DODEV_BUILD_PLUGIN_EXAMPLES "Build bundled native plugin example" ON)
+option(DODEV_BUILD_QRCODE_PLUGIN "Build and install the bundled QR Code plugin" ON)
+include(GNUInstallDirs)
 set(DODEV_RAVEN_REPOSITORY "https://github.com/aneury1/Raven.git" CACHE STRING "Repositorio Git de Raven GUI")
 set(DODEV_RAVEN_GIT_TAG "main" CACHE STRING "Rama/tag/commit de Raven GUI")
 
@@ -21,6 +23,7 @@ add_library(dodev_services STATIC
     src/templates/TemplateRegistry.cpp
     src/themes/ThemeManager.cpp
     src/plugins/PluginManager.cpp
+    src/plugins/PluginPaths.cpp
     src/terminal/TerminalTasks.cpp
 )
 target_include_directories(dodev_services PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -89,6 +92,8 @@ if(DODEV_BUILD_GUI)
         src/EditorSettings.cpp
         src/EditorMenus.cpp
         src/EditorKeybindings.cpp
+        src/EditorSerial.cpp
+        resources/EmbeddedSerialUi.h
         resources/EmbeddedPluginPromptUi.h
         resources/EmbeddedNavigationUi.h
         resources/EmbeddedSettingsUi.h
@@ -97,6 +102,7 @@ if(DODEV_BUILD_GUI)
     )
     target_include_directories(DoDevEditor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
     target_link_libraries(DoDevEditor PRIVATE dodev_core dodev_services dodev_terminal raven::raven)
+    target_link_libraries(DoDevEditor PRIVATE dodev_serial_core)
     if(MSVC)
         target_compile_options(DoDevEditor PRIVATE /W4 /utf-8)
     else()
@@ -105,6 +111,12 @@ if(DODEV_BUILD_GUI)
     install(TARGETS DoDevEditor RUNTIME DESTINATION bin)
     message(STATUS "[DoDevEditor] GUI Raven 3.3 + 13 themes + JSON Settings + native plugin tools")
 endif()
+
+if(DODEV_BUILD_QRCODE_PLUGIN)
+    add_subdirectory(thirdparty/QRCode)
+endif()
+
+add_subdirectory(thirdparty/SerialMonitor)
 
 if(DODEV_BUILD_PLUGIN_EXAMPLES)
     add_library(hello_plugin MODULE plugins/examples/HelloPlugin/HelloPlugin.cpp)
@@ -131,6 +143,24 @@ endif()
 
 if(DODEV_BUILD_TESTS)
     enable_testing()
+    if(DODEV_BUILD_QRCODE_PLUGIN)
+        add_subdirectory(thirdparty/QRCode/tests)
+    endif()
+    add_executable(dodev_serial_tests thirdparty/SerialMonitor/tests/test_serial.cpp)
+        target_link_libraries(dodev_serial_tests PRIVATE dodev_serial_core)
+        if(UNIX AND NOT APPLE)
+            find_library(DODEV_SERIAL_UTIL NAMES util)
+            if(DODEV_SERIAL_UTIL)
+                target_link_libraries(dodev_serial_tests PRIVATE ${DODEV_SERIAL_UTIL})
+            endif()
+        endif()
+        add_test(NAME serial_monitor_filter_and_pty COMMAND dodev_serial_tests)
+        add_executable(dodev_serial_plugin_tests thirdparty/SerialMonitor/tests/test_plugin.cpp)
+        target_link_libraries(dodev_serial_plugin_tests PRIVATE dodev_services)
+        target_compile_definitions(dodev_serial_plugin_tests PRIVATE
+            DODEV_SERIAL_PLUGIN_DIR="${PROJECT_BINARY_DIR}/plugins/serial-monitor")
+        add_dependencies(dodev_serial_plugin_tests dodev_serial_monitor_plugin)
+        add_test(NAME serial_plugin_registration COMMAND dodev_serial_plugin_tests)
     add_executable(dodev_keybindings_tests tests/test_keybindings.cpp)
     target_link_libraries(dodev_keybindings_tests PRIVATE dodev_services)
     add_test(NAME vscode_keybinding_settings COMMAND dodev_keybindings_tests)
@@ -166,6 +196,8 @@ if(DODEV_BUILD_TESTS)
     add_test(NAME core_csv_dlt_files COMMAND dodev_core_tests)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME embedded_serial_ui_contract
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_serial_ui.py")
         add_test(NAME embedded_plugin_prompt_xml
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_plugin_prompt_ui.py")
         add_test(NAME vscode_keybinding_ui_contract

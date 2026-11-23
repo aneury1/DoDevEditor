@@ -1,84 +1,92 @@
 #ifndef __FILE_EXPLORER_TAB_H_DEFINED
 #define __FILE_EXPLORER_TAB_H_DEFINED
-#include <wx/listctrl.h>
-#include <wx/tokenzr.h>
-#include <wx/wx.h>
-
 #include <set>
 #include <string>
-
-#include "GitPanel.h"
-#include "constant.h"
+#include <wx/wx.h>
+#include <wx/listctrl.h>
 #include "frame.h"
+#include "constant.h"
+#include "GitPanel.h"
+#include <wx/tokenzr.h>
 
-struct FileExplorerTabContainer : public wxPanel {
-  enum class EditorState { DoingNothing, OpeningFolder, OtherNotKnownState };
-  wxTreeItemId root;
-  EditorState currentEditorState = EditorState::DoingNothing;
+struct FileExplorerTabContainer : public wxPanel
+{
+    
+    enum class EditorState{
+       DoingNothing,
+       OpeningFolder,
+       OtherNotKnownState
+    };
+    wxTreeItemId root; 
+    EditorState currentEditorState = EditorState::DoingNothing;
 
-  // Structure for file info
-  struct FileInfo {
-    std::string file;
-    std::string path;
-    std::string dateOfCreation;
-    long size;
-    std::string lastModification;
 
-    // Define ordering for std::set
-    bool operator<(const FileInfo& other) const {
-      return file < other.file;  // Sort by filename
-    }
-  };
-  void PopulateList(const std::set<FileInfo>& fileSet);
-  std::string rootPath;
-  std::set<FileInfo> explorer_files;
+    // Structure for file info
+    struct FileInfo
+    {
+        std::string file;
+        std::string path;
+        std::string dateOfCreation;
+        long size;
+        std::string lastModification;
 
-  wxBoxSizer* mainSizer;
+        // Define ordering for std::set
+        bool operator<(const FileInfo &other) const
+        {
+            return file < other.file; // Sort by filename
+        }
+    };
+    void PopulateList(const std::set<FileInfo> &fileSet);
+    std::string rootPath;
+    std::set<FileInfo> explorer_files;
 
-  wxAuiNotebook* filemanagertabs;
+    wxBoxSizer *mainSizer;
 
-  wxPanel* fileListPanel;
-  wxPanel* fileTreePanel;
-  wxPanel* fileSymbolPanel;
+    wxAuiNotebook *filemanagertabs;
 
-  /// 1
-  wxListCtrl* listCtrl = nullptr;
-  /// 2
-  wxStaticText* explorerLabel;
-  /// 3
-  wxTreeCtrl* folderTree;
-  /// 4
-  GitPanel* gitPanel;
+    wxPanel *fileListPanel;
+    wxPanel *fileTreePanel;
+    wxPanel *fileSymbolPanel;
 
-  wxTreeItemId AddRoot(const wxString& text);
-  Response OpenFolder();
-  void PopulateFolderTree(const std::string& path, wxTreeItemId parent);
-  wxTreeItemId FindOrCreateNode(wxTreeItemId parent, const wxString& label);
-  void AddEntry(const std::string& path);
-  void ClearFolderTree();
-  void ClearFileList();
-  void CreateFileListPanel();
-  void CreateFileTreePanel();
-  void CreateFileSymbolPanel();
-  void CreateGitPanel();
+    /// 1
+    wxListCtrl *listCtrl = nullptr;
+    /// 2
+    wxStaticText *explorerLabel;
+    /// 3
+    wxTreeCtrl *folderTree;
+    /// 4
+    GitPanel *gitPanel;
 
-  void SetupPanel();
+    wxTreeItemId AddRoot(const wxString &text);
+    Response OpenFolder();
+    void PopulateFolderTree(const std::string &path, wxTreeItemId parent);
+    wxTreeItemId FindOrCreateNode(wxTreeItemId parent, const wxString &label);
+    void AddEntry(const std::string &path);
+    void ClearFolderTree();
+    void ClearFileList();
+    void CreateFileListPanel();
+    void CreateFileTreePanel();
+    void CreateFileSymbolPanel();
+    void CreateGitPanel();
 
-  void AddEvents();
+    void SetupPanel();
 
-  void UpdateFileList();
+    void AddEvents();
 
-  bool isFileOpened(std::string fileFullPath);
+    void UpdateFileList();
 
-  void OnItemTreeActivate(wxTreeEvent& event);
+    bool isFileOpened(std::string fileFullPath);
 
-  void OnItemListActivate(wxListEvent& ev);
+    void OnItemTreeActivate(wxTreeEvent &event);
+    
+    void OnItemListActivate(wxListEvent& ev );
 
-  FileExplorerTabContainer(wxWindow* parent);
+    FileExplorerTabContainer(wxWindow *parent);
 
-  static FileExplorerTabContainer* get();
+    static FileExplorerTabContainer *get();
 
-  std::set<std::string> GetFiles();
+    std::set<std::string> GetFiles();
+
 };
 
-#endif  /// __FILE_EXPLORER_TAB_H_DEFINED
+#endif /// __FILE_EXPLORER_TAB_H_DEFINED

@@ -1,0 +1,12 @@
+{
+  "id": "com.dodev.qrcode",
+  "name": "QR Code Generator",
+  "version": "1.0.0",
+  "description": "Generate offline QR PNG or SVG images from the entire open text document",
+  "apiVersion": 1,
+  "entry": {
+    "linux": "libdodev_qrcode_plugin.so",
+    "windows": "dodev_qrcode_plugin.dll",
+    "macos": "libdodev_qrcode_plugin.dylib"
+  }
+}

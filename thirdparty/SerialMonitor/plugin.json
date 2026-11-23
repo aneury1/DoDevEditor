@@ -1,0 +1,12 @@
+{
+  "id": "com.dodev.serialmonitor",
+  "name": "Serial Monitor",
+  "version": "1.0.0",
+  "description": "Interactive serial monitor: port configuration, live Tasks tab, text and regex filters, TXT export, optional Polkit authorization",
+  "apiVersion": 1,
+  "entry": {
+    "linux": "libdodev_serial_monitor_plugin.so",
+    "windows": "dodev_serial_monitor_plugin.dll",
+    "macos": "libdodev_serial_monitor_plugin.dylib"
+  }
+}

@@ -1,3 +1,20 @@
+# DoDevEditor Raven 3.5 — Bundled Serial Monitor
+
+**New in 3.5:** `thirdparty/SerialMonitor` is built and installed automatically with the editor. Enable `com.dodev.serialmonitor` in Settings → Plugins and restart, then open **Herramientas → Monitor serie...**. Configure a serial port, capture logs in **Tasks · Serial** alongside Terminal, apply fixed/regex filters and export TXT via a Save dialog. Optional Polkit authorization on Linux does not ask for passwords inside the IDE.
+
+**Complete guide:** [Serial Monitor Plugin](docs/SERIAL_MONITOR_PLUGIN.md).
+
+---
+
+> **Version 3.4 — QR Code plugin integrated in `thirdparty/QRCode`:**
+> `DODEV_BUILD_QRCODE_PLUGIN=ON` by default compiles the plugin during a normal
+> DoDevEditor build. `make install` / `cmake --install` installs its binary and
+> `plugin.json` to `<prefix>/bin/plugins/qrcode/`. The editor discovers both
+> installed and user plugins, prints discovery/status and paths to stdout/stderr,
+> and shows the installed QR plugin in Settings → Plugins. Native plugins remain
+> **opt-in** for security: enable `com.dodev.qrcode` in Settings → Plugins once
+> and restart. [Installation & logs guide](docs/QR_BUNDLED_INSTALL.md).
+
 > **Version 3.3 — Extended plugin bridge + tools + documentation:**
 > Includes a complete customization manual (`docs/CUSTOMIZATION_MANUAL.md`),
 > clang-format and Docker CLI plugins, an embedded Raven input prompt,
@@ -22,7 +39,7 @@ For patch failures against modified 3.1/3.2 trees, use the conflict-aware `scrip
 > terminal splitting, native task loading and build tasks. See
 > [`docs/VSCODE_MENUS.md`](docs/VSCODE_MENUS.md) for details and compatibility limits.
 
-# DoDevEditor Raven 3.3
+# DoDevEditor Raven 3.4 — Bundled QR plugin
 
 **Source project — C++17, Raven GUI, embedded XML, persistent IDE terminal, configurable Settings, custom themes, file templates and a native plugin SDK.**
 
@@ -134,3 +151,10 @@ The five tests cover JSON and missing-file defaults, settings migration/malforme
 * [`docs/TERMINAL.md`](docs/TERMINAL.md) — interactive terminal behavior and limitations.
 * [`docs/MIGRATION.md`](docs/MIGRATION.md) — migration notes for Raven GUI.
 * [`docs/MUSIC_STYLE.md`](docs/MUSIC_STYLE.md) — inherited MusicStyle design.
+
+
+### QR Capture in Herramientas
+
+The **Herramientas → Capturar QR del archivo actual...** menu entry is always visible.
+Enable `com.dodev.qrcode` in **Settings → Plugins**, restart, and select an active text
+document to export as PNG/SVG. Details: `docs/QR_CAPTURE_MENU.md`.
