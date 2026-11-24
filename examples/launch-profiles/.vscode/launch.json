@@ -1,0 +1,20 @@
+{
+  // Use either F5 (GDB) or Ctrl+F5 (direct launch).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C++: Launch example",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/launch_example",
+      "args": ["hello world"],
+      "cwd": "${workspaceFolder}",
+      "environment": [{"name":"APP_MODE","value":"development"}],
+      "stopAtEntry": true,
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "preLaunchTask": "${defaultBuildTask}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {"label":"Configure", "type":"process", "command":"cmake", "args":["-S","${workspaceFolder}","-B","${workspaceFolder}/build","-DCMAKE_BUILD_TYPE=Debug"]},
+    {"label":"Build", "type":"process", "command":"cmake", "args":["--build","${workspaceFolder}/build","--parallel"],"dependsOn":"Configure","group":{"kind":"build","isDefault":true}}
+  ]
+}

@@ -367,6 +367,9 @@ std::vector<std::string> strings(const Json& j) {
   return v;
 }
 }  // namespace
+std::shared_ptr<const TaskInputs> parseTaskInputs(const Json& root) {
+  return parseInputs(root);
+}
 std::vector<Task> loadTasks(const fs::path& path, std::string* error) {
   if (error) error->clear();
   std::vector<Task> result;

@@ -31,13 +31,16 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
+#include <thread>
 
 #include "../../../resources/EmbeddedUi.h"
 #include "AiProfiles.h"
 #include "CallHierarchy.h"
 #include "EditorData.h"
 #include "GdbConfig.h"
+#include "LaunchProfiles.h"
 #include "RemoteJournal.h"
 #include "SerialMonitor.h"
 #include "SymbolCache.h"
@@ -46,6 +49,8 @@
 #include "WxExplorerModel.h"
 #include "WxTerminal.h"
 #include "WxTheme.h"
+#include "dodev/docker/DockerQuery.h"
+#include "dodev/docker/DockerTools.h"
 #include "dodev/editor/EditorCommands.h"
 #include "dodev/explorer/ExplorerOps.h"
 #include "dodev/keybindings/KeybindingManager.h"
@@ -108,6 +113,7 @@ class Frame : public wxFrame {
     WxTerminal* out = nullptr;
     bool wasRunning = false, taskMode = false;
     fs::path cwd;
+    std::string launchProfile;
     std::vector<dodev::terminal::TaskLaunch> taskQueue;
   };
   std::unique_ptr<Terminal> shell, debug;
@@ -454,28 +460,28 @@ class Frame : public wxFrame {
   void startShell() { startTerminal(shell.get()); }
   gdb::Context context() {
     auto e = active();
-    return {root, e ? docs.at(e).path : fs::path{}};
+    return {root, e ? docs.at(e).path : fs::path{},
+            e ? e->GetCurrentLine() + 1 : 1};
   }
   void run() {
     if (debug->session.running()) {
-      debug->session.sendLine("continue");
+      debug->session.sendLine(
+          "python gdb.execute('continue' if gdb.selected_inferior().pid else "
+          "'run')");
       return;
     }
+    auto name = chooseLaunchConfig();
+    if (name.empty()) return;
     if (wxMessageBox("Debug configurations can execute workspace build "
                      "commands. Trust this workspace?",
-                     "GDB", wxYES_NO | wxICON_WARNING, this) != wxYES)
+                     "GDB", wxYES_NO | wxNO_DEFAULT | wxICON_WARNING,
+                     this) != wxYES)
       return;
-    auto names = gdb::names(context());
-    wxArrayString choices;
-    for (auto& n : names) choices.Add(W(n));
-    if (choices.empty()) throw std::runtime_error("No GDB configurations");
-    wxSingleChoiceDialog d(this, "Choose debug configuration", "GDB", choices);
-    if (showModal(d) != wxID_OK) return;
-    auto l = gdb::makeLaunch(context(), S(d.GetStringSelection()), "gdb");
+    auto l = gdb::makeLaunch(context(), name, "gdb");
     if (l.needsPid) {
-      auto pid = wxGetTextFromUser("Process ID", "Attach");
-      if (pid.empty()) return;
-      l = gdb::makeLaunch(context(), S(d.GetStringSelection()), "gdb", S(pid));
+      wxTextEntryDialog d(this, "Process ID", "Attach");
+      if (showModal(d) != wxID_OK || d.GetValue().empty()) return;
+      l = gdb::makeLaunch(context(), name, "gdb", S(d.GetValue()));
     }
     std::string err;
     auto executable = l.argv.front();
@@ -483,6 +489,7 @@ class Frame : public wxFrame {
     debug->out->clearSelection();
     if (!debug->session.start(l.cwd, &err, executable, l.argv))
       throw std::runtime_error(err);
+    debug->out->resizeTerminal();
     showTerminal(debug.get());
   }
   void tick() {
@@ -700,11 +707,13 @@ class Frame : public wxFrame {
   }
 
 #include "WxCommands.inc"
+#include "WxDocker.inc"
+#include "WxLaunch.inc"
 #include "WxSettings.inc"
 #include "WxTools.inc"
  public:
   Frame()
-      : wxFrame(nullptr, wxID_ANY, "DoDevEditor wx 5.1.4", wxDefaultPosition,
+      : wxFrame(nullptr, wxID_ANY, "DoDevEditor wx 5.1.5", wxDefaultPosition,
                 wxSize(1250, 850)),
         aui(this),
         timer(this) {
@@ -987,6 +996,7 @@ class Frame : public wxFrame {
         bundledPluginDirectory()});
     for (auto& b : std::map<std::string, std::string>{
              {"gdb.start", "F5"},
+             {"launch.run", "Ctrl+F5"},
              {"gdb.stop", "Shift+F5"},
              {"gdb.restart", "Ctrl+Shift+F5"},
              {"gdb.breakpoint", "F9"},

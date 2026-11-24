@@ -110,7 +110,37 @@ void execute(const DodevHostAPI* host, const std::vector<std::string>& args) {
     log(host, 2, "Unsupported character in Docker executable path");
     return;
   }
-  for (const auto& a : args) {
+  std::vector<std::string> effective;
+  auto context = get(host, "context", ""), daemon = get(host, "host", ""),
+       config = get(host, "configDirectory", "");
+  if (!context.empty() && !daemon.empty()) {
+    log(host, 2, "Choose a Docker context OR a host");
+    return;
+  }
+  if (!context.empty()) {
+    effective.push_back("--context");
+    effective.push_back(context);
+  }
+  if (!daemon.empty()) {
+    effective.push_back("--host");
+    effective.push_back(daemon);
+  }
+  if (!config.empty()) {
+    effective.push_back("--config");
+    effective.push_back(config);
+  }
+  auto flags = get(host, "globalFlags", "");
+  std::string line;
+  for (char ch : flags) {
+    if (ch == '\n') {
+      if (!line.empty()) effective.push_back(line);
+      line.clear();
+    } else if (ch != '\r')
+      line += ch;
+  }
+  if (!line.empty()) effective.push_back(line);
+  effective.insert(effective.end(), args.begin(), args.end());
+  for (const auto& a : effective) {
     const auto literal = quote(a);
     if (literal.empty()) {
       log(host, 2, "Unsupported shell metacharacter in Docker CLI argument");
@@ -210,6 +240,11 @@ extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,
     const char* description;
   } settings[] = {
       {"executable", "docker", "Docker CLI executable or absolute path"},
+      {"context", "", "Docker context for the graphical manager"},
+      {"host", "", "Docker daemon URL for the graphical manager"},
+      {"configDirectory", "", "Docker CLI config directory"},
+      {"globalFlags", "",
+       "Additional global Docker CLI arguments, one per line"},
       {"composeFile", "compose.yaml", "Docker Compose YAML filename"},
       {"buildTag", "dodev-app:latest", "Default docker build -t tag"},
       {"buildContext", ".",
@@ -240,7 +275,7 @@ extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,
       return 0;
   for (const auto& action : actions)
     host->register_menu(host->context, "Tools", action.label, action.id);
-  host->register_tab(host->context, "docker.dashboard", "Docker Tools",
+  host->register_tab(host->context, "docker.dashboard", "Docker Manager",
                      &dockerTab, nullptr);
   return 1;
 }

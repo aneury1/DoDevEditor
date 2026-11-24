@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(DoDevEditor VERSION 5.1.4 LANGUAGES C CXX)
+project(DoDevEditor VERSION 5.1.6 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -40,6 +40,7 @@ add_library(dodev_services STATIC
     src/plugins/PluginManager.cpp
     src/plugins/PluginPaths.cpp
     src/terminal/TerminalTasks.cpp
+    src/docker/DockerTools.cpp
 )
 target_include_directories(dodev_services PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(dodev_services PUBLIC cxx_std_17)
@@ -130,6 +131,13 @@ if(DODEV_BUILD_PLUGIN_EXAMPLES)
         configure_file("${CMAKE_CURRENT_SOURCE_DIR}/plugins/examples/${extension}/plugin.json"
                        "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/${extension_lower}/plugin.json" COPYONLY)
     endforeach()
+    # Docker is a bundled, opt-in native plugin. Retain the example output for SDK tests.
+    add_custom_command(TARGET docker_plugin POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/plugins/docker"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:docker_plugin>" "${CMAKE_CURRENT_BINARY_DIR}/plugins/docker/$<TARGET_FILE_NAME:docker_plugin>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/plugins/examples/Docker/plugin.json" "${CMAKE_CURRENT_BINARY_DIR}/plugins/docker/plugin.json")
+    install(TARGETS docker_plugin LIBRARY DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins/docker" RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins/docker")
+    install(FILES plugins/examples/Docker/plugin.json DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins/docker")
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/plugins/examples/HelloPlugin/plugin.json"
         "${CMAKE_CURRENT_BINARY_DIR}/plugin-examples/hello/plugin.json" COPYONLY)
@@ -137,11 +145,17 @@ endif()
 
 if(DODEV_BUILD_TESTS)
     enable_testing()
+    add_executable(dodev_docker_tests tests/test_docker_tools.cpp)
+    target_link_libraries(dodev_docker_tests PRIVATE dodev_services dodev_terminal)
+    add_test(NAME docker_tools COMMAND dodev_docker_tests)
     add_executable(dodev_gdb_tests thirdparty/GdbDebugger/tests/test_gdb.cpp)
     target_link_libraries(dodev_gdb_tests PRIVATE dodev_gdb_core dodev_services dodev_terminal)
     target_compile_definitions(dodev_gdb_tests PRIVATE DODEV_GDB_TEST_ROOT="${PROJECT_BINARY_DIR}/plugins")
     add_dependencies(dodev_gdb_tests dodev_gdb_plugin)
     add_test(NAME gdb_configuration_and_native_plugin COMMAND dodev_gdb_tests)
+    add_executable(dodev_launch_profiles_tests tests/test_launch_profiles.cpp)
+    target_link_libraries(dodev_launch_profiles_tests PRIVATE dodev_gdb_core)
+    add_test(NAME vscode_launch_profiles COMMAND dodev_launch_profiles_tests)
     add_executable(dodev_wx_explorer_tests tests/test_wx_explorer.cpp)
     target_include_directories(dodev_wx_explorer_tests PRIVATE src/gui/wx)
     add_test(NAME wx_explorer_filesystem COMMAND dodev_wx_explorer_tests)

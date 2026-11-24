@@ -1,8 +1,8 @@
 {
   "id": "com.dodev.docker",
-  "name": "Docker Tools",
-  "version": "1.0.0",
-  "description": "Integrated Docker CLI, Compose, images, containers and interactive command prompt",
+  "name": "Docker Manager",
+  "version": "2.0.0",
+  "description": "Docker Manager, images, containers, build, import/export, Compose and interactive terminals",
   "apiVersion": 1,
   "entry": {
     "linux": "libdocker_plugin.so",

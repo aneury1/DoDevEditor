@@ -52,3 +52,11 @@ ctest --test-dir build-core --output-on-failure
 ## 5.1.4 task variables
 
 See [VSCode task variables](docs/WX_5_1_4.md) and `examples/task-variables`.
+
+## 5.1.5 launch profiles
+
+See [Launch.json menu and direct execution](docs/WX_5_1_5.md). Open `examples/launch-profiles` as a workspace and use Run > Launch.json to select, configure or run a profile.
+
+## 5.1.6: Docker Manager
+
+Enable **Docker Manager** in Settings > Plugins, restart, then open Plugins > Docker Manager. See [Docker Manager documentation](docs/WX_5_1_6_DOCKER.md) for image/container operations, interactive terminal support, CLI settings and limitations.
