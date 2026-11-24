@@ -1,7 +1,7 @@
 #pragma once
 #include <string_view>
 namespace dodev::ui {
-inline constexpr std::string_view kRemoteJournalWindow = R"JOURNAL(
+inline constexpr std::string_view kRemoteJournalWindow=R"JOURNAL(
 <Window Title="Remote Journal · DoDevEditor" Width="740" Height="515" MinWidth="570" MinHeight="420">
  <VBox Spacing="10" Slot.Padding="15,13">
   <HeaderBar Title="Remote Systemd Journal (SSH)"/>

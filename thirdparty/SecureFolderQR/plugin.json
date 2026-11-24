@@ -1,0 +1,8 @@
+{
+  "id": "com.dodev.securefolderqr",
+  "name": "Secure Folder QR",
+  "version": "1.0.0",
+  "description": "Compress and encrypt folders offline, export recoverable QR text and PNG images",
+  "apiVersion": 1,
+  "entry": {"linux":"libdodev_securefolder_plugin.so","windows":"dodev_securefolder_plugin.dll","macos":"libdodev_securefolder_plugin.dylib"}
+}

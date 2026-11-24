@@ -7,10 +7,10 @@ param(
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 if ([string]::IsNullOrWhiteSpace($BuildDir)) { $BuildDir = Join-Path $root "build" }
-Write-Host "`n[1/3] Descarga Raven GUI desde Github con progreso de Git" -ForegroundColor Cyan
-& cmake -S "$root" -B "$BuildDir" -DDODEV_BUILD_GUI=ON -DDODEV_BUILD_TESTS=ON "-DDODEV_RAVEN_GIT_TAG=$RavenRef" -DFETCHCONTENT_QUIET=OFF
+Write-Host "`n[1/3] Configurando DoDevEditor wxWidgets" -ForegroundColor Cyan
+& cmake -S "$root" -B "$BuildDir" -DDODEV_BUILD_GUI=ON -DDODEV_BUILD_TESTS=ON
 if ($LASTEXITCODE -ne 0) { throw "Falló la configuración de CMake: $LASTEXITCODE" }
-Write-Host "`n[2/3] Compilando Raven y DoDevEditor..." -ForegroundColor Cyan
+Write-Host "`n[2/3] Compilando DoDevEditor wxWidgets..." -ForegroundColor Cyan
 & cmake --build "$BuildDir" --config "$Configuration" --parallel $Jobs
 if ($LASTEXITCODE -ne 0) { throw "Falló la compilación: $LASTEXITCODE" }
 Write-Host "`n[3/3] Ejecutando pruebas del núcleo..." -ForegroundColor Cyan

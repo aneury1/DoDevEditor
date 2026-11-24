@@ -1,0 +1,8 @@
+# Workspace symbol indexing (4.2.2)
+Opening a workspace schedules a background scan automatically, independent of the native plugin menu. The Symbols tab defaults to workspace mode when opening a folder. The existing parser settings (auto: Clang then lexical fallback; clang; regex) are respected. Uncheck workspace mode to extract the current editor buffer, including unsaved edits.
+
+Cache: `<workspace>/.dodev/symbols-cache.json`. Each entry stores relative path, modification time, size, parser and symbols (name, kind, signature, line and column). Parser settings and schema version invalidate the cache. New/modified files are parsed; unchanged files reuse cached rows; deleted files disappear. Corrupt cache is rebuilt. Cache updates use a temporary file and rename. Add `.dodev/` to the project's `.gitignore` if desired.
+
+Opening a folder, saving a document, explorer create/rename/delete and Refresh schedule indexing. External changes are detected on the next refresh, not via a filesystem watcher. No 150-file limit; files above 4 MiB and common generated directories are skipped. Workspace rows reflect saved files; active-file mode reads unsaved buffers. Clang runs per changed C/C++ file; initial indexing may take time. Compiler version/include dependency changes are not automatically tracked; remove the cache to force a rebuild. Closing the editor may wait for an in-progress scan. GUI runtime and Windows are unverified.
+
+Diagnostics: `[DoDevEditor][Symbols] parsed=N cached=N skipped=N` in foreground output or launcher log. The Symbols status label shows counts and first diagnostic.

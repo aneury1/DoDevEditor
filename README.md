@@ -1,3 +1,7 @@
+# wxWidgets 5.0 migration preview
+
+**Start with [README_WX.md](README_WX.md)** for the new frontend, build instructions, and migration limitations. The following original Raven documentation is retained for reference only.
+
 # DoDevEditor 4.0 — Context Menus and Output Export
 
 - Explorer right-click: New File, New Folder, Open, Rename, Delete (confirmed), Copy Path and Refresh.
@@ -242,3 +246,16 @@ Both `./build/DoDevEditor .` and `./build/dodeveditor .` return the shell immedi
 ## Release 4.1.0 — GDB debugger plugin
 
 Adds `com.dodev.gdb`, a native C++17 plugin using the same supported `.vscode/launch.json` and `.vscode/tasks.json` settings as VSCode C++/GDB. Enable it in Settings > Plugins, restart, and open **Run > Run and Debug**. GDB needs Python support. See [GDB debugger plugin manual](docs/GDB_DEBUGGER_PLUGIN.md) for setup, shortcuts, supported fields, sample workspace, tests and limitations. Debug results are shown in the dedicated integrated GDB terminal rather than a full MI/DAP visual debugger. Detached startup from 4.0.1 is preserved.
+
+### 4.2.0 — Directory tree
+
+The Explorer now presents a hierarchical directory tree. See [Directory tree documentation](docs/DIRECTORY_TREE.md) for usage, validation and limitations.
+
+## 4.2.1 Dual pane File Manager
+See [Dual pane documentation](docs/DUAL_PANE.md).
+
+### Workspace symbol cache (4.2.2)
+See [docs/SYMBOL_CACHE.md](docs/SYMBOL_CACHE.md) for automatic indexing and cache invalidation.
+
+### Call Hierarchy (4.3.0)
+See [Call Hierarchy](docs/CALL_HIERARCHY.md) for usage, cache migration and static-analysis limitations.

@@ -50,4 +50,4 @@ inline constexpr std::string_view kSerialMonitorWindow = R"DODEV_SERIAL_XML(
   </VBox>
 </Window>
 )DODEV_SERIAL_XML";
-}  // namespace dodev::ui
+}

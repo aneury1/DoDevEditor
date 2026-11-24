@@ -1,0 +1,4 @@
+# Dual pane File Manager (4.2.1)
+The ARCHIVOS dock contains the tree and a flat list of the selected directory. Select a tree row to update the flat list; double-click a directory in either view to navigate (tree also toggles expansion). Double-click a file to open it. Both views share file operations and hidden-file filtering. Arbol/Lista/Ambos switch the layout; ↑ navigates to the parent within the workspace. The workspace root remains separate from the browsing directory.
+
+The two columns use equal flexible layout slots; there is no independently draggable divider. The outer dock can be resized using Raven's dock layout. The flat list displays names and directory indicators; metadata columns, sorting controls, drag/drop, history and persistent layout are not implemented. Full GUI build/runtime needs verification against Raven.

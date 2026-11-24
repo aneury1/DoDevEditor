@@ -1,0 +1,9 @@
+# Interactive terminal 5.0.2
+
+The Terminal and GDB pages now render the existing TerminalScreen VT cell model in a custom wxPanel. There is no separate input field. Click the terminal and type. Input is delivered to the real PTY/ConPTY; the shell handles history, completion and line editing. Ctrl+C interrupts, Ctrl+D sends EOF, Ctrl+Z sends suspend. Ctrl+Shift+C/V copy/paste; mouse drag selects visible cells, wheel or Shift+PageUp/Down scrolls. Paste uses bracketed mode when requested by the application. A multi-line paste without bracketed mode requires confirmation. The toolbar offers Copy, Paste, Interrupt, Clear and Export. Terminal > Start shell restarts the current shell. Resizing synchronizes PTY dimensions and the screen. The GDB page remains independent.
+
+The renderer uses a dark terminal palette even in light editor mode. Existing emulator supports basic ANSI colors, cursor movements and alternate screen; it is not a complete xterm emulator. Unicode wide/combining glyphs, mouse reporting, full key modifier sequences, reflow, multiple shell instances, split terminals and native GUI tests remain pending. Editor menu accelerators for Cut/Copy/Paste/Undo/Redo are removed to prevent capture of terminal control sequences; standard native editor shortcuts should be handled by Scintilla. The earlier Frame::Refresh collision is fixed using wxFrame::Refresh().
+
+Build with scripts/build.sh or CMake (wxWidgets 3.2 development libraries required). Headless terminal tests can be built with -DDODEV_BUILD_GUI=OFF. The wx GUI was not compiled in the packaging environment.
+
+Manual smoke tests: type pwd, use Tab and Up, run sleep 30 and Ctrl+C, run printf '\033[31mred\033[0m\n', resize the dock, try top and vim, exit and restart. Check clipboard and exported scrollback. Run GDB separately.

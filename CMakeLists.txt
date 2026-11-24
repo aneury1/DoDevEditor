@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(DoDevEditor VERSION 4.1.1 LANGUAGES C CXX)
+project(DoDevEditor VERSION 5.1.1 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(DODEV_BUILD_GUI "Compilar la interfaz nativa Raven GUI" ON)
+option(DODEV_BUILD_GUI "Build wxWidgets frontend" ON)
 option(DODEV_BUILD_TESTS "Compilar pruebas del nucleo CSV/DLT/archivos" ON)
 option(DODEV_BUILD_PLUGIN_EXAMPLES "Build bundled native plugin example" ON)
 option(DODEV_BUILD_QRCODE_PLUGIN "Build and install the bundled QR Code plugin" ON)
@@ -30,7 +30,7 @@ else()
     target_compile_options(dodeveditor PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-add_library(dodev_core STATIC src/EditorData.cpp src/editor/EditorCommands.cpp src/search/WorkspaceSearch.cpp src/explorer/ExplorerOps.cpp)
+add_library(dodev_core STATIC src/EditorData.cpp src/editor/EditorCommands.cpp src/search/WorkspaceSearch.cpp src/explorer/ExplorerOps.cpp src/explorer/DirectoryTree.cpp)
 add_library(dodev_services STATIC
     src/settings/Json.cpp
     src/settings/SettingsManager.cpp
@@ -73,71 +73,31 @@ else()
 endif()
 
 if(DODEV_BUILD_GUI)
-    include(FetchContent)
-    # Mostrar realmente las lineas de progreso de 'git clone', no ocultarlas con FetchContent.
-    set(FETCHCONTENT_QUIET OFF CACHE BOOL "Mostrar progreso de dependencias" FORCE)
-    set(FETCHCONTENT_UPDATES_DISCONNECTED OFF)
-    set(RAVEN_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(RAVEN_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(RAVEN_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-
-    message(STATUS "[DoDevEditor] Descargando Raven GUI desde: ${DODEV_RAVEN_REPOSITORY}")
-    message(STATUS "[DoDevEditor] Revision: ${DODEV_RAVEN_GIT_TAG}")
-    message(STATUS "[DoDevEditor] Git clone / checkout: progreso habilitado (GIT_PROGRESS=TRUE)")
-    FetchContent_Declare(raven
-        GIT_REPOSITORY "${DODEV_RAVEN_REPOSITORY}"
-        GIT_TAG "${DODEV_RAVEN_GIT_TAG}"
-        GIT_SHALLOW TRUE
-        GIT_PROGRESS TRUE
-        GIT_SUBMODULES_RECURSE TRUE
-        USES_TERMINAL_DOWNLOAD TRUE
-    )
-    FetchContent_MakeAvailable(raven)
-    if(NOT TARGET raven::raven)
-        if(TARGET raven)
-            add_library(raven::raven ALIAS raven)
-        else()
-            message(FATAL_ERROR "No se encontro target raven::raven tras el FetchContent")
+    find_package(wxWidgets 3.2 REQUIRED COMPONENTS core base aui stc adv)
+    include(${wxWidgets_USE_FILE})
+    add_executable(DoDevEditor src/gui/wx/Main.cpp)
+    target_link_libraries(DoDevEditor PRIVATE ${wxWidgets_LIBRARIES} dodev_core dodev_services dodev_terminal dodev_launch dodev_symbols_core dodev_gdb_core dodev_ai_core dodev_serial_core dodev_journal_core)
+    option(DODEV_WX_GTK_THEME "Enable application-local GTK3 theme CSS" ON)
+    if(DODEV_WX_GTK_THEME AND UNIX AND NOT APPLE AND wxWidgets_CONFIG_EXECUTABLE)
+        execute_process(COMMAND "${wxWidgets_CONFIG_EXECUTABLE}" --selected-config OUTPUT_VARIABLE DODEV_WX_CONFIG OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if(DODEV_WX_CONFIG MATCHES "gtk3")
+            find_package(PkgConfig QUIET)
+            if(PkgConfig_FOUND)
+                pkg_check_modules(DODEV_GTK3 QUIET IMPORTED_TARGET gtk+-3.0)
+                if(TARGET PkgConfig::DODEV_GTK3)
+                    target_link_libraries(DoDevEditor PRIVATE PkgConfig::DODEV_GTK3)
+                    target_compile_definitions(DoDevEditor PRIVATE DODEV_GTK3_THEME=1)
+                    message(STATUS "DoDevEditor: GTK3 native theme CSS enabled")
+                else()
+                    message(STATUS "DoDevEditor: GTK3 development files absent; wxWidgets palette only")
+                endif()
+            endif()
         endif()
-    endif()
-
-    add_executable(DoDevEditor
-        src/main.cpp
-        src/EditorApp.cpp
-        src/EditorContexts.cpp
-        src/EditorSettings.cpp
-        src/EditorMenus.cpp
-        src/EditorKeybindings.cpp
-        src/EditorSerial.cpp
-        src/EditorSymbols.cpp
-        src/EditorWorkspace.cpp
-        src/EditorJournal.cpp
-        src/EditorAI.cpp
-        src/EditorGdb.cpp
-        resources/EmbeddedJournalUi.h
-        resources/EmbeddedSerialUi.h
-        resources/EmbeddedPluginPromptUi.h
-        resources/EmbeddedNavigationUi.h
-        resources/EmbeddedSettingsUi.h
-        include/EditorApp.h
-        resources/EmbeddedUi.h
-    )
-    target_include_directories(DoDevEditor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
-    target_link_libraries(DoDevEditor PRIVATE dodev_core dodev_services dodev_terminal dodev_launch raven::raven)
-    target_link_libraries(DoDevEditor PRIVATE dodev_serial_core dodev_symbols_core dodev_journal_core dodev_ai_core)
-    if(MSVC)
-        target_compile_options(DoDevEditor PRIVATE /W4 /utf-8)
-    else()
-        target_compile_options(DoDevEditor PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     install(TARGETS DoDevEditor dodeveditor RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
     if(UNIX AND NOT APPLE)
-        # An actual desktop entry makes DoDevEditor available in "Open With".
-        # Exec=dodeveditor %F supports multiple selected files (and folders).
         install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/dodev_install_desktop.cmake")
-        message(STATUS "[DoDevEditor][Launch] Installing dodeveditor + desktop Open With entry")
     endif()
-    message(STATUS "[DoDevEditor] GUI Raven 3.9 + 13 themes + JSON Settings + native plugin tools")
 endif()
 
 if(DODEV_BUILD_QRCODE_PLUGIN)
@@ -180,6 +140,12 @@ if(DODEV_BUILD_TESTS)
     target_compile_definitions(dodev_gdb_tests PRIVATE DODEV_GDB_TEST_ROOT="${PROJECT_BINARY_DIR}/plugins")
     add_dependencies(dodev_gdb_tests dodev_gdb_plugin)
     add_test(NAME gdb_configuration_and_native_plugin COMMAND dodev_gdb_tests)
+    add_executable(dodev_wx_explorer_tests tests/test_wx_explorer.cpp)
+    target_include_directories(dodev_wx_explorer_tests PRIVATE src/gui/wx)
+    add_test(NAME wx_explorer_filesystem COMMAND dodev_wx_explorer_tests)
+    add_executable(dodev_tree_tests tests/test_directory_tree.cpp)
+    target_link_libraries(dodev_tree_tests PRIVATE dodev_core)
+    add_test(NAME directory_tree COMMAND dodev_tree_tests)
     add_executable(dodev_explorer_tests tests/test_explorer_ops.cpp)
     target_link_libraries(dodev_explorer_tests PRIVATE dodev_core)
     add_test(NAME explorer_context_filesystem COMMAND dodev_explorer_tests)
@@ -261,6 +227,7 @@ if(DODEV_BUILD_TESTS)
     add_test(NAME core_csv_dlt_files COMMAND dodev_core_tests)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME wx_raven_menu_parity COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_wx_menu_parity.py")
         add_test(NAME vscode_context_menus_and_output_buttons
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_context_menus.py")
         add_test(NAME workspace_sidebar_xml_contract COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_workspace_ui.py")

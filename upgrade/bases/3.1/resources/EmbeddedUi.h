@@ -217,19 +217,13 @@ inline constexpr std::string_view kMainWindow = R"DODEV_XML(
 </Window>
 )DODEV_XML";
 
-inline constexpr std::string_view kMidnight =
-    R"DODEV_XML(<Theme Name="Midnight" Base="Dark" Accent="#579AFF" CornerRadius="8"><Colors Window="#0C1020" Panel="#131B2E" Control="#202D46" Input="#0F1930" Text="#E7F0FF" TextPlaceholder="#7C90B3" Separator="#2D3A54"/><Metrics ControlHeight="32" Spacing="7" FontSize="13"/><Syntax Keyword="#81A8FF" String="#96D8A3" Comment="#7890AC" Number="#F4B477"/></Theme>)DODEV_XML";
-inline constexpr std::string_view kGraphite =
-    R"DODEV_XML(<Theme Name="Graphite" Base="Dark" Accent="#B9B9C9" CornerRadius="6"><Colors Window="#141518" Panel="#1D1E23" Control="#2B2D32" Input="#191A1F" Text="#E8E8EC" Separator="#383B43"/><Metrics ControlHeight="32" Spacing="7"/><Syntax Keyword="#A3B8E8" String="#B5CC97" Comment="#8E939D"/></Theme>)DODEV_XML";
-inline constexpr std::string_view kAurora =
-    R"DODEV_XML(<Theme Name="Aurora" Base="Dark" Accent="#33D5BD" CornerRadius="12"><Colors Window="#091B21" Panel="#10282D" Control="#173D41" Input="#0A2227" Text="#E0FFF6" Separator="#255259"/><Metrics ControlHeight="34" Spacing="8"/><Syntax Keyword="#76E1CE" String="#FFD484" Comment="#76A3A4"/></Theme>)DODEV_XML";
-inline constexpr std::string_view kAmethyst =
-    R"DODEV_XML(<Theme Name="Amethyst" Base="Dark" Accent="#BD93F9" CornerRadius="10"><Colors Window="#15101F" Panel="#221B31" Control="#342A49" Input="#1A1527" Text="#F2EDFF" Separator="#493C60"/><Metrics ControlHeight="34" Spacing="8"/><Syntax Keyword="#D7ABFF" String="#91E3C9" Comment="#9C8CAF"/></Theme>)DODEV_XML";
-inline constexpr std::string_view kPaper =
-    R"DODEV_XML(<Theme Name="Paper" Base="Light" Accent="#3768D0" CornerRadius="9"><Colors Window="#F7F8FB" Panel="#FFFFFF" Control="#EAEFF6" Input="#FFFFFF" Text="#263249" Separator="#D7E0EC"/><Metrics ControlHeight="33" Spacing="8"/><Syntax Keyword="#3C65B6" String="#13815F" Comment="#748399"/></Theme>)DODEV_XML";
-// Los dos nuevos temas aprovechan el material *real* Glass de Raven, no una
-// simulacion CSS. Base GlassDark incorpora la refraccion, sombras y desenfoque
-// nativos del renderer.
+inline constexpr std::string_view kMidnight = R"DODEV_XML(<Theme Name="Midnight" Base="Dark" Accent="#579AFF" CornerRadius="8"><Colors Window="#0C1020" Panel="#131B2E" Control="#202D46" Input="#0F1930" Text="#E7F0FF" TextPlaceholder="#7C90B3" Separator="#2D3A54"/><Metrics ControlHeight="32" Spacing="7" FontSize="13"/><Syntax Keyword="#81A8FF" String="#96D8A3" Comment="#7890AC" Number="#F4B477"/></Theme>)DODEV_XML";
+inline constexpr std::string_view kGraphite = R"DODEV_XML(<Theme Name="Graphite" Base="Dark" Accent="#B9B9C9" CornerRadius="6"><Colors Window="#141518" Panel="#1D1E23" Control="#2B2D32" Input="#191A1F" Text="#E8E8EC" Separator="#383B43"/><Metrics ControlHeight="32" Spacing="7"/><Syntax Keyword="#A3B8E8" String="#B5CC97" Comment="#8E939D"/></Theme>)DODEV_XML";
+inline constexpr std::string_view kAurora = R"DODEV_XML(<Theme Name="Aurora" Base="Dark" Accent="#33D5BD" CornerRadius="12"><Colors Window="#091B21" Panel="#10282D" Control="#173D41" Input="#0A2227" Text="#E0FFF6" Separator="#255259"/><Metrics ControlHeight="34" Spacing="8"/><Syntax Keyword="#76E1CE" String="#FFD484" Comment="#76A3A4"/></Theme>)DODEV_XML";
+inline constexpr std::string_view kAmethyst = R"DODEV_XML(<Theme Name="Amethyst" Base="Dark" Accent="#BD93F9" CornerRadius="10"><Colors Window="#15101F" Panel="#221B31" Control="#342A49" Input="#1A1527" Text="#F2EDFF" Separator="#493C60"/><Metrics ControlHeight="34" Spacing="8"/><Syntax Keyword="#D7ABFF" String="#91E3C9" Comment="#9C8CAF"/></Theme>)DODEV_XML";
+inline constexpr std::string_view kPaper = R"DODEV_XML(<Theme Name="Paper" Base="Light" Accent="#3768D0" CornerRadius="9"><Colors Window="#F7F8FB" Panel="#FFFFFF" Control="#EAEFF6" Input="#FFFFFF" Text="#263249" Separator="#D7E0EC"/><Metrics ControlHeight="33" Spacing="8"/><Syntax Keyword="#3C65B6" String="#13815F" Comment="#748399"/></Theme>)DODEV_XML";
+// Los dos nuevos temas aprovechan el material *real* Glass de Raven, no una simulacion CSS.
+// Base GlassDark incorpora la refraccion, sombras y desenfoque nativos del renderer.
 inline constexpr std::string_view kGlassStudio = R"DODEV_XML(
 <Theme Name="Glass Studio" Base="GlassDark" Accent="#7E9DFF" Material="TintedGlass" Wallpaper="Dark" CornerRadius="15">
   <Colors Window="#0C1025" Panel="#1A2342C8" Control="#38476EAF" Input="#111B34D8" Text="#EFF3FF" TextPlaceholder="#A2B3D7" Separator="#B3C3FF38"/>
@@ -342,8 +336,7 @@ inline constexpr std::string_view kMusicDaylight = R"DODEV_XML(
 </Theme>
 )DODEV_XML";
 
-inline constexpr std::string_view kCopper =
-    R"DODEV_XML(<Theme Name="Copper" Base="Dark" Accent="#ED9B62" CornerRadius="9"><Colors Window="#1D1512" Panel="#2B211B" Control="#48372B" Input="#251B17" Text="#FFF1DB" Separator="#594536"/><Metrics ControlHeight="33" Spacing="8"/><Syntax Keyword="#F3B777" String="#C4DEA1" Comment="#AC937C"/></Theme>)DODEV_XML";
+inline constexpr std::string_view kCopper = R"DODEV_XML(<Theme Name="Copper" Base="Dark" Accent="#ED9B62" CornerRadius="9"><Colors Window="#1D1512" Panel="#2B211B" Control="#48372B" Input="#251B17" Text="#FFF1DB" Separator="#594536"/><Metrics ControlHeight="33" Spacing="8"/><Syntax Keyword="#F3B777" String="#C4DEA1" Comment="#AC937C"/></Theme>)DODEV_XML";
 
 inline constexpr std::string_view kVSCodeDarkModern = R"DODEV_XML(
 <Theme Name="VS Code Dark Modern" Base="Dark" Accent="#007ACC" CornerRadius="5">
@@ -368,22 +361,13 @@ inline constexpr std::string_view kVSCodeLightModern = R"DODEV_XML(
 </Theme>
 )DODEV_XML";
 
-struct Theme {
-  std::string_view name;
-  std::string_view xml;
-};
-inline constexpr std::array<Theme, 13> kThemes{
-    {{"Midnight", kMidnight},
-     {"Graphite", kGraphite},
-     {"Aurora", kAurora},
-     {"Amethyst", kAmethyst},
-     {"Paper", kPaper},
-     {"Copper", kCopper},
-     {"Glass Studio", kGlassStudio},
-     {"Glass Spotify", kGlassSpotify},
-     {"Music Nocturne", kMusicNocturne},
-     {"Music Aurora Glass", kMusicAuroraGlass},
-     {"Music Daylight", kMusicDaylight},
-     {"VS Code Dark Modern", kVSCodeDarkModern},
-     {"VS Code Light Modern", kVSCodeLightModern}}};
-}  // namespace dodev::ui
+struct Theme { std::string_view name; std::string_view xml; };
+inline constexpr std::array<Theme, 13> kThemes{{
+    {"Midnight", kMidnight}, {"Graphite", kGraphite}, {"Aurora", kAurora},
+    {"Amethyst", kAmethyst}, {"Paper", kPaper}, {"Copper", kCopper},
+    {"Glass Studio", kGlassStudio}, {"Glass Spotify", kGlassSpotify},
+    {"Music Nocturne", kMusicNocturne}, {"Music Aurora Glass", kMusicAuroraGlass},
+    {"Music Daylight", kMusicDaylight},
+    {"VS Code Dark Modern", kVSCodeDarkModern}, {"VS Code Light Modern", kVSCodeLightModern}
+}};
+} // namespace dodev::ui

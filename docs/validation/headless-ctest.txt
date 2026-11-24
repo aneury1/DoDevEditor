@@ -1,0 +1,68 @@
+Internal ctest changing into directory: /tmp/wxmig-build
+Test project /tmp/wxmig-build
+      Start  1: gdb_configuration_and_native_plugin
+ 1/31 Test  #1: gdb_configuration_and_native_plugin .......   Passed    0.03 sec
+      Start  2: directory_tree
+ 2/31 Test  #2: directory_tree ............................   Passed    0.00 sec
+      Start  3: explorer_context_filesystem
+ 3/31 Test  #3: explorer_context_filesystem ...............   Passed    0.00 sec
+      Start  4: workspace_search_replace_core
+ 4/31 Test  #4: workspace_search_replace_core .............   Passed    0.01 sec
+      Start  5: launcher_paths_and_flags
+ 5/31 Test  #5: launcher_paths_and_flags ..................   Passed    0.00 sec
+      Start  6: ai_assistant_native_plugin_registration
+ 6/31 Test  #6: ai_assistant_native_plugin_registration ...   Passed    0.00 sec
+      Start  7: ai_chat_provider_json
+ 7/31 Test  #7: ai_chat_provider_json .....................   Passed    0.01 sec
+      Start  8: source_symbols_outline_csv
+ 8/31 Test  #8: source_symbols_outline_csv ................   Passed    0.43 sec
+      Start  9: remote_journal_ssh_filter
+ 9/31 Test  #9: remote_journal_ssh_filter .................   Passed    0.03 sec
+      Start 10: new_symbol_and_remote_journal_plugins
+10/31 Test #10: new_symbol_and_remote_journal_plugins .....   Passed    0.01 sec
+      Start 11: serial_monitor_filter_and_pty
+11/31 Test #11: serial_monitor_filter_and_pty .............   Passed    0.30 sec
+      Start 12: serial_plugin_registration
+12/31 Test #12: serial_plugin_registration ................   Passed    0.00 sec
+      Start 13: vscode_keybinding_settings
+13/31 Test #13: vscode_keybinding_settings ................   Passed    0.00 sec
+      Start 14: settings_themes_templates_json
+14/31 Test #14: settings_themes_templates_json ............   Passed    0.08 sec
+      Start 15: native_plugin_integration
+15/31 Test #15: native_plugin_integration .................   Passed    0.01 sec
+      Start 16: clangformat_docker_plugin_integration
+16/31 Test #16: clangformat_docker_plugin_integration .....   Passed    0.01 sec
+      Start 17: vscode_terminal_tasks
+17/31 Test #17: vscode_terminal_tasks .....................   Passed    0.00 sec
+      Start 18: vscode_edit_selection_commands
+18/31 Test #18: vscode_edit_selection_commands ............   Passed    0.00 sec
+      Start 19: terminal_pty_interactive
+19/31 Test #19: terminal_pty_interactive ..................   Passed    0.03 sec
+      Start 20: core_csv_dlt_files
+20/31 Test #20: core_csv_dlt_files ........................   Passed    0.00 sec
+      Start 21: vscode_context_menus_and_output_buttons
+21/31 Test #21: vscode_context_menus_and_output_buttons ...   Passed    0.78 sec
+      Start 22: workspace_sidebar_xml_contract
+22/31 Test #22: workspace_sidebar_xml_contract ............   Passed    0.90 sec
+      Start 23: detached_direct_executable
+23/31 Test #23: detached_direct_executable ................   Passed    4.78 sec
+      Start 24: detached_cli_and_open_with
+24/31 Test #24: detached_cli_and_open_with ................   Passed    4.07 sec
+      Start 25: ai_local_http_transport
+25/31 Test #25: ai_local_http_transport ...................   Passed    1.20 sec
+      Start 26: journal_symbols_terminal_ui_contract
+26/31 Test #26: journal_symbols_terminal_ui_contract ......   Passed    0.65 sec
+      Start 27: embedded_serial_ui_contract
+27/31 Test #27: embedded_serial_ui_contract ...............   Passed    0.65 sec
+      Start 28: embedded_plugin_prompt_xml
+28/31 Test #28: embedded_plugin_prompt_xml ................   Passed    0.74 sec
+      Start 29: vscode_keybinding_ui_contract
+29/31 Test #29: vscode_keybinding_ui_contract .............   Passed    0.68 sec
+      Start 30: vscode_menus_xml_contract
+30/31 Test #30: vscode_menus_xml_contract .................   Passed    0.70 sec
+      Start 31: embedded_music_theme_xml
+31/31 Test #31: embedded_music_theme_xml ..................   Passed    0.70 sec
+
+100% tests passed, 0 tests failed out of 31
+
+Total Test time (real) =  16.84 sec

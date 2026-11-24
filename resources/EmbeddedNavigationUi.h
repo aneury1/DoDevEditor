@@ -1,7 +1,7 @@
 #pragma once
 #include <string_view>
 namespace dodev::ui {
-inline constexpr std::string_view kGoToLineWindow = R"DODEV_XML(
+inline constexpr std::string_view kGoToLineWindow=R"DODEV_XML(
 <Window Title="Go to Line / Column" Width="510" Height="190" MinWidth="390" MinHeight="150">
   <VBox Spacing="9" Slot.Padding="16,12">
     <HeaderBar Title="Go to Line · Ctrl+G"/>
@@ -11,7 +11,7 @@ inline constexpr std::string_view kGoToLineWindow = R"DODEV_XML(
   </VBox>
 </Window>
 )DODEV_XML";
-inline constexpr std::string_view kQuickOpenWindow = R"DODEV_XML(
+inline constexpr std::string_view kQuickOpenWindow=R"DODEV_XML(
 <Window Title="DoDevEditor · Quick Open" Width="750" Height="520" MinWidth="490" MinHeight="340">
   <VBox Spacing="8" Slot.Padding="13,10">
     <HeaderBar Title="Quick Open · Ctrl+P"/>
@@ -21,4 +21,4 @@ inline constexpr std::string_view kQuickOpenWindow = R"DODEV_XML(
   </VBox>
 </Window>
 )DODEV_XML";
-}  // namespace dodev::ui
+}
