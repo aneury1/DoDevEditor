@@ -1,3 +1,12 @@
+# DoDevEditor 4.0 — Context Menus and Output Export
+
+- Explorer right-click: New File, New Folder, Open, Rename, Delete (confirmed), Copy Path and Refresh.
+- Editor and document-tab context menus: edit actions, navigation, save/close, copy path and reveal in Explorer.
+- Terminal, Serial, Journal and AI output: Copy All and Save TXT via file dialog.
+- To launch the Linux build as a Windows GUI through WSLg, see [WSL Windows launch guide](docs/WSL_WINDOWS_LAUNCH.md).
+
+---
+
 # DoDevEditor Raven 3.8 — AI Provider Profiles and Model Discovery
 
 Version 3.8 adds **local llama.cpp model discovery**, Ollama model discovery, and configurable per-server remote provider profiles to the AI Assistant. See [`docs/AI_PROVIDER_PROFILES.md`](docs/AI_PROVIDER_PROFILES.md) for installation, server commands, JSON settings and authentication.
@@ -194,3 +203,42 @@ See [`docs/RELEASE_3_9.md`](docs/RELEASE_3_9.md) for the complete guide.
   **Type**, and **Filepath : line**. Double-click navigates to source.
 - Built-in XML remains embedded in C++ and all bundled third-party plugins
   are preserved.
+
+### Linux: development desktop shortcut (without `make install`)
+
+After compiling the GUI in `build/`:
+
+```bash
+python3 scripts/create_dev_shortcut.py
+```
+
+This creates **DoDevEditor (Development)** in the Applications menu and, if a
+`Desktop`/`Escritorio` directory exists, an executable desktop shortcut. It
+points directly to the locally built `build/dodeveditor` launcher, which
+returns control to the shell immediately and accepts files/folders (`%F`).
+There is no need for `sudo` or `cmake --install`.
+
+For a different build directory:
+
+```bash
+python3 scripts/create_dev_shortcut.py --build-dir /path/to/build-release
+```
+
+Remove the entries using:
+
+```bash
+python3 scripts/create_dev_shortcut.py --remove
+```
+
+The installed release shortcut remains separate (`dodeveditor.desktop`).
+On GNOME, you may need to right-click the Desktop icon and select **Allow
+Launching**. On KDE Plasma, ensure the desktop launcher is marked trusted if
+requested. Re-run the script if you move the source or build directory.
+
+## Release 4.0.1 — detached startup
+
+Both `./build/DoDevEditor .` and `./build/dodeveditor .` return the shell immediately. On Linux the GUI is started in a separate session with redirected standard streams; closing the invoking terminal does not normally terminate it. `--foreground` and `--wait` keep the process attached and propagate the GUI exit code. Use `--foreground` with a debugger. Detached logs: `${XDG_STATE_HOME:-$HOME/.local/state}/DoDevEditor/launcher.log`. Relative file and folder arguments retain the original working directory. Separate launches still create separate windows; no single-instance IPC is implemented.
+
+## Release 4.1.0 — GDB debugger plugin
+
+Adds `com.dodev.gdb`, a native C++17 plugin using the same supported `.vscode/launch.json` and `.vscode/tasks.json` settings as VSCode C++/GDB. Enable it in Settings > Plugins, restart, and open **Run > Run and Debug**. GDB needs Python support. See [GDB debugger plugin manual](docs/GDB_DEBUGGER_PLUGIN.md) for setup, shortcuts, supported fields, sample workspace, tests and limitations. Debug results are shown in the dedicated integrated GDB terminal rather than a full MI/DAP visual debugger. Detached startup from 4.0.1 is preserved.

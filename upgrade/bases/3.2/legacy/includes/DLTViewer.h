@@ -1,13 +1,15 @@
 #ifndef DLT_VIEWER_H_DEFINED
 #define DLT_VIEWER_H_DEFINED
 
-#include <wx/wx.h>
 #include <wx/listctrl.h>
-#include <vector>
+#include <wx/wx.h>
+
 #include <string>
+#include <vector>
+
 #include "EditorTab.h"
 
-struct DLTInformation{
+struct DLTInformation {
   int index;
   std::string timestamp;
   std::string apid;
@@ -18,40 +20,34 @@ struct DLTInformation{
 
 std::vector<DLTInformation> parseDLTFile(const std::string file);
 
-struct DLTViewerTab : public EditorTab{
-    
-    wxBoxSizer *sizer;
-    wxStaticText *label;
-    wxPanel* optionPanel;
-    wxButton* openDLTFile;
-    wxListCtrl *dltentries;
-    wxCheckListBox* apid;
-    // wxCheckListBox* ctid;
-  
-    wxPanel *viewerInteralPanel;
-    wxBoxSizer *viewerInteralPanelSizer;
-    wxPanel *opionsPanel;
+struct DLTViewerTab : public EditorTab {
+  wxBoxSizer* sizer;
+  wxStaticText* label;
+  wxPanel* optionPanel;
+  wxButton* openDLTFile;
+  wxListCtrl* dltentries;
+  wxCheckListBox* apid;
+  // wxCheckListBox* ctid;
 
-    DLTViewerTab(wxWindow *parent);
+  wxPanel* viewerInteralPanel;
+  wxBoxSizer* viewerInteralPanelSizer;
+  wxPanel* opionsPanel;
 
-    virtual ~DLTViewerTab(){}
+  DLTViewerTab(wxWindow* parent);
 
-    virtual int getTypeOfEditor(){
-        return 2;
-    }
-    
-    virtual std::vector<uint8_t> getData()override;
+  virtual ~DLTViewerTab() {}
 
-    virtual Response setData(std::vector<uint8_t> d)override;
+  virtual int getTypeOfEditor() { return 2; }
 
-    virtual bool wasChanged()override;
+  virtual std::vector<uint8_t> getData() override;
 
-    virtual Response saveDocument()override;
+  virtual Response setData(std::vector<uint8_t> d) override;
 
-    virtual Response openFile(std::string filepath)override;
+  virtual bool wasChanged() override;
 
+  virtual Response saveDocument() override;
+
+  virtual Response openFile(std::string filepath) override;
 };
-
-
 
 #endif

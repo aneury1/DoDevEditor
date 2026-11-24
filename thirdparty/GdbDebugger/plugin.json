@@ -1,0 +1,6 @@
+{
+  "id": "com.dodev.gdb", "name": "GDB / C++ Run and Debug",
+  "description": "VSCode cppdbg launch.json profiles, persistent source breakpoints, integrated GDB process and debugging controls",
+  "version": "1.0.0", "apiVersion": 1,
+  "entry": {"linux": "libdodev_gdb_plugin.so", "windows": "dodev_gdb_plugin.dll", "macos": "libdodev_gdb_plugin.dylib"}
+}

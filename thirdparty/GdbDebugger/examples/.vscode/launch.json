@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C++: GDB Launch",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/app",
+      "args": ["Hello GDB"],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}",
+      "environment": [{"name":"APP_MODE","value":"debug"}],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "preLaunchTask": "Build example",
+      "setupCommands": [
+        {"description": "Enable pretty-printing", "text": "-enable-pretty-printing", "ignoreFailures": true}
+      ],
+      "windows": {"program": "${workspaceFolder}/build/app.exe"}
+    },
+    {
+      "name": "C++: GDB Attach",
+      "type": "cppdbg",
+      "request": "attach",
+      "program": "${workspaceFolder}/build/app",
+      "processId": "${command:pickProcess}",
+      "cwd": "${workspaceFolder}",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "windows": {"program": "${workspaceFolder}/build/app.exe"}
+    }
+  ]
+}

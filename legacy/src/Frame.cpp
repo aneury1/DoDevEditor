@@ -1,19 +1,20 @@
 
+#include "frame.h"
+
 #include <mutex>
 #include <thread>
-#include "frame.h"
-#include "TabContainer.h"
-#include "MenubarOptions.h"
-#include "constant.h"
-#include "utils.h"
-#include "DLTViewer.h"
+
 #include "CSVEditor.h"
+#include "DLTViewer.h"
 #include "DataServerEditor.h"
 #include "Dialogs.h"
+#include "MenubarOptions.h"
 #include "Settings.h"
+#include "TabContainer.h"
+#include "constant.h"
+#include "utils.h"
 
-WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
-{
+WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor")) {
   /// SetBackgroundColour(*wxBLACK);
   auiManager.SetManagedWindow(this);
   // auiManager.SetBackgroundColour(defaultSettings.getPanelBG());
@@ -45,35 +46,29 @@ WindowFrame::WindowFrame() : wxFrame(nullptr, wxID_ANY, wxT("DoDevEditor"))
   Bind(wxEVT_MENU, &WindowFrame::OnEventHappened, this, OpenFileAccelerator);
 }
 
-void WindowFrame::AddDefaultEvent()
-{
-  auto newEmptyFile = [this](WindowFrame *frame)
-  {
+void WindowFrame::AddDefaultEvent() {
+  auto newEmptyFile = [this](WindowFrame* frame) {
     tabContainer->AddEmptyTextPage();
   };
 
-  auto openExistingFile = [this](WindowFrame *frame)
-  {
+  auto openExistingFile = [this](WindowFrame* frame) {
     std::string path;
-    if (OpenFileDialog(this, path) == Response::Success && path.size() > 0)
-    {
+    if (OpenFileDialog(this, path) == Response::Success && path.size() > 0) {
       std::string content;
       content = ReadFile(path);
-      if (content.size() > 0)
-      {
+      if (content.size() > 0) {
         auto vc = fromStrTo8Vec(content);
         tabContainer->SetDataToCurrentContainer(vc);
         int lastSlashOnPath = path.find_last_of(FileSeparator);
-        if (lastSlashOnPath == std::string::npos)
-        {
+        if (lastSlashOnPath == std::string::npos) {
           tabContainer->SetTitleToCurrentPage(path);
           tabContainer->GetCurrentTab()->SetPath(path);
         }
 
-        else
-        {
+        else {
           tabContainer->GetCurrentTab()->SetPath(path);
-          path = path.substr(lastSlashOnPath + 1, path.size() - lastSlashOnPath);
+          path =
+              path.substr(lastSlashOnPath + 1, path.size() - lastSlashOnPath);
           tabContainer->SetTitleToCurrentPage(path);
         }
       }
@@ -81,59 +76,46 @@ void WindowFrame::AddDefaultEvent()
   };
 
   std::mutex mu;
-  auto openFolder = [this](WindowFrame *frame)
-  {
-    if (explorerTabContainer)
-      explorerTabContainer->OpenFolder();
+  auto openFolder = [this](WindowFrame* frame) {
+    if (explorerTabContainer) explorerTabContainer->OpenFolder();
   };
 
-  auto saveCurrentFile = [this](WindowFrame *frame)
-  {
+  auto saveCurrentFile = [this](WindowFrame* frame) {
     tabContainer->GetCurrentTab()->saveDocument();
-    tabContainer->SetTitleToCurrentPage(tabContainer->GetCurrentTab()->GetFileName());
+    tabContainer->SetTitleToCurrentPage(
+        tabContainer->GetCurrentTab()->GetFileName());
   };
 
-  auto openTerminal = [this](WindowFrame *frame)
-  {
-    GetTerminal();
-  };
+  auto openTerminal = [this](WindowFrame* frame) { GetTerminal(); };
 
-  auto openDLTViewer = [this](WindowFrame *frame)
-  {
-    if (tabContainer)
-    {
+  auto openDLTViewer = [this](WindowFrame* frame) {
+    if (tabContainer) {
       auto dlt = new DLTViewerTab(tabContainer);
       tabContainer->addCustomEditorTab(dlt);
       tabContainer->SetTitleToCurrentPage("--DLT File viewer:--");
     }
   };
 
-  auto openCSVViewer = [this](WindowFrame *frame)
-  {
-    if (tabContainer)
-    {
+  auto openCSVViewer = [this](WindowFrame* frame) {
+    if (tabContainer) {
       auto csv = new CSVEditor(tabContainer);
       tabContainer->addCustomEditorTab(csv);
       tabContainer->SetTitleToCurrentPage("--CSV Editor--");
     }
   };
 
-  auto openDataServerEditor = [this](WindowFrame *frame)
-  {
-    if (tabContainer)
-    {
+  auto openDataServerEditor = [this](WindowFrame* frame) {
+    if (tabContainer) {
       auto csv = new DataServerEditor(tabContainer);
       tabContainer->addCustomEditorTab(csv);
       tabContainer->SetTitleToCurrentPage("--DataServer Editor--");
     }
   };
 
-  auto openFileByAccelerator = [this](WindowFrame *frame)
-  {
+  auto openFileByAccelerator = [this](WindowFrame* frame) {
     auto files = this->explorerTabContainer->GetFiles();
     OpenExistingFile file(frame, files);
-    if (file.ShowModal() == wxID_CANCEL)
-    {
+    if (file.ShowModal() == wxID_CANCEL) {
     }
   };
 
@@ -153,22 +135,30 @@ void WindowFrame::AddDefaultEvent()
   wxAcceleratorTable accel(1, entries);
   SetAcceleratorTable(accel);
 }
-#include <wx/artprov.h> // Required for wxArtProvider
-
+#include <wx/artprov.h>  // Required for wxArtProvider
 #include <wx/aui/aui.h>
-void WindowFrame::SetDefaultPanel()
-{
+void WindowFrame::SetDefaultPanel() {
   panel_info tabpanel;
   panel_info explorerpanel;
 
   tabContainer = new TabContainer(this);
   tabpanel.panel = tabContainer;
-  tabpanel.info = wxAuiPaneInfo().Name(tabcontainer).Centre().Caption(" ").BestSize(300, 400).MinSize(100, 100);
+  tabpanel.info = wxAuiPaneInfo()
+                      .Name(tabcontainer)
+                      .Centre()
+                      .Caption(" ")
+                      .BestSize(300, 400)
+                      .MinSize(100, 100);
   add_panel(&tabpanel);
 
   explorerTabContainer = new FileExplorerTabContainer(this);
   explorerpanel.panel = explorerTabContainer;
-  explorerpanel.info = wxAuiPaneInfo().Name(explorercontainer).Left().Caption(" ").BestSize(300, 400).MinSize(300, 100);
+  explorerpanel.info = wxAuiPaneInfo()
+                           .Name(explorercontainer)
+                           .Left()
+                           .Caption(" ")
+                           .BestSize(300, 400)
+                           .MinSize(300, 100);
   add_panel(&explorerpanel);
 
   auiManager.Update();
@@ -177,14 +167,16 @@ void WindowFrame::SetDefaultPanel()
   ptr->Update();
   ptr->Refresh();
 
-  wxAuiToolBar *toolbar = new wxAuiToolBar(this, wxID_ANY);
-  toolbar->SetBackgroundColour(defaultSettings.getPanelBG()); // Dark background
+  wxAuiToolBar* toolbar = new wxAuiToolBar(this, wxID_ANY);
+  toolbar->SetBackgroundColour(
+      defaultSettings.getPanelBG());  // Dark background
   toolbar->AddTool(wxID_EXIT, "Exit", wxArtProvider::GetBitmap(wxART_QUIT));
   toolbar->Realize();
 
-  auiManager.AddPane(toolbar, wxAuiPaneInfo().Top().ToolbarPane().Gripper(false));
+  auiManager.AddPane(toolbar,
+                     wxAuiPaneInfo().Top().ToolbarPane().Gripper(false));
 
-  wxAuiDockArt *art = auiManager.GetArtProvider();
+  wxAuiDockArt* art = auiManager.GetArtProvider();
   art->SetColor(wxAUI_DOCKART_SASH_COLOUR, defaultSettings.getPanelBG());
   art->SetColor(wxAUI_DOCKART_BACKGROUND_COLOUR, defaultSettings.getPanelBG());
   art->SetMetric(wxAUI_DOCKART_SASH_SIZE, 5);
@@ -193,68 +185,50 @@ void WindowFrame::SetDefaultPanel()
   auiManager.Update();
 }
 
-void WindowFrame::add_panel(panel_info *panel)
-{
+void WindowFrame::add_panel(panel_info* panel) {
   auiManager.AddPane(panel->panel, panel->info);
 }
 
-void WindowFrame::SetUpMenu()
-{
+void WindowFrame::SetUpMenu() {
   auto menubar = CreateMenuBarAndOptions();
   SetMenuBar(menubar);
 }
 
-void WindowFrame::OnEventHappened(wxCommandEvent &ev)
-{
+void WindowFrame::OnEventHappened(wxCommandEvent& ev) {
   std::cout << "DEBUG: Event not found: " << ev.GetId() << "\n";
   auto find = commandEventFunctions.find(ev.GetId());
-  if (find != commandEventFunctions.end())
-  {
+  if (find != commandEventFunctions.end()) {
     find->second(this);
-  }
-  else
-  {
+  } else {
   }
 }
 
-void WindowFrame::OnExit(wxCommandEvent &ev)
-{
-  exit(1);
-}
+void WindowFrame::OnExit(wxCommandEvent& ev) { exit(1); }
 
-EditorTab *WindowFrame::GetCurrentEditorTab()
-{
+EditorTab* WindowFrame::GetCurrentEditorTab() {
   return tabContainer->GetCurrentTab();
 }
 
-void WindowFrame::AddCMDCallback(int id, std::function<void(WindowFrame *)> cb)
-{
+void WindowFrame::AddCMDCallback(int id, std::function<void(WindowFrame*)> cb) {
   this->commandEventFunctions[id] = cb;
 }
 
-EditorTab *WindowFrame::AddNewPage()
-{
-  if (tabContainer)
-  {
+EditorTab* WindowFrame::AddNewPage() {
+  if (tabContainer) {
     tabContainer->AddEmptyTextPage();
-    EditorTab *tab = tabContainer->GetCurrentTab();
+    EditorTab* tab = tabContainer->GetCurrentTab();
     return tab;
   }
   return nullptr;
 }
 
-EditorTab *WindowFrame::AddNewPage(std::string filename)
-{
-  if (tabContainer)
-  {
+EditorTab* WindowFrame::AddNewPage(std::string filename) {
+  if (tabContainer) {
     tabContainer->AddPage(filename);
-    EditorTab *tab = tabContainer->GetCurrentTab();
+    EditorTab* tab = tabContainer->GetCurrentTab();
     return tab;
   }
   return nullptr;
 }
 
-TabContainer *WindowFrame::GetTabContainer()
-{
-  return tabContainer;
-}
+TabContainer* WindowFrame::GetTabContainer() { return tabContainer; }

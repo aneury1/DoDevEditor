@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(DoDevEditor VERSION 3.9.0 LANGUAGES C CXX)
+project(DoDevEditor VERSION 4.1.1 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -19,7 +19,7 @@ set(DODEV_RAVEN_GIT_TAG "main" CACHE STRING "Rama/tag/commit de Raven GUI")
 
 # The CLI launcher is a separate executable: it returns the invoking shell
 # immediately while the Raven window keeps running in its own session.
-add_library(dodev_launch STATIC src/launch/LaunchArgs.cpp)
+add_library(dodev_launch STATIC src/launch/LaunchArgs.cpp src/launch/ProcessLaunch.cpp)
 target_include_directories(dodev_launch PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(dodev_launch PUBLIC cxx_std_17)
 add_executable(dodeveditor src/launch/Launcher.cpp)
@@ -30,7 +30,7 @@ else()
     target_compile_options(dodeveditor PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-add_library(dodev_core STATIC src/EditorData.cpp src/editor/EditorCommands.cpp src/search/WorkspaceSearch.cpp)
+add_library(dodev_core STATIC src/EditorData.cpp src/editor/EditorCommands.cpp src/search/WorkspaceSearch.cpp src/explorer/ExplorerOps.cpp)
 add_library(dodev_services STATIC
     src/settings/Json.cpp
     src/settings/SettingsManager.cpp
@@ -104,6 +104,7 @@ if(DODEV_BUILD_GUI)
     add_executable(DoDevEditor
         src/main.cpp
         src/EditorApp.cpp
+        src/EditorContexts.cpp
         src/EditorSettings.cpp
         src/EditorMenus.cpp
         src/EditorKeybindings.cpp
@@ -112,6 +113,7 @@ if(DODEV_BUILD_GUI)
         src/EditorWorkspace.cpp
         src/EditorJournal.cpp
         src/EditorAI.cpp
+        src/EditorGdb.cpp
         resources/EmbeddedJournalUi.h
         resources/EmbeddedSerialUi.h
         resources/EmbeddedPluginPromptUi.h
@@ -146,6 +148,7 @@ add_subdirectory(thirdparty/SerialMonitor)
 add_subdirectory(thirdparty/SourceSymbols)
 add_subdirectory(thirdparty/RemoteJournal)
 add_subdirectory(thirdparty/AIAssistant)
+add_subdirectory(thirdparty/GdbDebugger)
 
 if(DODEV_BUILD_PLUGIN_EXAMPLES)
     add_library(hello_plugin MODULE plugins/examples/HelloPlugin/HelloPlugin.cpp)
@@ -172,6 +175,14 @@ endif()
 
 if(DODEV_BUILD_TESTS)
     enable_testing()
+    add_executable(dodev_gdb_tests thirdparty/GdbDebugger/tests/test_gdb.cpp)
+    target_link_libraries(dodev_gdb_tests PRIVATE dodev_gdb_core dodev_services dodev_terminal)
+    target_compile_definitions(dodev_gdb_tests PRIVATE DODEV_GDB_TEST_ROOT="${PROJECT_BINARY_DIR}/plugins")
+    add_dependencies(dodev_gdb_tests dodev_gdb_plugin)
+    add_test(NAME gdb_configuration_and_native_plugin COMMAND dodev_gdb_tests)
+    add_executable(dodev_explorer_tests tests/test_explorer_ops.cpp)
+    target_link_libraries(dodev_explorer_tests PRIVATE dodev_core)
+    add_test(NAME explorer_context_filesystem COMMAND dodev_explorer_tests)
     add_executable(dodev_workspace_tests tests/test_workspace_search.cpp)
     target_link_libraries(dodev_workspace_tests PRIVATE dodev_core)
     add_test(NAME workspace_search_replace_core COMMAND dodev_workspace_tests)
@@ -250,8 +261,14 @@ if(DODEV_BUILD_TESTS)
     add_test(NAME core_csv_dlt_files COMMAND dodev_core_tests)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME vscode_context_menus_and_output_buttons
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_context_menus.py")
         add_test(NAME workspace_sidebar_xml_contract COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_workspace_ui.py")
         if(UNIX AND NOT APPLE)
+            add_executable(dodev_direct_launch_tests tests/test_direct_launch.cpp)
+            target_link_libraries(dodev_direct_launch_tests PRIVATE dodev_launch)
+            add_test(NAME detached_direct_executable COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_direct_launch.py" "$<TARGET_FILE:dodev_direct_launch_tests>")
             add_test(NAME detached_cli_and_open_with
                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_launcher.py"
                     "$<TARGET_FILE:dodeveditor>" "${CMAKE_CURRENT_SOURCE_DIR}/packaging/dodeveditor.desktop")

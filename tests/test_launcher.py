@@ -46,7 +46,7 @@ with tempfile.TemporaryDirectory() as tmp:
         if output.exists():break
         time.sleep(.05)
     assert output.exists(),'Stub GUI never started'
-    assert output.read_text().splitlines()==[str(path),str(folder)]
+    assert output.read_text().splitlines()==["--foreground","--",str(path),str(folder)]
     log=root/'state'/'DoDevEditor'/'launcher.log'
     for _ in range(40):
         if log.exists(): break
