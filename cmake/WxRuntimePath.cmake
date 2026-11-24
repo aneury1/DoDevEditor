@@ -1,0 +1,32 @@
+# Preserve non-system wxWidgets library search paths in installed Linux binaries.
+function(dodev_wx_runtime_path target)
+    if(NOT UNIX OR APPLE)
+        return()
+    endif()
+    set(dirs ${wxWidgets_LIBRARY_DIRS})
+    # Some FindwxWidgets versions/configurations expose only the link flags.
+    foreach(item IN LISTS wxWidgets_LIBRARIES)
+        if(item MATCHES "^-L(.+)$")
+            list(APPEND dirs "${CMAKE_MATCH_1}")
+        elseif(IS_ABSOLUTE "${item}")
+            get_filename_component(dir "${item}" DIRECTORY)
+            list(APPEND dirs "${dir}")
+        endif()
+    endforeach()
+    set(paths)
+    foreach(dir IN LISTS dirs)
+        if(IS_ABSOLUTE "${dir}" AND IS_DIRECTORY "${dir}")
+            list(APPEND paths "${dir}")
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES paths)
+    if(paths)
+        set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH ${paths})
+        set_property(TARGET ${target} APPEND PROPERTY INSTALL_RPATH ${paths})
+    endif()
+    set_target_properties(${target} PROPERTIES
+        SKIP_BUILD_RPATH FALSE
+        BUILD_WITH_INSTALL_RPATH FALSE
+        INSTALL_RPATH_USE_LINK_PATH TRUE)
+    message(STATUS "DoDevEditor: wxWidgets runtime paths: ${paths}")
+endfunction()

@@ -14,42 +14,51 @@ extern "C" {
 
 typedef struct DodevHostAPI DodevHostAPI;
 typedef struct DodevUiBuilder DodevUiBuilder;
-typedef void (*DodevCommandFn)(const DodevHostAPI* host,void* user_data);
-typedef void (*DodevEventFn)(const DodevHostAPI* host,const char* event,const char* json_payload,void* user_data);
-typedef void (*DodevViewFn)(const DodevHostAPI* host,const DodevUiBuilder* ui,void* user_data);
+typedef void (*DodevCommandFn)(const DodevHostAPI* host, void* user_data);
+typedef void (*DodevEventFn)(const DodevHostAPI* host, const char* event,
+                             const char* json_payload, void* user_data);
+typedef void (*DodevViewFn)(const DodevHostAPI* host, const DodevUiBuilder* ui,
+                            void* user_data);
 
 /* The builder is short lived. Plugins must not store it or its context. */
 struct DodevUiBuilder {
-    uint32_t struct_size;
-    void* context;
-    void (*label)(void* context,const char* text);
-    void (*button)(void* context,const char* title,const char* command_id);
-    void (*read_only_text)(void* context,const char* text);
+  uint32_t struct_size;
+  void* context;
+  void (*label)(void* context, const char* text);
+  void (*button)(void* context, const char* title, const char* command_id);
+  void (*read_only_text)(void* context, const char* text);
 };
 struct DodevHostAPI {
-    uint32_t struct_size;
-    uint32_t api_version;
-    void* context;
-    void (*log)(void* context,int severity,const char* message);
-    int (*register_command)(void* context,const char* id,const char* title,DodevCommandFn callback,void* user_data);
-    int (*register_menu)(void* context,const char* location,const char* title,const char* command_id);
-    int (*register_tab)(void* context,const char* id,const char* title,DodevViewFn factory,void* user_data);
-    int (*register_panel)(void* context,const char* id,const char* title,const char* side,DodevViewFn factory,void* user_data);
-    int (*register_template)(void* context,const char* id,const char* name,const char* extension,const char* contents);
-    int (*register_theme_xml)(void* context,const char* theme_xml);
-    int (*register_setting)(void* context,const char* key,const char* default_value,const char* description);
-    const char* (*get_setting)(void* context,const char* key);
-    int (*set_setting)(void* context,const char* key,const char* value);
-    int (*subscribe_event)(void* context,const char* event,DodevEventFn callback,void* user_data);
+  uint32_t struct_size;
+  uint32_t api_version;
+  void* context;
+  void (*log)(void* context, int severity, const char* message);
+  int (*register_command)(void* context, const char* id, const char* title,
+                          DodevCommandFn callback, void* user_data);
+  int (*register_menu)(void* context, const char* location, const char* title,
+                       const char* command_id);
+  int (*register_tab)(void* context, const char* id, const char* title,
+                      DodevViewFn factory, void* user_data);
+  int (*register_panel)(void* context, const char* id, const char* title,
+                        const char* side, DodevViewFn factory, void* user_data);
+  int (*register_template)(void* context, const char* id, const char* name,
+                           const char* extension, const char* contents);
+  int (*register_theme_xml)(void* context, const char* theme_xml);
+  int (*register_setting)(void* context, const char* key,
+                          const char* default_value, const char* description);
+  const char* (*get_setting)(void* context, const char* key);
+  int (*set_setting)(void* context, const char* key, const char* value);
+  int (*subscribe_event)(void* context, const char* event,
+                         DodevEventFn callback, void* user_data);
 };
 /* Returned plugin function table: plugin may omit shutdown by leaving NULL. */
 typedef struct DodevPluginAPI {
-    uint32_t struct_size;
-    uint32_t api_version;
-    void (*shutdown)(void);
+  uint32_t struct_size;
+  uint32_t api_version;
+  void (*shutdown)(void);
 } DodevPluginAPI;
 /* Required exported symbol of every native plugin. Return 1 for success. */
-typedef int (*DodevPluginInitFn)(const DodevHostAPI*,DodevPluginAPI*);
+typedef int (*DodevPluginInitFn)(const DodevHostAPI*, DodevPluginAPI*);
 #ifdef __cplusplus
 }
 #endif

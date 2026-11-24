@@ -6,12 +6,12 @@
 namespace dodev::launch {
 
 struct Request {
-    std::vector<std::filesystem::path> paths;
-    bool help = false;
-    bool version = false;
-    bool foreground = false;
-    bool wait = false;
-    std::string error;
+  std::vector<std::filesystem::path> paths;
+  bool help = false;
+  bool version = false;
+  bool foreground = false;
+  bool wait = false;
+  std::string error;
 };
 
 // Parse arguments without performing any graphical initialization. Only the
@@ -20,4 +20,4 @@ struct Request {
 Request parse(int argc, const char* const argv[], bool launcher);
 std::string usage();
 
-} // namespace dodev::launch
+}  // namespace dodev::launch

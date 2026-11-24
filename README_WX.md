@@ -1,3 +1,11 @@
+# DoDevEditor wxWidgets 5.1.3
+
+New: preserve detected wxWidgets runtime paths at install and select/run workspace VSCode tasks beside the theme picker. See [release notes](docs/WX_5_1_3.md).
+
+# DoDevEditor wxWidgets 5.1.2
+
+New: VSCode JSONC tasks and Remote Journal SSH password mode. See [release notes](docs/WX_5_1_2.md).
+
 # DoDevEditor wxWidgets 5.1.1 — Explorer and theme propagation
 
 This full source package extends wxWidgets 5.0.2 using the retained Raven 4.3 frontend as the reference. The wx GUI target does not fetch or link Raven.
@@ -40,3 +48,7 @@ cmake -S . -B build-core -DDODEV_BUILD_GUI=OFF
 cmake --build build-core -j$(nproc)
 ctest --test-dir build-core --output-on-failure
 ```
+
+## 5.1.4 task variables
+
+See [VSCode task variables](docs/WX_5_1_4.md) and `examples/task-variables`.

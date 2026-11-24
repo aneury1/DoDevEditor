@@ -1,0 +1,5 @@
+{
+  // Example workspace settings, not extension activation.
+  "build.jobs": 4,
+  "dodev.taskCommandVariables": { "example.compiler": "cmake" }
+}

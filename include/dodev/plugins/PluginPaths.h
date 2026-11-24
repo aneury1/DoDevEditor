@@ -5,4 +5,4 @@ namespace dodev {
 // For a normal install: <prefix>/bin/DoDevEditor -> <prefix>/bin/plugins/.
 std::filesystem::path executableDirectory();
 std::filesystem::path bundledPluginDirectory();
-}
+}  // namespace dodev

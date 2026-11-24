@@ -1,4 +1,4 @@
-add_library(dodev_gdb_core STATIC src/GdbConfig.cpp src/GdbBreakpoints.cpp "${PROJECT_SOURCE_DIR}/src/settings/Json.cpp")
+add_library(dodev_gdb_core STATIC src/GdbConfig.cpp src/GdbBreakpoints.cpp "${PROJECT_SOURCE_DIR}/src/settings/Json.cpp" "${PROJECT_SOURCE_DIR}/src/terminal/TerminalTasks.cpp")
 set_target_properties(dodev_gdb_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(dodev_gdb_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(dodev_gdb_core PUBLIC cxx_std_17)

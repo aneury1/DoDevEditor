@@ -1,0 +1,9 @@
+{
+  // Shared by VSCode and DoDevEditor. Copy into an existing CMake workspace.
+  "version": "2.0.0",
+  "tasks": [
+    {"label": "CMake: Configure", "type": "process", "command": "cmake", "args": ["-S", "${workspaceFolder}", "-B", "${workspaceFolder}/build", "-DCMAKE_BUILD_TYPE=Debug"], "options": {"cwd": "${workspaceFolder}"}},
+    {"label": "CMake: Build", "type": "process", "command": "cmake", "args": ["--build", "${workspaceFolder}/build", "--parallel"], "dependsOn": "CMake: Configure", "group": {"kind": "build", "isDefault": true}},
+    {"label": "CMake: Test", "type": "process", "command": "ctest", "args": ["--test-dir", "${workspaceFolder}/build", "--output-on-failure"], "dependsOn": "CMake: Build", "group": "test"}
+  ]
+}

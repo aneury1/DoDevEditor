@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    { "id": "buildType", "type": "pickString", "description": "Build configuration", "options": ["Debug", "Release", "RelWithDebInfo"], "default": "Debug" },
+    { "id": "buildDir", "type": "promptString", "description": "Build directory", "default": "build" }
+  ],
+  "tasks": [
+    { "label": "Show variables", "type": "process", "command": "echo", "args": ["${workspaceFolder}", "${input:buildType}", "${input:buildDir}", "${config:build.jobs}", "${command:example.compiler}"] },
+    { "label": "Configure example", "type": "process", "command": "${command:example.compiler}", "args": ["-S", "${workspaceFolder}", "-B", "${workspaceFolder}/${input:buildDir}", "-DCMAKE_BUILD_TYPE=${input:buildType}"] },
+    { "label": "Build example", "type": "process", "command": "cmake", "args": ["--build", "${workspaceFolder}/${input:buildDir}", "--parallel", "${config:build.jobs}"], "dependsOn": "Configure example", "group": {"kind": "build", "isDefault": true} }
+  ]
+}
