@@ -1,4 +1,6 @@
 #pragma once
+// This header must compile independently of the including file.
+#include <wx/wx.h>
 // Optional GTK3 application-local CSS. No OS theme files are modified.
 #if defined(DODEV_GTK3_THEME) && defined(__WXGTK__)
 #include <gtk/gtk.h>

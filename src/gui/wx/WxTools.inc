@@ -8,7 +8,8 @@ std::vector<ai::ProviderProfile> profiles() {
   return p;
 }
 template <class Fn>
-auto networkJob(const wxString& title, Fn fn) {
+auto networkJob(const wxString& title, Fn fn)
+    -> decltype(fn(static_cast<std::atomic<bool>*>(nullptr))) {
   std::atomic<bool> cancel{false};
   auto future = std::async(std::launch::async, [&] { return fn(&cancel); });
   wxProgressDialog progress(title, "Waiting for provider...", 100, this,

@@ -1,3 +1,10 @@
+# DoDevEditor wxWidgets 5.1.9 — GUI compilation hotfix
+
+See [build hotfix notes](docs/WX_5_1_9_BUILD_FIX.md).
+
+
+See [Build system and troubleshooting](docs/BUILD_SYSTEM.md) for module responsibilities, presets, dependency diagnostics and platform notes. The 5.1.7 application features are unchanged.
+
 # DoDevEditor wxWidgets 5.1.3
 
 New: preserve detected wxWidgets runtime paths at install and select/run workspace VSCode tasks beside the theme picker. See [release notes](docs/WX_5_1_3.md).

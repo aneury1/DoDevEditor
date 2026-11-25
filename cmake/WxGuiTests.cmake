@@ -1,0 +1,6 @@
+# Native Scintilla regression test requires a graphical display or Xvfb.
+add_executable(dodev_wx_syntax_gui_tests tests/test_wx_syntax_gui.cpp)
+target_include_directories(dodev_wx_syntax_gui_tests PRIVATE src/gui/wx)
+target_link_libraries(dodev_wx_syntax_gui_tests PRIVATE dodev_services dodev_wx_dependencies)
+dodev_wx_runtime_path(dodev_wx_syntax_gui_tests)
+add_test(NAME wx_syntax_gui COMMAND dodev_wx_syntax_gui_tests)

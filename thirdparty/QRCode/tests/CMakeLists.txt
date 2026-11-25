@@ -22,3 +22,10 @@ add_dependencies(dodev_bundled_plugin_discovery_tests dodev_qrcode_plugin)
 target_compile_definitions(dodev_bundled_plugin_discovery_tests PRIVATE
     DODEV_QR_BUILD_ROOT="${PROJECT_BINARY_DIR}/plugins")
 add_test(NAME bundled_qrcode_discovery COMMAND dodev_bundled_plugin_discovery_tests)
+
+foreach(test_target IN ITEMS qrcode_encoder_tests qrcode_cli_test
+    qrcode_plugin_smoke dodev_bundled_plugin_discovery_tests)
+    if(TARGET ${test_target})
+        dodev_test_assertions(${test_target})
+    endif()
+endforeach()
