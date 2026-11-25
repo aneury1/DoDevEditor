@@ -13,11 +13,13 @@ docker::Connection dockerConnection() {
   return c;
 }
 std::string dockerQuery(const docker::Connection& c, const docker::Args& args) {
-  auto argv = c.command(args);
+ 
+/* auto argv = c.command(args);
   auto cwd = root;
   return networkJob("Docker query", [argv, cwd](std::atomic<bool>* cancel) {
     return docker::capture(argv, cwd, cancel);
-  });
+  });*/
+  return std::string();
 }
 void dockerTerminal(const docker::Args& argv, const wxString& title) {
   auto t = terminal(title);

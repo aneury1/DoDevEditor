@@ -229,7 +229,7 @@ int startEditor(int argc, char** argv, bool direct,
     return 0;
   }
   if (request.version) {
-    std::cout << "DoDevEditor 5.1.6\n";
+    std::cout << "DoDevEditor 5.1.7\n";
     return 0;
   }
   std::vector<std::string> paths;

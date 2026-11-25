@@ -47,6 +47,7 @@
 #include "TerminalScreen.h"
 #include "TerminalSession.h"
 #include "WxExplorerModel.h"
+#include "WxSyntaxSettings.h"
 #include "WxTerminal.h"
 #include "WxTheme.h"
 #include "dodev/docker/DockerQuery.h"
@@ -167,31 +168,8 @@ class Frame : public wxFrame {
     e->StyleSetFont(wxSTC_STYLE_DEFAULT,
                     wxFont(wxFontInfo(11).Family(wxFONTFAMILY_TELETYPE)));
     e->StyleClearAll();
-    auto ext = p.extension().string();
-    if (ext == ".cpp" || ext == ".c" || ext == ".h" || ext == ".hpp" ||
-        ext == ".java" || ext == ".kt") {
-      e->SetLexer(wxSTC_LEX_CPP);
-      e->SetKeyWords(
-          0,
-          "auto bool break case char class const constexpr continue double "
-          "else enum explicit float for if int long namespace new nullptr "
-          "private protected public return short static struct switch template "
-          "this throw try typedef typename using virtual void while");
-      e->StyleSetForeground(wxSTC_C_WORD, wxColour(25, 85, 170));
-      e->StyleSetForeground(wxSTC_C_COMMENT, wxColour(0, 125, 65));
-      e->StyleSetForeground(wxSTC_C_COMMENTLINE, wxColour(0, 125, 65));
-      e->StyleSetForeground(wxSTC_C_STRING, wxColour(160, 55, 25));
-    } else if (ext == ".py") {
-      e->SetLexer(wxSTC_LEX_PYTHON);
-      e->SetKeyWords(
-          0,
-          "and as assert async await break class continue def del elif else "
-          "except False finally for from global if import in is lambda None "
-          "nonlocal not or pass raise return True try while with yield");
-    } else if (ext == ".json") {
-      e->SetLexer(wxSTC_LEX_JSON);
-      e->SetKeyWords(0, "true false null");
-    }
+    if (auto* syntax = dynamic_cast<wxui::SyntaxEditor*>(e))
+      syntax->setLanguage(dodev::syntax::detect(p));
     e->SetProperty("fold", "1");
     e->SetMarginType(2, wxSTC_MARGIN_SYMBOL);
     e->SetMarginMask(2, wxSTC_MASK_FOLDERS);
@@ -229,14 +207,14 @@ class Frame : public wxFrame {
       }
     if (!fs::is_regular_file(p))
       throw std::runtime_error("File not found: " + p.u8string());
-    auto e = new wxStyledTextCtrl(editors, wxID_ANY);
+    auto e = new wxui::SyntaxEditor(editors, wxID_ANY);
     configure(e, p);
     if (!e->LoadFile(P(p))) {
       e->Destroy();
       throw std::runtime_error("Cannot read file");
     }
     docs[e] = {p};
-    palette.editor(e);
+    applyEditorSettings(e);
     editors->AddPage(e, P(p.filename()), true);
     if (line) e->GotoLine(int(line - 1));
     Json evt = Json::object();
@@ -251,6 +229,9 @@ class Frame : public wxFrame {
                        wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
       if (showModal(dlg) != wxID_OK) return false;
       d.path = F(dlg.GetPath());
+      if (auto* syntax = dynamic_cast<wxui::SyntaxEditor*>(e))
+        syntax->setLanguage(dodev::syntax::detect(d.path));
+      applyEditorSettings(e);
     }
     if (!e->SaveFile(P(d.path)))
       throw std::runtime_error("Cannot save file: " + d.path.u8string());
@@ -270,7 +251,7 @@ class Frame : public wxFrame {
     return r == wxNO || (r == wxYES && save(e));
   }
   void newDoc(const fs::path& typeHint = {}) {
-    auto e = new wxStyledTextCtrl(editors, wxID_ANY);
+    auto e = new wxui::SyntaxEditor(editors, wxID_ANY);
     configure(e, typeHint);
     docs[e] = {};
     editors->AddPage(e, "Untitled", true);
@@ -494,6 +475,9 @@ class Frame : public wxFrame {
   }
   void tick() {
     pollTaskPicker();
+    for (auto& d : docs)
+      if (auto* syntax = dynamic_cast<wxui::SyntaxEditor*>(d.first))
+        syntax->pollSyntax();
     for (auto t : allTerminals()) {
       auto out = t->session.takeOutput();
       if (!out.empty()) {

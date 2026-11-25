@@ -60,3 +60,7 @@ See [Launch.json menu and direct execution](docs/WX_5_1_5.md). Open `examples/la
 ## 5.1.6: Docker Manager
 
 Enable **Docker Manager** in Settings > Plugins, restart, then open Plugins > Docker Manager. See [Docker Manager documentation](docs/WX_5_1_6_DOCKER.md) for image/container operations, interactive terminal support, CLI settings and limitations.
+
+## 5.1.7: Syntax Highlighting
+
+Open **Settings > Syntax Highlighting** to configure theme-wide and language-specific token styles or individual keywords. Inheritance, preview, reset and persistent settings are described in [Syntax Highlighting](docs/WX_5_1_7_SYNTAX.md).

@@ -57,6 +57,7 @@ Json SettingsManager::defaultSettings() {
       "general":{"language":"en","restoreSession":true,"autoSave":false,"lastFolder":""},
       "editor":{"fontFamily":"monospace","fontFile":"","fontSize":14,"tabSize":4,"insertSpaces":true,"wordWrap":false,"lineNumbers":true},
       "appearance":{"theme":"Music Nocturne","uiFontFile":"","uiFontSize":13,"customThemesDirectory":"","preferredThemeFormat":"json"},
+      "syntaxHighlighting":{"global":{},"themes":{}},
       "terminal":{"fontFamily":"monospace","fontFile":"","fontSize":14,"defaultShell":"","scrollbackLines":3000},
       "templates":{"directory":"","associations":{".cpp":"cpp17",".hpp":"cpp-header",".h":"cpp-header",".py":"python",".json":"json",".xml":"xml"}},
       "plugins":{"enabled":true,"directory":"","safeMode":false,"enabledIds":[],"disabled":[]}

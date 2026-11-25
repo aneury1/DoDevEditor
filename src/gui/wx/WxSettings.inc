@@ -42,7 +42,11 @@ void applyEditorSettings(wxStyledTextCtrl* e) {
   auto family = settings.getString("editor.fontFamily");
   if (!family.empty() && family != "monospace") font.SetFaceName(W(family));
   for (int i = 0; i < 256; ++i) e->StyleSetFont(i, font);
-  palette.editor(e);
+  if (auto* syntax = dynamic_cast<wxui::SyntaxEditor*>(e))
+    syntax->applySyntax(palette, themeName, settings.get("syntaxHighlighting"),
+                        font);
+  else
+    palette.editor(e);
 }
 void selectTheme(const std::string& name, bool persist = true) {
   auto t = themes.find(name);
@@ -373,6 +377,22 @@ void settingsDialog() {
     choice->SetStringSelection(W(themeName));
   });
   button(p, p->GetSizer(), "Export current theme", [this] { themeExport(); });
+  p = pane("Syntax Highlighting");
+  auto syntaxFont = wxFont(
+      wxFontInfo(std::clamp(settings.getInt("editor.fontSize", 14), 8, 64))
+          .Family(wxFONTFAMILY_TELETYPE));
+  auto syntaxPage = new wxui::SyntaxSettingsPanel(
+      p, themes, themeName, settings.get("syntaxHighlighting"), syntaxFont);
+  p->GetSizer()->Add(syntaxPage, 1, wxEXPAND | wxALL, 4);
+  store.push_back([this, syntaxPage] {
+    settings.set("syntaxHighlighting", syntaxPage->value());
+  });
+  reset.push_back([syntaxPage] { syntaxPage->resetAll(); });
+  tabs->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED,
+             [syntaxPage, choice](wxBookCtrlEvent& e) {
+               syntaxPage->setPreviewTheme(S(choice->GetStringSelection()));
+               e.Skip();
+             });
   p = pane("Terminal");
   field(p, "Shell executable/profile (restart terminal to apply)",
         "terminal.defaultShell");
@@ -437,6 +457,7 @@ void settingsDialog() {
       saveSettings();
       loadThemes();
       selectTheme(settings.getString("appearance.theme"), false);
+      syntaxPage->setPreviewTheme(themeName);
       auto dir = settings.getString("templates.directory");
       templates.loadDirectory(dir.empty() ? settings.directory() / "templates"
                                           : fs::u8path(dir));
