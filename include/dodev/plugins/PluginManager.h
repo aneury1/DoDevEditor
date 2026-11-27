@@ -74,6 +74,18 @@ class PluginManager {
     std::function<bool(const std::string&, const std::string&,
                        const std::string&, const std::string&)>
         showTextView;
+    std::function<bool(const std::string&, const std::string&,
+                       const std::string&, const std::string&)>
+        showHtmlView;
+    std::function<bool(const std::string&, const std::string&, const void*,
+                       size_t)>
+        showImageView;
+    std::function<bool(const std::string&, const std::string&,
+                       const DodevTreeNode*, size_t)>
+        showTreeView;
+    std::function<bool(const std::string&, const std::string&,
+                       const std::string&)>
+        showMediaView;
     std::function<bool(const std::string&, bool,
                        std::function<void(const std::string&)>)>
         selectPath;
@@ -102,6 +114,9 @@ class PluginManager {
   size_t discoverAndLoad(const std::filesystem::path& dir);
   size_t discoverAndLoad(const std::vector<std::filesystem::path>& directories);
   bool execute(const std::string& commandId);
+  bool supportsPreview(const std::filesystem::path&) const;
+  bool previewFile(const std::filesystem::path&,
+                   const std::string* source = nullptr);
   void buildView(const PluginView& view, const DodevUiBuilder& builder);
   void emit(const std::string& event, const std::string& payload = "{}");
   bool isEnabled(const std::string& id) const;
@@ -150,6 +165,13 @@ class PluginManager {
   std::vector<PluginSetting> settingsSpecs_;
   std::vector<PluginSettingsAction> settingsActions_;
   std::vector<Subscription> subscriptions_;
+  struct FilePreview {
+    Instance* owner;
+    std::string extension;
+    DodevFilePreviewFn callback;
+    void* data;
+  };
+  std::vector<FilePreview> previews_;
   std::vector<std::string> diagnostics_;
   bool activate(PluginManifest manifest, std::string* error);
   static Instance* instance(void* context);
@@ -180,6 +202,14 @@ class PluginManager {
                               void*);
   static int hostShowTextView(void*, const char*, const char*, const char*,
                               const char*);
+  static int hostShowHtmlView(void*, const char*, const char*, const char*,
+                              const char*);
+  static int hostRegisterPreview(void*, const char*, DodevFilePreviewFn, void*);
+  static int hostImageView(void*, const char*, const char*, const void*,
+                           size_t);
+  static int hostTreeView(void*, const char*, const char*, const DodevTreeNode*,
+                          size_t);
+  static int hostMediaView(void*, const char*, const char*, const char*);
   static int hostRunJob(void*, const char*, DodevWorkFn, void*);
   static int hostSelectPath(void*, const char*, int, DodevPromptFn, void*);
   static int hostOpenSerialMonitor(void*);

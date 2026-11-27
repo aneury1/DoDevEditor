@@ -3,6 +3,7 @@ option(DODEV_BUILD_GUI "Build wxWidgets desktop frontend" ON)
 option(DODEV_BUILD_TESTS "Build and register regression tests" ON)
 option(DODEV_BUILD_PLUGIN_EXAMPLES "Build native plugin examples (including Docker Manager)" ON)
 option(DODEV_BUILD_QRCODE_PLUGIN "Build and install QR Code plugin" ON)
+option(DODEV_BUILD_FILE_PREVIEW_PLUGIN "Build File Preview plugin" ON)
 option(DODEV_BUILD_HTTP_CLIENT_PLUGIN "Build HTTP Client plugin" ON)
 # Windows defaults to fetching only when an installed package is unavailable.
 option(DODEV_FETCH_WXWIDGETS "Fetch wxWidgets from source if not installed" ${WIN32})

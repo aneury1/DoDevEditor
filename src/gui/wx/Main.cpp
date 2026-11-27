@@ -50,6 +50,8 @@
 #include "TerminalSession.h"
 #include "WxExplorerModel.h"
 #include "WxJournal.h"
+#include "WxPreviewViews.h"
+#include "WxStaticHtml.h"
 #include "WxSyntaxSettings.h"
 #include "WxTerminal.h"
 #include "WxTheme.h"
@@ -200,6 +202,34 @@ class Frame : public wxFrame {
                       {"Toggle line comment", "edit.toggle_line_comment"},
                       {"Format document (clang-format)", "editor.format"}});
     });
+  }
+  void previewPath(const fs::path& path) {
+    auto p = fs::absolute(path).lexically_normal();
+    for (auto& d : docs)
+      if (d.second.path == p && d.first->GetModify()) {
+        auto text = S(d.first->GetText());
+        if (plugins.previewFile(p, &text)) return;
+        throw std::runtime_error("No preview available");
+      }
+    if (!plugins.previewFile(p))
+      throw std::runtime_error(
+          "No preview available. Enable File Preview in Settings > Plugins.");
+  }
+  void openChoice(const fs::path& path) {
+    if (!plugins.supportsPreview(path)) {
+      open(path);
+      return;
+    }
+    wxArrayString choices;
+    choices.Add("Open as Text");
+    choices.Add("Open as Preview");
+    wxSingleChoiceDialog dialog(
+        this, "Select how to open " + P(path.filename()), "Open file", choices);
+    if (showModal(dialog) != wxID_OK) return;
+    if (dialog.GetSelection() == 1)
+      previewPath(path);
+    else
+      open(path);
   }
   void open(fs::path p, size_t line = 0) {
     p = fs::absolute(p).lexically_normal();
@@ -710,7 +740,7 @@ class Frame : public wxFrame {
 #include "WxTools.inc"
  public:
   Frame()
-      : wxFrame(nullptr, wxID_ANY, "DoDevEditor wx 5.2.9", wxDefaultPosition,
+      : wxFrame(nullptr, wxID_ANY, "DoDevEditor wx 5.3.1", wxDefaultPosition,
                 wxSize(1250, 850)),
         aui(this),
         timer(this) {
@@ -762,7 +792,7 @@ class Frame : public wxFrame {
       try {
         auto d = static_cast<PathData*>(tree->GetItemData(e.GetItem()));
         if (d && fs::is_regular_file(d->path))
-          open(d->path);
+          openChoice(d->path);
         else if (d && wxui::explorer::canExpand(d->path, root)) {
           if (tree->IsExpanded(e.GetItem()))
             tree->Collapse(e.GetItem());
@@ -781,6 +811,8 @@ class Frame : public wxFrame {
       contextMenu(tree, {{"New file...", "explorer.new_file"},
                          {"New directory...", "explorer.new_folder"},
                          {"Open", "explorer.open"},
+                         {"Open as Text", "explorer.open_text"},
+                         {"Open as Preview", "explorer.preview"},
                          {"Rename...", "explorer.rename"},
                          {"Delete...", "explorer.delete"},
                          {"Copy path", "explorer.copy_path"},
@@ -1063,6 +1095,64 @@ class Frame : public wxFrame {
       aui.Update();
       return true;
     };
+    hooks.showHtmlView = [this](const std::string& id, const std::string& title,
+                                const std::string& where,
+                                const std::string& html) {
+      auto* book = where == "Editor"      ? editors
+                   : where == "Workspace" ? side
+                   : where == "Output"    ? bottom
+                                          : nullptr;
+      if (!book || html.size() > 16 * 1024 * 1024) return false;
+      auto name = W("dodev.plugin.view:" + id);
+      for (size_t i = 0; i < book->GetPageCount(); ++i)
+        if (book->GetPage(i)->GetName() == name) {
+          auto* view = dynamic_cast<wxui::StaticHtmlView*>(book->GetPage(i));
+          if (!view) return false;
+          bool ok = view->SetPage(W(html));
+          book->SetSelection(i);
+          if (book != editors) aui.GetPane(book).Show();
+          aui.Update();
+          return ok;
+        }
+      auto* view = new wxui::StaticHtmlView(book);
+      view->SetName(name);
+      if (!view->SetPage(W(html))) {
+        view->Destroy();
+        return false;
+      }
+      book->AddPage(view, W(title), true);
+      if (book != editors) aui.GetPane(book).Show();
+      aui.Update();
+      return true;
+    };
+    hooks.showImageView = [this](const std::string& id,
+                                 const std::string& title, const void* data,
+                                 size_t n) {
+      auto* p = wxui::imagePreview(editors, data, n);
+      if (!p) return false;
+      p->SetName(W("dodev.plugin.view:" + id));
+      palette.apply(p);
+      editors->AddPage(p, W(title), true);
+      return true;
+    };
+    hooks.showTreeView = [this](const std::string& id, const std::string& title,
+                                const DodevTreeNode* nodes, size_t n) {
+      auto* p = wxui::treePreview(editors, nodes, n);
+      p->SetName(W("dodev.plugin.view:" + id));
+      palette.apply(p);
+      editors->AddPage(p, W(title), true);
+      return true;
+    };
+    hooks.showMediaView = [this](const std::string& id,
+                                 const std::string& title,
+                                 const std::string& path) {
+      auto* p = wxui::mediaPreview(editors, P(fs::u8path(path)));
+      if (!p) return false;
+      p->SetName(W("dodev.plugin.view:" + id));
+      palette.apply(p);
+      editors->AddPage(p, W(title), true);
+      return true;
+    };
     plugins.setHostHooks(std::move(hooks));
     auto customPlugins = settings.getString("plugins.directory");
     plugins.discoverAndLoad(std::vector<fs::path>{
@@ -1229,6 +1319,7 @@ static std::vector<fs::path> startup;
 class App : public wxApp {
  public:
   bool OnInit() override {
+    wxInitAllImageHandlers();
     auto f = new Frame;
     f->Show();
     try {

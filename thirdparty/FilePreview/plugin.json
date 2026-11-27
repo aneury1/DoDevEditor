@@ -1,0 +1,1 @@
+{"id":"com.dodev.filepreview","name":"File Preview","version":"1.1.0","description":"Document, image, database, diagram and media previews in editor tabs","apiVersion":1,"entry":{"linux":"libdodev_file_preview_plugin.so","windows":"dodev_file_preview_plugin.dll","macos":"libdodev_file_preview_plugin.dylib"}}

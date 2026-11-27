@@ -14,6 +14,13 @@ extern "C" {
 
 typedef struct DodevHostAPI DodevHostAPI;
 typedef struct DodevUiBuilder DodevUiBuilder;
+/* File preview handler: source is borrowed, NULL means read from disk. */
+typedef int (*DodevFilePreviewFn)(const DodevHostAPI*, const char* path,
+                                  const char* source, size_t size, void*);
+typedef struct DodevTreeNode {
+  size_t depth;
+  const char* label;
+} DodevTreeNode;
 typedef void (*DodevCommandFn)(const DodevHostAPI* host, void* user_data);
 typedef void (*DodevEventFn)(const DodevHostAPI* host, const char* event,
                              const char* json_payload, void* user_data);
@@ -137,6 +144,20 @@ struct DodevHostAPI {
      remains running when this call returns. Worker may only use cancel
      callback. */
   int (*run_job)(void*, const char*, DodevWorkFn, void*);
+  /* Generic static HTML view. Copies strings synchronously. */
+  int (*show_html_view)(void*, const char* id, const char* title,
+                        const char* side, const char* html);
+  /* Additive, generic preview APIs. Extensions are comma-separated, including
+     dots; * is an explicit-preview fallback. All buffers are consumed
+     synchronously, and are not retained by the host. */
+  int (*register_file_preview)(void*, const char* extensions,
+                               DodevFilePreviewFn, void*);
+  int (*show_image_view)(void*, const char* id, const char* title,
+                         const void* bytes, size_t size);
+  int (*show_tree_view)(void*, const char* id, const char* title,
+                        const DodevTreeNode*, size_t count);
+  int (*show_media_view)(void*, const char* id, const char* title,
+                         const char* local_path);
 };
 /* Test optional host function availability before use; older binaries may not
  * expose it. */

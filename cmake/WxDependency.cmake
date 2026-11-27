@@ -1,13 +1,13 @@
 # One dependency interface for system wxWidgets and the source fallback.
 # Keep all wx options target-local, so standalone plugins remain independent.
-set(DODEV_WX_COMPONENTS core base aui stc adv)
+set(DODEV_WX_COMPONENTS core base aui stc adv html)
 set(DODEV_WX_PROVIDER "")
 add_library(dodev_wx_dependencies INTERFACE)
 
 # First try an installed modern CMake package on Windows (e.g. vcpkg), then
 # CMake's traditional FindwxWidgets module (wx-config or Windows SDK paths).
 if(NOT DODEV_WX_FORCE_FETCH AND NOT FETCHCONTENT_SOURCE_DIR_WXWIDGETS AND NOT DODEV_WX_SOURCE_ARCHIVE)
-    message(STATUS "[wxWidgets] Searching for an installed wxWidgets 3.2+ (core/base/aui/stc/adv)")
+    message(STATUS "[wxWidgets] Searching for an installed wxWidgets 3.2+ (core/base/aui/stc/adv/html)")
     if(WIN32)
         find_package(wxWidgets 3.2 QUIET CONFIG COMPONENTS ${DODEV_WX_COMPONENTS})
         # Imported targets cannot be removed once a config package has loaded.
@@ -50,7 +50,7 @@ endif()
 if(NOT DODEV_WX_PROVIDER)
     if(NOT DODEV_FETCH_WXWIDGETS AND NOT DODEV_WX_FORCE_FETCH AND NOT FETCHCONTENT_SOURCE_DIR_WXWIDGETS AND NOT DODEV_WX_SOURCE_ARCHIVE)
         message(FATAL_ERROR
-            "wxWidgets 3.2+ with core, base, aui, stc and adv is required.\n"
+            "wxWidgets 3.2+ with core, base, aui, stc, adv and html is required.\n"
             "Arch/CachyOS: install wxwidgets-gtk3; Debian/Ubuntu: libwxgtk3.2-dev.\n"
             "Custom Unix install: -DwxWidgets_CONFIG_EXECUTABLE=/path/to/wx-config\n"
             "Windows: -DwxWidgets_ROOT_DIR=C:/path/to/wxWidgets and, if needed, -DwxWidgets_LIB_DIR=...\n"

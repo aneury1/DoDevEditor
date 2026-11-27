@@ -118,13 +118,13 @@ struct RuleSet {
       Json v = Json::object();
 #define JFIELD(x) v[#x] = s.x;
       JFIELD(name)
-      JFIELD(type)
-      JFIELD(payload) JFIELD(application) JFIELD(service) JFIELD(host)
-          JFIELD(process) JFIELD(pid) JFIELD(from) JFIELD(to) JFIELD(foreground)
-              JFIELD(background) JFIELD(enabled) JFIELD(regex)
-                  JFIELD(caseSensitive) JFIELD(minPriority) JFIELD(maxPriority)
+      JFIELD(type) JFIELD(payload) JFIELD(application) JFIELD(service)
+          JFIELD(host) JFIELD(process) JFIELD(pid) JFIELD(from) JFIELD(to)
+              JFIELD(foreground) JFIELD(background) JFIELD(enabled)
+                  JFIELD(regex) JFIELD(caseSensitive) JFIELD(minPriority)
+                      JFIELD(maxPriority)
 #undef JFIELD
-                      a.push_back(std::move(v));
+                          a.push_back(std::move(v));
     }
     j["rules"] = Json(std::move(a));
     return j.dump(2);
@@ -172,11 +172,11 @@ struct RuleSet {
       RuleSpec s;
 #define JSTR(x) s.x = v[#x].string(s.x);
       JSTR(name)
-      JSTR(type)
-      JSTR(payload) JSTR(application) JSTR(service) JSTR(host) JSTR(process)
-          JSTR(pid) JSTR(from) JSTR(to) JSTR(foreground) JSTR(background)
+      JSTR(type) JSTR(payload) JSTR(application) JSTR(service) JSTR(host)
+          JSTR(process) JSTR(pid) JSTR(from) JSTR(to) JSTR(foreground)
+              JSTR(background)
 #undef JSTR
-              s.enabled = v["enabled"].boolean(true);
+                  s.enabled = v["enabled"].boolean(true);
       s.regex = v["regex"].boolean(false);
       s.caseSensitive = v["caseSensitive"].boolean(false);
       s.minPriority = v["minPriority"].integer(-1);

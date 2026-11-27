@@ -1,11 +1,13 @@
 #include "dodev/plugins/PluginManager.h"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <set>
+#include <sstream>
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -98,6 +100,7 @@ PluginManager::~PluginManager() { shutdown(); }
 void PluginManager::shutdown() {
   // Callbacks and user data must never be called after their module is
   // unloaded.
+  previews_.clear();
   subscriptions_.clear();
   views_.clear();
   commands_.clear();
@@ -303,13 +306,19 @@ bool PluginManager::activate(PluginManifest manifest, std::string* error) {
                  &hostPromptSecret,
                  &hostShowTextView,
                  &hostSelectPath,
-                 &hostRunJob};
+                 &hostRunJob,
+                 &hostShowHtmlView,
+                 &hostRegisterPreview,
+                 &hostImageView,
+                 &hostTreeView,
+                 &hostMediaView};
   entry->plugin = {sizeof(DodevPluginAPI), DODEV_PLUGIN_API_VERSION, nullptr};
   const size_t commandsBefore = commands_.size(), menusBefore = menus_.size(),
                viewsBefore = views_.size(),
                settingsBefore = settingsSpecs_.size(),
                eventsBefore = subscriptions_.size(),
-               actionsBefore = settingsActions_.size();
+               actionsBefore = settingsActions_.size(),
+               previewsBefore = previews_.size();
   int ok = 0;
   try {
     ok = init(&entry->host, &entry->plugin);
@@ -323,6 +332,7 @@ bool PluginManager::activate(PluginManifest manifest, std::string* error) {
     settingsSpecs_.resize(settingsBefore);
     subscriptions_.resize(eventsBefore);
     settingsActions_.resize(actionsBefore);
+    previews_.resize(previewsBefore);
     if (error) *error = "Plugin initialization failed or API version mismatch";
     return false;
   }
@@ -576,6 +586,93 @@ int PluginManager::hostShowTextView(void* ctx, const char* id,
                  hook(p->manifest.id + ":" + id, title, side, text)
              ? 1
              : 0;
+}
+int PluginManager::hostShowHtmlView(void* ctx, const char* id,
+                                    const char* title, const char* side,
+                                    const char* html) {
+  auto* p = instance(ctx);
+  auto& hook = p->owner->hooks_.showHtmlView;
+  return id && simpleId(id) && title && side && html && hook &&
+                 hook(p->manifest.id + ":" + id, title, side, html)
+             ? 1
+             : 0;
+}
+static std::string previewExtension(std::string ext) {
+  for (auto& c : ext)
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  return ext;
+}
+int PluginManager::hostRegisterPreview(void* ctx, const char* extensions,
+                                       DodevFilePreviewFn fn, void* data) {
+  auto* p = instance(ctx);
+  if (!extensions || !fn) return 0;
+  std::istringstream input(extensions);
+  std::string ext;
+  std::vector<std::string> valid;
+  while (std::getline(input, ext, ',')) {
+    ext = previewExtension(ext);
+    if (ext != "*" &&
+        (ext.size() < 2 || ext.size() > 32 || ext.front() != '.' ||
+         ext.find_first_not_of(".abcdefghijklmnopqrstuvwxyz0123456789_-") !=
+             std::string::npos))
+      return 0;
+    valid.push_back(ext);
+  }
+  if (valid.empty()) return 0;
+  for (auto& x : valid) p->owner->previews_.push_back({p, x, fn, data});
+  return 1;
+}
+bool PluginManager::supportsPreview(const std::filesystem::path& path) const {
+  auto ext = previewExtension(path.extension().u8string());
+  for (auto& p : previews_)
+    if (p.extension == ext) return true;
+  return false;
+}
+bool PluginManager::previewFile(const std::filesystem::path& path,
+                                const std::string* source) {
+  auto ext = previewExtension(path.extension().u8string());
+  auto name = path.u8string();
+  for (auto match : {ext, std::string("*")})
+    for (auto& p : previews_)
+      if (p.extension == match) {
+        try {
+          return p.callback(&p.owner->host, name.c_str(),
+                            source ? source->data() : nullptr,
+                            source ? source->size() : 0, p.data) != 0;
+        } catch (...) {
+          diagnostics_.push_back("Preview failed: " + name);
+          return false;
+        }
+      }
+  return false;
+}
+int PluginManager::hostImageView(void* ctx, const char* id, const char* title,
+                                 const void* bytes, size_t size) {
+  auto* p = instance(ctx);
+  auto& h = p->owner->hooks_.showImageView;
+  return id && simpleId(id) && title && bytes && size &&
+         size <= 64u * 1024 * 1024 && h &&
+         h(p->manifest.id + ":" + id, title, bytes, size);
+}
+int PluginManager::hostTreeView(void* ctx, const char* id, const char* title,
+                                const DodevTreeNode* nodes, size_t count) {
+  auto* p = instance(ctx);
+  auto& h = p->owner->hooks_.showTreeView;
+  if (!id || !simpleId(id) || !title || !nodes || !count || count > 10000 ||
+      nodes[0].depth != 0 || !h)
+    return 0;
+  for (size_t i = 0; i < count; ++i)
+    if (!nodes[i].label || nodes[i].depth > 100 ||
+        (i && nodes[i].depth > nodes[i - 1].depth + 1))
+      return 0;
+  return h(p->manifest.id + ":" + id, title, nodes, count);
+}
+int PluginManager::hostMediaView(void* ctx, const char* id, const char* title,
+                                 const char* path) {
+  auto* p = instance(ctx);
+  auto& h = p->owner->hooks_.showMediaView;
+  return id && simpleId(id) && title && path && h &&
+         h(p->manifest.id + ":" + id, title, path);
 }
 int PluginManager::hostRunJob(void* ctx, const char* title, DodevWorkFn work,
                               void* data) {

@@ -75,6 +75,14 @@ void explorerAction(const std::string& a) {
       populate(id);
       tree->Expand(id);
     } else
+      openChoice(p);
+    return;
+  }
+  if (a == "explorer.open_text" || a == "explorer.preview") {
+    if (!fs::is_regular_file(p)) throw std::runtime_error("Select a file");
+    if (a == "explorer.preview")
+      previewPath(p);
+    else
       open(p);
     return;
   }
@@ -1318,6 +1326,9 @@ void buildMenus() {
     else
       item(m, spec.label, spec.action);
   }
+  item(get("Archivo"), "Open as Text...", "file.open_text");
+  item(get("Archivo"), "Open as Preview...", "file.open_preview");
+  item(get("Archivo"), "Preview selected workspace file", "explorer.preview");
   auto themeMenu = new wxMenu;
   get("Ver")->AppendSubMenu(themeMenu, "Color Theme");
   for (auto& n : themes.names()) item(themeMenu, n, "theme.select:" + n);
@@ -1403,7 +1414,15 @@ void dispatch(const std::string& a) {
     newDoc();
   else if (a == "file.open") {
     wxFileDialog d(this, "Open file", P(root));
-    if (showModal(d) == wxID_OK) open(F(d.GetPath()));
+    if (showModal(d) == wxID_OK) openChoice(F(d.GetPath()));
+  } else if (a == "file.open_text" || a == "file.open_preview") {
+    wxFileDialog d(this, "Open file", P(root));
+    if (showModal(d) == wxID_OK) {
+      if (a == "file.open_preview")
+        previewPath(F(d.GetPath()));
+      else
+        open(F(d.GetPath()));
+    }
   } else if (a == "folder.open") {
     wxDirDialog d(this, "Open folder", P(root));
     if (showModal(d) == wxID_OK) workspace(F(d.GetPath()));
@@ -1429,7 +1448,7 @@ void dispatch(const std::string& a) {
   else if (a == "app.exit")
     Close();
   else if (a == "app.about")
-    wxMessageBox("DoDevEditor wxWidgets 5.2.9\nC++17 · wxAUI · Scintilla",
+    wxMessageBox("DoDevEditor wxWidgets 5.3.1\nC++17 · wxAUI · Scintilla",
                  "About", wxOK, this);
   else if (a == "panel.explorer")
     showSide(0);

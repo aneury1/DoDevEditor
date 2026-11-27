@@ -34,11 +34,12 @@ function(dodev_fetch_wxwidgets archive_url archive_hash)
     set(wxBUILD_BENCHMARKS OFF CACHE BOOL "Skip wx benchmarks" FORCE)
     set(wxUSE_GUI ON CACHE BOOL "Enable wx GUI" FORCE)
     set(wxUSE_AUI ON CACHE BOOL "Enable docking" FORCE)
+    set(wxUSE_HTML ON CACHE BOOL "Enable static HTML view" FORCE)
     set(wxUSE_STC ON CACHE BOOL "Enable Scintilla" FORCE)
     set(wxUSE_UNICODE ON CACHE BOOL "Enable Unicode" FORCE)
     # No editor code uses these optional modules; avoid SDK/browser dependencies.
     set(wxUSE_WEBVIEW OFF CACHE BOOL "Skip wxWebView" FORCE)
-    set(wxUSE_MEDIACTRL OFF CACHE BOOL "Skip wxMediaCtrl" FORCE)
+    set(wxUSE_MEDIACTRL ${WIN32} CACHE BOOL "Enable native media on Windows" FORCE)
     # wx 3.2 uses a separate setting for the MSVC CRT. Match the main project's
     # default /MD[d] or an explicitly selected /MT[d] runtime.
     if(MSVC)

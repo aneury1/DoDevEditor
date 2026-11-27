@@ -103,3 +103,10 @@ HTTP Client plugin: Workspace request form and history, one independent Editor t
 ### 5.2.9 — Windows dependency fallback
 
 Windows builds automatically fetch pinned wxWidgets 3.2.6 when no installed package is detected. Download/verification/extraction logs are visible, and the PowerShell build script saves configure/build/test logs. See [Windows build guide](docs/WX_5_2_9_WINDOWS_BUILD.md).
+
+### 5.3.0 — File Preview
+
+Independent native File Preview extension with static HTML, Markdown and CSV/TSV table views, JSON formatting and escaped text previews. Use Options > Preview active file or Preview file... after enabling the plugin. Requires wxWidgets html; the Windows source fallback enables it. See `docs/WX_5_3_0_FILE_PREVIEW.md` and `thirdparty/FilePreview/README.md`.
+
+## 5.3.1 File Preview
+File > Open offers text or preview for registered formats; Workspace context menu provides both choices. File Preview 1.1.0 adds images, hex, structured trees, read-only SQLite, optional PDF/SVG/diagram rendering and native media playback. See `thirdparty/FilePreview/README.md` and `docs/WX_5_3_1_FILE_PREVIEW.md` for prerequisites and limitations.
