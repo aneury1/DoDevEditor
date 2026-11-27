@@ -17,6 +17,7 @@ struct Options {
   ParserMode mode = ParserMode::Auto;
   std::string clangExecutable;  // empty: discover clang++ / clang in PATH
   int timeoutMs = 2500;
+  std::string captureKinds;  // comma-separated; empty = all
 };
 struct Call {
   std::string caller, callee;
@@ -32,6 +33,7 @@ struct Result {
 };
 // The active, unsaved buffer is passed directly to Clang via stdin. If Clang is
 // unavailable/invalid/times out, Auto mode falls back to the lexical parser.
+bool capturesKind(std::string_view kinds, std::string_view kind);
 Result extract(std::string_view path, std::string_view contents,
                const Options& options = {});
 std::string toCsv(const std::vector<Symbol>& rows);

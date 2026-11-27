@@ -20,6 +20,7 @@ struct PortOptions {
   // Explicit consent is required; only used following a permission-denied
   // error.
   bool allowPolkit = false;
+  bool captureAsAdministrator = false;
   std::string privilegedHelper;
 };
 struct Snapshot {

@@ -50,14 +50,14 @@ void Engine::reset() noexcept {}
   REQUIRE(toCsv(cpp.rows).find("test_run") != std::string::npos);
   const auto py =
       extract("a.py",
-              "class Example:\n    def run(self):\n        pass\nasync def "
-              "main():\n    pass\n\"\"\"def fake():\"\"\"\n");
+              "class Example:\n    def run(self):\n        pass\nasync "
+              "def main():\n    pass\n\"\"\"def fake():\"\"\"\n");
   REQUIRE(has(py, "Example") && has(py, "run") && has(py, "main") &&
           !has(py, "fake"));
   const auto js =
       extract("index.ts",
-              "export async function hello(x: string) {\n}\nconst go = (a) => "
-              "42;\nclass People { greet(name) { return name; } }\n");
+              "export async function hello(x: string) {\n}\nconst go = (a) "
+              "=> 42;\nclass People { greet(name) { return name; } }\n");
   REQUIRE(has(js, "hello") && has(js, "go") && has(js, "People") &&
           has(js, "greet"));
   const auto kt = extract(
@@ -76,8 +76,8 @@ void Engine::reset() noexcept {}
   // preserve editor navigation coordinates.
   const auto valid =
       extract("ok.cpp",
-              "namespace demo { class Widget { public: int run(int v) { return "
-              "v; } }; int execute(int n) { return n; } }\n");
+              "namespace demo { class Widget { public: int run(int v) { "
+              "return v; } }; int execute(int n) { return n; } }\n");
   REQUIRE(has(valid, "Widget") && has(valid, "execute") && has(valid, "run"));
   if (valid.parser == "Clang") REQUIRE(valid.rows.size() >= 3);
   const auto forcedRegex = extract(

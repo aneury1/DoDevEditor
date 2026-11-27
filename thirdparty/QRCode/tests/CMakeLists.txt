@@ -29,3 +29,8 @@ foreach(test_target IN ITEMS qrcode_encoder_tests qrcode_cli_test
         dodev_test_assertions(${test_target})
     endif()
 endforeach()
+
+add_executable(qrcode_payload_tests payload_tests.cpp)
+target_link_libraries(qrcode_payload_tests PRIVATE dodev_qr_core)
+dodev_test_assertions(qrcode_payload_tests)
+add_test(NAME qrcode_binary_payload COMMAND qrcode_payload_tests)

@@ -35,8 +35,28 @@ struct PluginView {
   DodevViewFn factory = nullptr;
   void* userData = nullptr;
 };
+// Presentation location, independent of any particular plugin or GUI toolkit.
+enum class PluginViewLocation { Editor, Output, Sidebar };
+inline PluginViewLocation pluginViewLocation(const PluginView& view) {
+  if (!view.isPanel || (view.side == "Tab" || view.side == "Editor"))
+    return PluginViewLocation::Editor;
+  if ((view.side == "Bottom" || view.side == "Output"))
+    return PluginViewLocation::Output;
+  return PluginViewLocation::Sidebar;
+}
+// Workspace panels are installed lazily when a project is opened.
+inline bool isWorkspacePluginView(const PluginView& view) {
+  return view.isPanel && view.side == "Workspace";
+}
 struct PluginSetting {
   std::string owner, key, description, defaultValue;
+  std::string label, type = "text";
+  int minimum = 0, maximum = 100;
+  std::vector<std::pair<std::string, std::string>> choices;  // value, label
+  bool accepts(const std::string& value) const;
+};
+struct PluginSettingsAction {
+  std::string owner, title, command;
 };
 class PluginManager {
  public:
@@ -45,6 +65,17 @@ class PluginManager {
         activeDocument;
     std::function<bool(const std::string& contents)> replaceDocument;
     std::function<bool(const std::string& command)> terminalCommand;
+    std::function<bool(const std::string&, const std::string&)>
+        openWorkspaceConfig;
+    std::function<bool(const std::string&, const std::string&,
+                       std::function<void(const std::string&)>)>
+        promptSecret;
+    std::function<bool(const std::string&, const std::string&,
+                       const std::string&, const std::string&)>
+        showTextView;
+    std::function<bool(const std::string&, bool,
+                       std::function<void(const std::string&)>)>
+        selectPath;
     std::function<bool()> openSerialMonitor;
     std::function<bool()> openSourceSymbols;
     std::function<bool()> openRemoteJournal;
@@ -82,6 +113,11 @@ class PluginManager {
   const std::vector<PluginSetting>& settingSpecs() const {
     return settingsSpecs_;
   }
+  const std::vector<PluginSettingsAction>& settingsActions() const {
+    return settingsActions_;
+  }
+  bool updatePluginSettings(const std::string& owner,
+                            const std::map<std::string, std::string>& values);
   std::string pluginSetting(const std::string& owner,
                             const std::string& key) const;
   Json pluginSettingJson(const std::string& owner, const std::string& key);
@@ -111,6 +147,7 @@ class PluginManager {
   std::vector<PluginMenuItem> menus_;
   std::vector<PluginView> views_;
   std::vector<PluginSetting> settingsSpecs_;
+  std::vector<PluginSettingsAction> settingsActions_;
   std::vector<Subscription> subscriptions_;
   std::vector<std::string> diagnostics_;
   bool activate(PluginManifest manifest, std::string* error);
@@ -125,6 +162,9 @@ class PluginManager {
   static int hostTemplate(void*, const char*, const char*, const char*,
                           const char*);
   static int hostTheme(void*, const char*);
+  static int hostSettingEx(void*, const char*, const char*, const char*,
+                           const char*);
+  static int hostSettingsAction(void*, const char*, const char*);
   static int hostSetting(void*, const char*, const char*, const char*);
   static const char* hostGetSetting(void*, const char*);
   static int hostSetSetting(void*, const char*, const char*);
@@ -134,6 +174,12 @@ class PluginManager {
   static int hostTerminalCommand(void*, const char*);
   static int hostPromptInput(void*, const char*, const char*, const char*,
                              DodevPromptFn, void*);
+  static int hostWorkspaceConfig(void*, const char*);
+  static int hostPromptSecret(void*, const char*, const char*, DodevPromptFn,
+                              void*);
+  static int hostShowTextView(void*, const char*, const char*, const char*,
+                              const char*);
+  static int hostSelectPath(void*, const char*, int, DodevPromptFn, void*);
   static int hostOpenSerialMonitor(void*);
   static int hostOpenSourceSymbols(void*);
   static int hostOpenRemoteJournal(void*);

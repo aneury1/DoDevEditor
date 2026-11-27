@@ -21,6 +21,8 @@ typedef void (*DodevViewFn)(const DodevHostAPI* host, const DodevUiBuilder* ui,
                             void* user_data);
 /* Input callbacks run later on the Raven UI thread.  The plugin must remain
  * loaded. */
+typedef void (*DodevRowFn)(const DodevHostAPI* host, const char* row_id,
+                           void* user_data);
 typedef void (*DodevPromptFn)(const DodevHostAPI* host, const char* text,
                               void* user_data);
 
@@ -31,6 +33,16 @@ struct DodevUiBuilder {
   void (*label)(void* context, const char* text);
   void (*button)(void* context, const char* title, const char* command_id);
   void (*read_only_text)(void* context, const char* text);
+  /* Row-major strings and IDs are copied synchronously; callback remains valid
+   * while loaded. */
+  void (*table)(void* context, const char* const* columns, size_t column_count,
+                const char* const* cells, const char* const* row_ids,
+                size_t row_count, const DodevHostAPI* host, DodevRowFn selected,
+                void* user_data);
+  /* Optional inline workspace profiles editor. Host copies the default JSON.
+     Uses the registered view owner and current workspace, not a global setting.
+   */
+  void (*workspace_profiles)(void* context, const char* default_json);
 };
 struct DodevHostAPI {
   uint32_t struct_size;
@@ -39,8 +51,12 @@ struct DodevHostAPI {
   void (*log)(void* context, int severity, const char* message);
   int (*register_command)(void* context, const char* id, const char* title,
                           DodevCommandFn callback, void* user_data);
+  /* Options is supported by the wx host since 5.2.3. Menu commands may be
+     registered command IDs or host actions plugin.view.<registered-view-id>. */
   int (*register_menu)(void* context, const char* location, const char* title,
                        const char* command_id);
+  /* Editor tab. register_panel with side Bottom targets the Output notebook;
+     Tab targets the editor; Left/Right target the workspace sidebar in wx. */
   int (*register_tab)(void* context, const char* id, const char* title,
                       DodevViewFn factory, void* user_data);
   int (*register_panel)(void* context, const char* id, const char* title,
@@ -81,6 +97,27 @@ struct DodevHostAPI {
   int (*debug_control)(void* context, const char* command);
   int (*debug_open_file)(void* context, const char* path);
   void (*debug_status)(void* context, const char* message);
+  /* Additive v1 settings schema. Values remain strings for ABI compatibility.
+     Schema JSON: label, type (text/multiline/bool/int/choice), min/max,
+     choices (strings or {value,label}), optional legacyKey for migration. */
+  int (*register_setting_ex)(void* context, const char* key,
+                             const char* default_value, const char* description,
+                             const char* schema_json);
+  int (*register_settings_action)(void* context, const char* title,
+                                  const char* command_id);
+  /* Workspace configuration belongs to the calling plugin. Host opens its JSON
+   * file. */
+  int (*open_workspace_config)(void* context, const char* initial_json);
+  /* Secret and path callbacks run synchronously before these functions return.
+   */
+  int (*prompt_secret)(void* context, const char* title, const char* label,
+                       DodevPromptFn callback, void* user_data);
+  /* Display or replace a named read-only tool view; side: Editor, Output,
+   * Workspace. */
+  int (*show_text_view)(void* context, const char* id, const char* title,
+                        const char* side, const char* text);
+  int (*select_path)(void* context, const char* title, int directory,
+                     DodevPromptFn callback, void* user_data);
 };
 /* Test optional host function availability before use; older binaries may not
  * expose it. */

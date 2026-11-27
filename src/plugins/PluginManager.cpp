@@ -1,6 +1,7 @@
 #include "dodev/plugins/PluginManager.h"
 
 #include <algorithm>
+#include <charconv>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -77,6 +78,7 @@ struct PluginManager::Instance {
   DodevHostAPI host{};
   DodevPluginAPI plugin{};
   Json settings = Json::object();
+  bool migratedSettings = false;
   std::string scratch;
   std::string scratchPath, scratchContents;
   ~Instance() {
@@ -101,6 +103,7 @@ void PluginManager::shutdown() {
   commands_.clear();
   menus_.clear();
   settingsSpecs_.clear();
+  settingsActions_.clear();
   instances_.clear();
 }
 PluginManager::Instance* PluginManager::instance(void* context) {
@@ -293,12 +296,19 @@ bool PluginManager::activate(PluginManifest manifest, std::string* error) {
                  &hostDebugLaunch,
                  &hostDebugControl,
                  &hostDebugOpenFile,
-                 &hostDebugStatus};
+                 &hostDebugStatus,
+                 &hostSettingEx,
+                 &hostSettingsAction,
+                 &hostWorkspaceConfig,
+                 &hostPromptSecret,
+                 &hostShowTextView,
+                 &hostSelectPath};
   entry->plugin = {sizeof(DodevPluginAPI), DODEV_PLUGIN_API_VERSION, nullptr};
   const size_t commandsBefore = commands_.size(), menusBefore = menus_.size(),
                viewsBefore = views_.size(),
                settingsBefore = settingsSpecs_.size(),
-               eventsBefore = subscriptions_.size();
+               eventsBefore = subscriptions_.size(),
+               actionsBefore = settingsActions_.size();
   int ok = 0;
   try {
     ok = init(&entry->host, &entry->plugin);
@@ -311,9 +321,14 @@ bool PluginManager::activate(PluginManifest manifest, std::string* error) {
     views_.resize(viewsBefore);
     settingsSpecs_.resize(settingsBefore);
     subscriptions_.resize(eventsBefore);
+    settingsActions_.resize(actionsBefore);
     if (error) *error = "Plugin initialization failed or API version mismatch";
     return false;
   }
+  if (entry->migratedSettings &&
+      !settings_.savePluginSettings(entry->manifest.id, entry->settings))
+    diagnostics_.push_back("Could not persist migrated settings for " +
+                           entry->manifest.id);
   instances_.push_back(std::move(entry));
   return true;
 }
@@ -343,7 +358,7 @@ int PluginManager::hostMenu(void* ctx, const char* location, const char* title,
   if (!title || !*title || !command || !*command) return 0;
   const std::string loc = location ? location : "Plugins";
   if (loc != "File" && loc != "Edit" && loc != "View" && loc != "Tools" &&
-      loc != "Plugins" && loc != "Run")
+      loc != "Plugins" && loc != "Run" && loc != "Options")
     return 0;
   p->owner->menus_.push_back({loc, title, command, p->manifest.id});
   return 1;
@@ -364,7 +379,8 @@ int PluginManager::hostPanel(void* ctx, const char* id, const char* title,
   auto* p = instance(ctx);
   if (!id || !simpleId(id) || !title) return 0;
   const std::string loc = side ? side : "Right";
-  if (loc != "Left" && loc != "Right" && loc != "Bottom" && loc != "Tab")
+  if (loc != "Left" && loc != "Right" && loc != "Bottom" && loc != "Tab" &&
+      loc != "Workspace" && loc != "Editor" && loc != "Output")
     return 0;
   for (const auto& v : p->owner->views_)
     if (v.id == id) return 0;
@@ -390,33 +406,99 @@ int PluginManager::hostTheme(void* ctx, const char* xml) {
   p->owner->themes_.add(std::move(theme));
   return 1;
 }
+bool PluginSetting::accepts(const std::string& value) const {
+  if (type == "bool") return value == "true" || value == "false";
+  if (type == "choice")
+    return std::any_of(choices.begin(), choices.end(),
+                       [&](const auto& c) { return c.first == value; });
+  if (type == "int") {
+    int n = 0;
+    auto r = std::from_chars(value.data(), value.data() + value.size(), n);
+    return r.ec == std::errc{} && r.ptr == value.data() + value.size() &&
+           n >= minimum && n <= maximum;
+  }
+  return true;
+}
 int PluginManager::hostSetting(void* ctx, const char* key, const char* def,
                                const char* desc) {
+  return hostSettingEx(ctx, key, def, desc, "{}");
+}
+int PluginManager::hostSettingEx(void* ctx, const char* key, const char* def,
+                                 const char* desc, const char* schema) {
   auto* p = instance(ctx);
-  if (!key || !simpleId(key) || !def) return 0;
+  if (!key || !simpleId(key) || !def || !schema) return 0;
   for (const auto& setting : p->owner->settingsSpecs_)
     if (setting.owner == p->manifest.id && setting.key == key) return 0;
-  p->owner->settingsSpecs_.push_back(
-      {p->manifest.id, key, desc ? desc : "", def});
-  if (!p->settings.find(key)) p->settings[key] = def;
+  Json j;
+  if (!Json::parse(schema, j) || !j.isObject()) return 0;
+  PluginSetting sp;
+  sp.owner = p->manifest.id;
+  sp.key = key;
+  sp.description = desc ? desc : "";
+  sp.defaultValue = def;
+  sp.label = j["label"].string(key);
+  sp.type = j["type"].string("text");
+  if (sp.type != "text" && sp.type != "multiline" && sp.type != "bool" &&
+      sp.type != "int" && sp.type != "choice")
+    return 0;
+  sp.minimum = j["min"].integer(0);
+  sp.maximum = j["max"].integer(100);
+  if (sp.minimum > sp.maximum) return 0;
+  for (const auto& c : j["choices"].asArray()) {
+    auto value = c.isString() ? c.string() : c["value"].string();
+    auto label = c.isString() ? value : c["label"].string(value);
+    if ((!c.isString() && !c["value"].isString()) ||
+        std::any_of(sp.choices.begin(), sp.choices.end(),
+                    [&](const auto& x) { return x.first == value; }))
+      return 0;
+    sp.choices.emplace_back(value, label);
+  }
+  if (!sp.accepts(def)) return 0;
+  const auto* stored = p->settings.find(key);
+  if (!stored) {
+    auto legacy = j["legacyKey"].string();
+    auto value = legacy.empty() ? std::string(def)
+                                : p->owner->settings_.getString(legacy, def);
+    p->settings[key] = sp.accepts(value) ? value : std::string(def);
+    if (!legacy.empty() && !p->owner->settings_.get(legacy).isString())
+      legacy.clear();
+    if (!legacy.empty()) p->migratedSettings = true;
+  } else if (!stored->isString() || !sp.accepts(stored->string()))
+    p->settings[key] = def;
+  p->owner->settingsSpecs_.push_back(std::move(sp));
   return 1;
+}
+int PluginManager::hostSettingsAction(void* ctx, const char* title,
+                                      const char* command) {
+  auto* p = instance(ctx);
+  if (!title || !*title || !command) return 0;
+  for (const auto& c : p->owner->commands_)
+    if (c.owner == p->manifest.id && c.id == command) {
+      p->owner->settingsActions_.push_back({p->manifest.id, title, command});
+      return 1;
+    }
+  return 0;
 }
 const char* PluginManager::hostGetSetting(void* ctx, const char* key) {
   auto* p = instance(ctx);
   if (!key || !simpleId(key)) return "";
-  p->scratch = p->settings[key].string();
+  auto* value = p->settings.find(key);
+  p->scratch = value ? value->string() : std::string{};
   return p->scratch.c_str();
 }
 int PluginManager::hostSetSetting(void* ctx, const char* key,
                                   const char* value) {
   auto* p = instance(ctx);
   if (!key || !simpleId(key) || !value) return 0;
-  p->settings[key] = value;
-  std::string error;
-  return p->owner->settings_.savePluginSettings(p->manifest.id, p->settings,
-                                                &error)
-             ? 1
-             : 0;
+  for (const auto& sp : p->owner->settingsSpecs_)
+    if (sp.owner == p->manifest.id && sp.key == key && !sp.accepts(value))
+      return 0;
+  auto revised = p->settings;
+  revised[key] = value;
+  if (!p->owner->settings_.savePluginSettings(p->manifest.id, revised))
+    return 0;
+  p->settings = std::move(revised);
+  return 1;
 }
 int PluginManager::hostEvent(void* ctx, const char* name, DodevEventFn cb,
                              void* data) {
@@ -463,6 +545,46 @@ int PluginManager::hostPromptInput(void* ctx, const char* title,
              [host, callback, user_data](const std::string& value) {
                callback(host, value.c_str(), user_data);
              })
+             ? 1
+             : 0;
+}
+int PluginManager::hostWorkspaceConfig(void* ctx, const char* json) {
+  auto* p = instance(ctx);
+  auto& hook = p->owner->hooks_.openWorkspaceConfig;
+  return json && hook && hook(p->manifest.id, json) ? 1 : 0;
+}
+int PluginManager::hostPromptSecret(void* ctx, const char* title,
+                                    const char* label, DodevPromptFn callback,
+                                    void* data) {
+  auto* p = instance(ctx);
+  auto& hook = p->owner->hooks_.promptSecret;
+  return callback && hook &&
+                 hook(title ? title : "Password", label ? label : "Password",
+                      [p, callback, data](const std::string& value) {
+                        callback(&p->host, value.c_str(), data);
+                      })
+             ? 1
+             : 0;
+}
+int PluginManager::hostShowTextView(void* ctx, const char* id,
+                                    const char* title, const char* side,
+                                    const char* text) {
+  auto* p = instance(ctx);
+  auto& hook = p->owner->hooks_.showTextView;
+  return id && simpleId(id) && title && side && text && hook &&
+                 hook(p->manifest.id + ":" + id, title, side, text)
+             ? 1
+             : 0;
+}
+int PluginManager::hostSelectPath(void* ctx, const char* title, int directory,
+                                  DodevPromptFn callback, void* data) {
+  auto* p = instance(ctx);
+  auto& hook = p->owner->hooks_.selectPath;
+  return callback && hook &&
+                 hook(title ? title : "Select path", directory != 0,
+                      [p, callback, data](const std::string& value) {
+                        callback(&p->host, value.c_str(), data);
+                      })
              ? 1
              : 0;
 }
@@ -577,7 +699,10 @@ void PluginManager::emit(const std::string& event, const std::string& payload) {
 std::string PluginManager::pluginSetting(const std::string& owner,
                                          const std::string& key) const {
   for (const auto& p : instances_)
-    if (p->manifest.id == owner) return p->settings[key].string();
+    if (p->manifest.id == owner) {
+      auto* v = p->settings.find(key);
+      return v ? v->string() : std::string{};
+    }
   return {};
 }
 Json PluginManager::pluginSettingJson(const std::string& owner,
@@ -595,6 +720,10 @@ bool PluginManager::updatePluginSettingJson(const std::string& owner,
                                             const std::string& key,
                                             const Json& value) {
   if (!simpleId(owner) || !simpleId(key)) return false;
+  for (const auto& sp : settingsSpecs_)
+    if (sp.owner == owner && sp.key == key &&
+        (!value.isString() || !sp.accepts(value.string())))
+      return false;
   for (const auto& p : instances_)
     if (p->manifest.id == owner) {
       auto revised = p->settings;
@@ -610,14 +739,27 @@ bool PluginManager::updatePluginSettingJson(const std::string& owner,
 bool PluginManager::updatePluginSetting(const std::string& owner,
                                         const std::string& key,
                                         const std::string& value) {
-  if (!simpleId(owner) || !simpleId(key)) return false;
+  return updatePluginSettingJson(owner, key, Json(value));
+}
+bool PluginManager::updatePluginSettings(
+    const std::string& owner,
+    const std::map<std::string, std::string>& values) {
   for (const auto& p : instances_)
     if (p->manifest.id == owner) {
-      p->settings[key] = value;
-      return settings_.savePluginSettings(owner, p->settings);
+      auto revised = p->settings;
+      for (const auto& v : values) {
+        auto spec = std::find_if(
+            settingsSpecs_.begin(), settingsSpecs_.end(), [&](const auto& sp) {
+              return sp.owner == owner && sp.key == v.first;
+            });
+        if (spec == settingsSpecs_.end() || !spec->accepts(v.second))
+          return false;
+        revised[v.first] = v.second;
+      }
+      if (!settings_.savePluginSettings(owner, revised)) return false;
+      p->settings = std::move(revised);
+      return true;
     }
-  Json j = settings_.loadPluginSettings(owner);
-  j[key] = value;
-  return settings_.savePluginSettings(owner, j);
+  return false;
 }
 }  // namespace dodev

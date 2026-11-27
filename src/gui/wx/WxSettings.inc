@@ -55,6 +55,10 @@ void selectTheme(const std::string& name, bool persist = true) {
   palette = wxui::Theme::from(*t);
   palette.native();
   palette.apply(this);
+  for (auto* n : {editors, bottom, side})
+    for (size_t i = 0; i < n->GetPageCount(); ++i)
+      if (auto* j = dynamic_cast<wxui::JournalPanel*>(n->GetPage(i)))
+        j->applyCustomColors();
   for (auto* w : wxTopLevelWindows)
     if (w != this && dynamic_cast<wxDialog*>(w)) palette.apply(w);
   applyUIFont(this);
@@ -262,6 +266,7 @@ void shortcutDialog() {
   showModal(d);
   deferMenus();
 }
+#include "WxPluginSettings.inc"
 void settingsDialog() {
   wxDialog d(this, wxID_ANY, "Settings", wxDefaultPosition, wxSize(770, 620),
              wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
@@ -420,30 +425,11 @@ void settingsDialog() {
       plugins.setEnabled(plugins.records()[i].manifest.id,
                          records->IsChecked(i));
   });
-  auto specs = new wxChoice(p, wxID_ANY);
-  auto value = new wxTextCtrl(p, wxID_ANY);
-  p->GetSizer()->Add(specs, 0, wxEXPAND | wxALL, 5);
-  p->GetSizer()->Add(value, 0, wxEXPAND | wxALL, 5);
-  for (auto& sp : plugins.settingSpecs())
-    specs->Append(W(sp.owner + " / " + sp.key));
-  specs->Bind(wxEVT_CHOICE, [&, specs, value](wxCommandEvent&) {
-    auto& sp = plugins.settingSpecs().at(specs->GetSelection());
-    value->SetValue(W(plugins.pluginSetting(sp.owner, sp.key)));
-    value->SetToolTip(W(sp.description));
-  });
-  button(p, p->GetSizer(), "Save plugin setting", [&, specs, value] {
-    int i = specs->GetSelection();
-    if (i == wxNOT_FOUND) return;
-    auto& sp = plugins.settingSpecs().at(i);
-    if (!plugins.updatePluginSetting(sp.owner, sp.key, S(value->GetValue())))
-      throw std::runtime_error("Unable to save plugin setting");
-    schedule();
-  });
-  button(p, p->GetSizer(), "AI provider profiles", [this] { aiProfiles(); });
   p->GetSizer()->Add(
       new wxStaticText(p, wxID_ANY,
                        "Plugin enablement/discovery changes apply on restart."),
       0, wxALL, 6);
+  addPluginSettingsPages(tabs, store, reset);
   auto row = new wxBoxSizer(wxHORIZONTAL);
   outer->Add(row, 0, wxEXPAND | wxALL, 8);
   button(&d, row, "Restore defaults", [&] {
@@ -452,8 +438,8 @@ void settingsDialog() {
   row->AddStretchSpacer();
   auto apply = [&] {
     auto previous = settings.data();
-    for (auto& f : store) f();
     try {
+      for (auto& f : store) f();
       saveSettings();
       loadThemes();
       selectTheme(settings.getString("appearance.theme"), false);

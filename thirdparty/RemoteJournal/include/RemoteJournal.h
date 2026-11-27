@@ -16,11 +16,19 @@ struct Options {
   std::string unit;  // optional systemd unit
   unsigned int lines = 200;
   bool follow = true;
+  bool structured = false;  // journalctl JSON lines for the table viewer
   bool passwordAuthentication =
       false;                        // opt-in, SSH password via anonymous pipe
   bool sudoNonInteractive = false;  // sudo -n only; never request password
 };
 enum class Filter { All, Fixed, Regex };
+struct RowBatch {
+  std::string status;
+  std::size_t received = 0, dropped = 0, firstId = 1;
+  bool running = false;
+  std::vector<std::string>
+      lines;  // consecutive complete records after the requested cursor
+};
 struct Snapshot {
   std::string text, status;
   std::size_t received = 0, dropped = 0;
@@ -46,6 +54,7 @@ class Session {
   Snapshot snapshot(bool onlyMatching = true,
                     std::size_t maxLines = 2500) const;
   std::string exportText(bool onlyMatching = true) const;
+  RowBatch rowsAfter(std::size_t cursor, bool includeRows = true) const;
   void clear();
   bool running() const { return running_.load(); }
 
@@ -53,6 +62,8 @@ class Session {
   bool startImpl(Options, std::string, std::string*);
   void worker(Options, std::string);
   void append(std::string);
+  void finishLine();  // mutex held
+  void flushFragment();
   bool matches(const std::string&) const;
   void setStatus(std::string);
   mutable std::mutex mutex_;
@@ -61,7 +72,8 @@ class Session {
   std::atomic<int> processId_{-1};
   std::deque<std::string> lines_;
   std::string fragment_, status_ = "Idle";
-  std::size_t received_ = 0, dropped_ = 0;
+  std::size_t received_ = 0, dropped_ = 0, bufferBytes_ = 0;
+  bool truncated_ = false;
   Filter filter_ = Filter::All;
   std::string pattern_;
   bool caseSensitive_ = false;

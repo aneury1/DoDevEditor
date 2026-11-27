@@ -1,0 +1,9 @@
+# Remote Journal: multiple filter rules
+
+The filter sidebar in each journal session is inspired by DLT Viewer. Add, edit (double click), duplicate, reorder, delete, check/uncheck, and enable/disable all rules independently of the quick search. Positive rules are ORed, conditions within a rule are ANDed, negative rules veto, and the first matching enabled marker sets the row colors. With no enabled positive rules, all rows pass unless excluded. The existing quick filter intersects with the rule results and remains active when the rule list is disabled. Neither filtering nor marking alters the raw capture or SSH connection.
+
+Each rule supports payload substring or ECMAScript regex, Application ID, systemd service, host, process, PID, inclusive UTC time range, numeric priority range (0 emergency, 7 debug), and case sensitivity. Empty fields are unrestricted; text comparisons are substrings. Colors are hexadecimal RGB, empty means default. The sidebar can save and load versioned JSON filter sets, with a 4 MiB import limit. Invalid imports preserve the existing set. There is no fixed number of rules. Complexity grows with rules and buffered records; avoid pathological regex expressions, since std::regex does not guarantee a matching time limit. JSON sets are not DLT `.dlf` files.
+
+Save sets in your workspace and set `filterSetFile` in a RemoteJournal workspace profile or the plugin's global Settings page. Relative paths resolve against the active workspace. A new session loads the selected set; edits are per-session until saved. Existing quick filters and appearance settings still work. The sample `examples/journal-filters/journal-filters.json` can be loaded from the sidebar.
+
+The filter engine and UI code are in RemoteJournal, but its legacy wx adapter is still compiled into the editor; full dynamic GUI plugin independence is not implemented by this release. Native wxWidgets rendering and live SSH require verification on a desktop.

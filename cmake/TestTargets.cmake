@@ -58,6 +58,19 @@ add_executable(dodev_journal_tests thirdparty/RemoteJournal/tests/test_journal.c
 target_link_libraries(dodev_journal_tests PRIVATE dodev_journal_core)
 add_test(NAME remote_journal_ssh_filter COMMAND dodev_journal_tests)
 
+add_executable(dodev_journal_table_tests tests/test_journal_table.cpp)
+target_link_libraries(dodev_journal_table_tests PRIVATE dodev_journal_core)
+add_test(NAME remote_journal_structured_table COMMAND dodev_journal_table_tests)
+
+# Journal export tests use an actual SQLite database, when available.
+find_package(SQLite3 QUIET)
+if(SQLite3_FOUND)
+    add_executable(dodev_journal_export_tests tests/test_journal_export.cpp)
+    target_include_directories(dodev_journal_export_tests PRIVATE "${PROJECT_SOURCE_DIR}/thirdparty/RemoteJournal/src/wx")
+    target_link_libraries(dodev_journal_export_tests PRIVATE dodev_journal_core SQLite::SQLite3)
+    add_test(NAME remote_journal_sqlite_export COMMAND dodev_journal_export_tests)
+endif()
+
 add_executable(dodev_new_plugins_tests tests/test_new_plugins.cpp)
 target_link_libraries(dodev_new_plugins_tests PRIVATE dodev_services)
 target_compile_definitions(dodev_new_plugins_tests PRIVATE DODEV_NEW_PLUGIN_ROOT="${PROJECT_BINARY_DIR}/plugins")
@@ -138,3 +151,19 @@ foreach(test_target IN LISTS test_targets)
         dodev_test_assertions(${test_target})
     endif()
 endforeach()
+
+if(TARGET simplemodule_plugin)
+    add_executable(dodev_simple_module_tests tests/test_simple_module.cpp)
+    target_link_libraries(dodev_simple_module_tests PRIVATE dodev_services)
+    target_compile_definitions(dodev_simple_module_tests PRIVATE SIMPLE_MODULE_DIR="${PROJECT_BINARY_DIR}/plugins/simple-module")
+    add_dependencies(dodev_simple_module_tests simplemodule_plugin)
+    add_test(NAME simple_module_sdk COMMAND dodev_simple_module_tests)
+endif()
+
+# Generic workspace profile and dynamic Git output integration (5.2.4).
+add_executable(dodev_workspace_plugin_extensions_tests tests/test_workspace_plugin_extensions.cpp)
+target_link_libraries(dodev_workspace_plugin_extensions_tests PRIVATE dodev_services dodev_journal_core dodev_symbols_core dodev_git_history_core)
+target_compile_definitions(dodev_workspace_plugin_extensions_tests PRIVATE DODEV_PLUGIN_ROOT="${PROJECT_BINARY_DIR}/plugins")
+add_dependencies(dodev_workspace_plugin_extensions_tests dodev_serial_monitor_plugin dodev_remote_journal_plugin dodev_source_symbols_plugin dodev_git_history_plugin)
+dodev_test_assertions(dodev_workspace_plugin_extensions_tests)
+add_test(NAME workspace_plugin_extensions COMMAND dodev_workspace_plugin_extensions_tests)

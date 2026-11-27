@@ -1,4 +1,4 @@
-#include "dodev/sdk/dodev_plugin_api.h"
+#include "dodev/sdk/PluginSettings.h"
 namespace {
 void open(const DodevHostAPI* host, void*) {
   if (DODEV_HOST_HAS(host, open_source_symbols))
@@ -9,12 +9,12 @@ void open(const DodevHostAPI* host, void*) {
 void help(const DodevHostAPI*, const DodevUiBuilder* ui, void*) {
   if (!ui) return;
   ui->label(ui->context,
-            "Clang-first AST symbols with automatic regex fallback; works with "
-            "unsaved edits.");
+            "Clang-first AST symbols with automatic regex "
+            "fallback; works with unsaved edits.");
   ui->button(ui->context, "Extract symbols from editor", "sourcesymbols.open");
   ui->label(ui->context,
-            "Results appear in Tasks · Symbols, with search, navigation and "
-            "CSV export.");
+            "Results appear in Tasks · Symbols, with search, "
+            "navigation and CSV export.");
 }
 }  // namespace
 extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,
@@ -29,15 +29,24 @@ extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,
                       "sourcesymbols.open");
   host->register_tab(host->context, "sourcesymbols.help", "Source Symbols",
                      &help, nullptr);
-  host->register_setting(host->context, "showIncludes", "true",
-                         "Include #include directives and #define macros");
-  host->register_setting(host->context, "parserMode", "auto",
-                         "Symbol parser: auto, clang or regex");
+  dodev::sdk::setting(host, "showIncludes", "true",
+                      "Include #include directives and #define macros",
+                      R"({"type":"bool"})");
+  dodev::sdk::setting(
+      host, "parserMode", "auto", "Symbol parser: auto, clang or regex",
+      R"({"type":"choice","choices":["auto","clang","regex"]})");
   host->register_setting(
       host->context, "clangExecutable", "",
       "Optional Clang binary path (empty finds clang++ on PATH)");
-  host->register_setting(host->context, "timeoutMs", "2500",
-                         "Clang AST parsing timeout in milliseconds");
+  dodev::sdk::setting(host, "timeoutMs", "2500",
+                      "Clang AST parsing timeout in milliseconds",
+                      R"({"type":"int","min":100,"max":60000})");
+  dodev::sdk::setting(
+      host, "captureKinds", "",
+      "Comma-separated kinds; blank captures all. "
+      "function,method,class,struct,namespace,enum,enumerator,field,variable,"
+      "type,concept,macro,include,interface,trait",
+      R"({"label":"Capture symbol kinds","type":"text"})");
   plugin->api_version = DODEV_PLUGIN_API_VERSION;
   return 1;
 }

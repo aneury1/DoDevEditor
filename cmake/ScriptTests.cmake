@@ -3,6 +3,7 @@ if(Python3_Interpreter_FOUND)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         add_test(NAME wx_install_runtime_path COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_wx_runtime_path.py")
     endif()
+    add_test(NAME wx_workspace_plugin_views COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_wx_workspace_plugin_views.py")
     add_test(NAME wx_raven_menu_parity COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_wx_menu_parity.py")
     add_test(NAME vscode_context_menus_and_output_buttons
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_context_menus.py")

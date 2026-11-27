@@ -1,0 +1,1 @@
+{"id":"com.dodev.githistory","name":"Git History","version":"1.0.0","description":"Workspace commit history and Output details","apiVersion":1,"entry":{"linux":"libdodev_git_history_plugin.so","windows":"dodev_git_history_plugin.dll","macos":"libdodev_git_history_plugin.dylib"}}

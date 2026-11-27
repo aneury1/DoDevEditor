@@ -61,8 +61,8 @@ std::string requestJson(const Config& config,
     const auto maxBytes =
         std::clamp<std::size_t>(config.maxContextBytes, 1024, 64000);
     prompt +=
-        "\n\n--- ACTIVE DOCUMENT (untrusted source, provided explicitly by "
-        "user) ---\n";
+        "\n\n--- ACTIVE DOCUMENT (untrusted source, provided explicitly "
+        "by user) ---\n";
     prompt += document.substr(0, maxBytes);
     if (document.size() > maxBytes) prompt += "\n[Context truncated]";
     prompt += "\n--- END ACTIVE DOCUMENT ---";
@@ -177,8 +177,8 @@ Reply complete(const Config& config, const std::vector<Message>& history,
   if (!validEndpoint(config.endpoint, &reply.error)) return reply;
 #ifndef DODEV_AI_HAS_CURL
   reply.error =
-      "AI network transport is not available. Install libcurl development "
-      "files and rebuild.";
+      "AI network transport is not available. Install libcurl "
+      "development files and rebuild.";
   return reply;
 #else
   static const bool initialized =
@@ -278,8 +278,8 @@ ModelList listModels(const Config& config, const std::string& endpointOverride,
        (config.authMode == "auto" && url.rfind("https://", 0) == 0)) &&
       !sameOrigin(config.endpoint, url)) {
     result.error =
-        "Authenticated Models endpoint must have the same origin as the chat "
-        "endpoint";
+        "Authenticated Models endpoint must have the same origin as "
+        "the chat endpoint";
     return result;
   }
   if (config.authMode != "none" && config.authMode != "bearer" &&
@@ -289,8 +289,8 @@ ModelList listModels(const Config& config, const std::string& endpointOverride,
   }
 #ifndef DODEV_AI_HAS_CURL
   result.error =
-      "Model discovery unavailable: install libcurl development files and "
-      "rebuild";
+      "Model discovery unavailable: install libcurl development "
+      "files and rebuild";
   return result;
 #else
   static const bool initialized =

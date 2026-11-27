@@ -166,9 +166,9 @@ void formatTab(const DodevHostAPI*, const DodevUiBuilder* ui, void*) {
              "clangformat.style_prompt");
   ui->read_only_text(
       ui->context,
-      "Settings > Plugins: executable, style.\nRequires a local clang-format "
-      "binary; network access is not required.\nUndo uses the editor's native "
-      "transaction history.");
+      "Settings > Plugins: executable, style.\nRequires a local "
+      "clang-format binary; network access is not required.\nUndo "
+      "uses the editor's native transaction history.");
 }
 }  // namespace
 extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,

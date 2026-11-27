@@ -340,8 +340,8 @@ bool runClang(const std::string&, std::string_view, const Options&,
 #endif
 }  // namespace
 
-Result extract(std::string_view path, std::string_view contents,
-               const Options& options) {
+static Result extractAll(std::string_view path, std::string_view contents,
+                         const Options& options) {
   if (options.mode == ParserMode::RegexOnly || !cFamily(path)) {
     auto result = extractRegex(path, contents);
     result.parser = "Regex";
@@ -393,4 +393,32 @@ Result extract(std::string_view path, std::string_view contents,
   }
   return result;
 }
+bool capturesKind(std::string_view kinds, std::string_view kind) {
+  if (kinds.find_first_not_of(" \t\r\n") == std::string_view::npos) return true;
+  while (!kinds.empty()) {
+    auto comma = kinds.find(',');
+    auto token = kinds.substr(0, comma);
+    auto first = token.find_first_not_of(" \t\r\n"),
+         last = token.find_last_not_of(" \t\r\n");
+    if (first != std::string_view::npos &&
+        (token.substr(first, last - first + 1) == kind ||
+         token.substr(first, last - first + 1) == "*"))
+      return true;
+    if (comma == std::string_view::npos) break;
+    kinds.remove_prefix(comma + 1);
+  }
+  return false;
+}
+Result extract(std::string_view path, std::string_view contents,
+               const Options& options) {
+  auto result = extractAll(path, contents, options);
+  result.rows.erase(std::remove_if(result.rows.begin(), result.rows.end(),
+                                   [&](const Symbol& row) {
+                                     return !capturesKind(options.captureKinds,
+                                                          row.kind);
+                                   }),
+                    result.rows.end());
+  return result;
+}
+
 }  // namespace dodev::symbols

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "dodev/sdk/dodev_plugin_api.h"
+#include "dodev/sdk/PluginSettings.h"
 
 namespace {
 void log(const DodevHostAPI* host, int severity, const std::string& text) {
@@ -252,8 +252,10 @@ extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,
       {"container", "", "Default Docker container for logs"},
       {"image", "alpine:latest", "Default image for docker run"}};
   for (const auto& item : settings)
-    if (!host->register_setting(host->context, item.name, item.def,
-                                item.description))
+    if (!dodev::sdk::setting(host, item.name, item.def, item.description,
+                             std::string(item.name) == "globalFlags"
+                                 ? R"({"type":"multiline"})"
+                                 : "{}"))
       return 0;
   const struct {
     const char* id;

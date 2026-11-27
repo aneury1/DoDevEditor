@@ -1,7 +1,22 @@
 #include <string>
 
-#include "dodev/sdk/dodev_plugin_api.h"
+#include "dodev/sdk/PluginSettings.h"
 namespace {
+void configureWorkspace(const DodevHostAPI* host, void*) {
+  if (DODEV_HOST_HAS(host, open_workspace_config))
+    host->open_workspace_config(
+        host->context,
+        R"JSON({"profiles":[{"name":"Device A","port":"/dev/ttyUSB0","baud":115200,"dataBits":8,"stopBits":1,"parity":"N"},{"name":"Device B","port":"/dev/ttyUSB1","baud":115200}]})JSON");
+}
+void workspaceView(const DodevHostAPI*, const DodevUiBuilder* ui, void*) {
+  ui->label(ui->context,
+            "Workspace profiles: configure and save JSON, then select profiles "
+            "to connect. No connections start automatically.");
+  ui->button(ui->context, "Configure workspace profiles...",
+             "serialmonitor.workspace.configure");
+  ui->button(ui->context, "Open capture / connection...", "serialmonitor.open");
+}
+
 void openMonitor(const DodevHostAPI* host, void*) {
   if (!DODEV_HOST_HAS(host, open_serial_monitor)) {
     if (host && host->log)
@@ -38,21 +53,38 @@ extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,
                      &view, nullptr);
   host->register_setting(host->context, "port", "",
                          "Serial device path or COM port");
-  host->register_setting(host->context, "baud", "115200", "Baud rate");
-  host->register_setting(host->context, "dataBits", "8", "Data bits: 7 or 8");
-  host->register_setting(host->context, "stopBits", "1", "Stop bits: 1 or 2");
-  host->register_setting(host->context, "parity", "N", "Parity: N, E, O");
-  host->register_setting(host->context, "filterMode", "all",
-                         "all | fixed | regex");
+  dodev::sdk::setting(host, "baud", "115200", "Baud rate",
+                      R"({"type":"int","min":50,"max":4000000})");
+  dodev::sdk::setting(host, "dataBits", "8", "Data bits: 7 or 8",
+                      R"({"type":"choice","choices":["7","8"]})");
+  dodev::sdk::setting(host, "stopBits", "1", "Stop bits: 1 or 2",
+                      R"({"type":"choice","choices":["1","2"]})");
+  dodev::sdk::setting(host, "parity", "N", "Parity: N, E, O",
+                      R"({"type":"choice","choices":["N","E","O"]})");
+  dodev::sdk::setting(host, "filterMode", "all", "all | fixed | regex",
+                      R"({"type":"choice","choices":["all","fixed","regex"]})");
   host->register_setting(host->context, "filterText", "",
                          "Fixed text or regular expression");
-  host->register_setting(host->context, "caseSensitive", "false",
-                         "Case-sensitive filter");
-  host->register_setting(host->context, "showOnlyMatches", "true",
-                         "Show only matching log lines");
-  host->register_setting(
-      host->context, "allowPolkit", "false",
-      "Request Polkit authorization after permission denied");
+  dodev::sdk::setting(host, "caseSensitive", "false", "Case-sensitive filter",
+                      R"({"type":"bool"})");
+  dodev::sdk::setting(host, "showOnlyMatches", "true",
+                      "Show only matching log lines", R"({"type":"bool"})");
+  dodev::sdk::setting(host, "captureAsAdministrator", "false",
+                      "Use the privileged Polkit helper for every capture "
+                      "(Linux; explicit consent).",
+                      R"({"type":"bool"})");
+  dodev::sdk::setting(host, "allowPolkit", "false",
+                      "Request Polkit authorization after permission denied",
+                      R"({"type":"bool"})");
+  host->register_command(host->context, "serialmonitor.workspace.configure",
+                         "Configure SerialMonitor workspace profiles",
+                         &configureWorkspace, nullptr);
+  host->register_panel(host->context, "serialmonitor.workspace",
+                       "SerialMonitor profiles", "Workspace", &workspaceView,
+                       nullptr);
+  host->register_menu(host->context, "Options",
+                      "SerialMonitor: Workspace profiles...",
+                      "plugin.view.serialmonitor.workspace");
   plugin->api_version = DODEV_PLUGIN_API_VERSION;
   if (plugin->struct_size >=
       offsetof(DodevPluginAPI, shutdown) + sizeof(plugin->shutdown))

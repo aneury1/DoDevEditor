@@ -124,8 +124,8 @@ void SettingsManager::tryLegacyIni() {
   }
   if (changed)
     diagnostics_.push_back(
-        "Imported legacy settings.ini into memory; next save writes "
-        "settings.json");
+        "Imported legacy settings.ini into memory; next "
+        "save writes settings.json");
 }
 void SettingsManager::validate() {
   const auto baseline = defaultSettings();
@@ -176,8 +176,8 @@ void SettingsManager::validate() {
   }
   if (getInt("schemaVersion") != 1) {
     diagnostics_.push_back(
-        "Unsupported schemaVersion; compatible keys loaded using schema 1 "
-        "defaults");
+        "Unsupported schemaVersion; compatible keys loaded "
+        "using schema 1 defaults");
     set("schemaVersion", 1);
   }
   if (!get("templates.associations").isObject())
@@ -241,8 +241,8 @@ bool SettingsManager::save(std::string* error) {
   if (malformed_) {
     if (error)
       *error =
-          "Refusing to overwrite malformed settings.json; repair or rename it "
-          "first";
+          "Refusing to overwrite malformed settings.json; repair or "
+          "rename it first";
     return false;
   }
   return writeAtomic(file(), data_.dump(2) + "\n", error);

@@ -10,6 +10,7 @@ add_subdirectory(thirdparty/SourceSymbols)
 add_subdirectory(thirdparty/RemoteJournal)
 add_subdirectory(thirdparty/AIAssistant)
 add_subdirectory(thirdparty/GdbDebugger)
+add_subdirectory(thirdparty/GitHistory)
 
 # Keep manifest paths stable for custom multi-config configurations as well.
 function(dodev_bundled_layout target directory)
@@ -44,6 +45,8 @@ if(DODEV_BUILD_PLUGIN_EXAMPLES)
         dodev_plugin_filename(${target})
         configure_file("${source_dir}/plugin.json" "${output_dir}/plugin.json" COPYONLY)
     endforeach()
+
+    add_subdirectory(plugins/examples/SimpleModule)
 
     set(docker_output "${PROJECT_BINARY_DIR}/plugins/docker")
     set(docker_install "${CMAKE_INSTALL_BINDIR}/plugins/docker")

@@ -10,7 +10,8 @@
 #include <vector>
 
 #include "QRMatrix.h"
-#include "dodev/sdk/dodev_plugin_api.h"
+#include "QRPayload.h"
+#include "dodev/sdk/PluginSettings.h"
 #ifdef _WIN32
 #include <shellapi.h>
 #include <windows.h>
@@ -122,6 +123,52 @@ void writeFile(const fs::path& destination, const std::string& contents,
     throw std::runtime_error("Cannot move generated image to destination: " +
                              ec.message());
 }
+bool encryptEnabled(const DodevHostAPI* host) {
+  return setting(host, "encryption", "off") == "aes256gcm";
+}
+std::string envelope(const DodevHostAPI* host, const std::string& data) {
+  if (!encryptEnabled(host)) return dodevqr::wrapPayload(data, false);
+  if (!dodevqr::encryptionAvailable() || !DODEV_HOST_HAS(host, prompt_secret))
+    throw std::runtime_error(
+        "Encrypted QR requires OpenSSL and a masked password prompt");
+  std::string result;
+  struct State {
+    const std::string* data;
+    std::string* result;
+  };
+  State state{&data, &result};
+  if (!host->prompt_secret(
+          host->context, "Encrypt QR payload", "Password (never saved):",
+          [](const DodevHostAPI*, const char* value, void* context) {
+            auto& st = *static_cast<State*>(context);
+            *st.result =
+                dodevqr::wrapPayload(*st.data, true, value ? value : "");
+          },
+          &state))
+    throw std::runtime_error("Encryption cancelled");
+  if (result.empty()) throw std::runtime_error("Encryption cancelled");
+  return result;
+}
+void renderPayload(const DodevHostAPI* host, const std::string& text,
+                   const char* textPath, Output format) {
+  fs::path output = fs::u8path(textPath ? textPath : "");
+  if (output.empty() ||
+      output.extension() != (format == Output::Png ? ".png" : ".svg"))
+    throw std::runtime_error("Select a valid QR output filename");
+  if (!output.is_absolute()) output = fs::absolute(output);
+  const auto matrix = dodevqr::encode(text, eccSetting(host));
+  int border = numericSetting(host, "quietZone", 4, 4, 16);
+  auto image =
+      format == Output::Png
+          ? bytesString(dodevqr::toPng(
+                matrix, numericSetting(host, "pixelsPerModule", 8, 2, 32),
+                border))
+          : dodevqr::toSvg(matrix, border);
+  writeFile(output, image,
+            lowercase(setting(host, "overwriteExisting", "false")) == "true");
+  lastOutput = output.u8string();
+  logMsg(host, 1, "QR code created: " + lastOutput);
+}
 void generate(const DodevHostAPI* host, const char* textPath, Output format) {
   if (!DODEV_HOST_HAS(host, get_active_document)) {
     logMsg(host, 2, "QR plugin requires DoDevEditor 3.3 document access");
@@ -137,31 +184,8 @@ void generate(const DodevHostAPI* host, const char* textPath, Output format) {
     const std::string text(
         contents);  // Important: copy before further host callbacks.
     if (text.empty()) throw std::invalid_argument("Active document is empty");
-    fs::path output = fs::u8path(textPath ? textPath : "");
-    if (output.empty()) throw std::invalid_argument("No output path selected");
-    if (output.extension() != (format == Output::Png ? ".png" : ".svg")) {
-      throw std::invalid_argument(
-          "Output must have a " +
-          std::string(format == Output::Png ? ".png" : ".svg") + " extension");
-    }
-    if (!output.is_absolute()) output = fs::absolute(output);
-    const auto matrix = dodevqr::encode(text, eccSetting(host));
-    const int border = numericSetting(host, "quietZone", 4, 4, 16);
-    std::string image;
-    if (format == Output::Png) {
-      const auto png = dodevqr::toPng(
-          matrix, numericSetting(host, "pixelsPerModule", 8, 2, 32), border);
-      image = bytesString(png);
-    } else
-      image = dodevqr::toSvg(matrix, border);
-    const bool overwrite =
-        lowercase(setting(host, "overwriteExisting", "false")) == "true";
-    writeFile(output, image, overwrite);
-    lastOutput = output.u8string();
-    logMsg(host, 1,
-           "QR code created: " + lastOutput + " (version " +
-               std::to_string(matrix.version) + ", " +
-               std::to_string(text.size()) + " UTF-8 bytes; offline)");
+    renderPayload(host, encryptEnabled(host) ? envelope(host, text) : text,
+                  textPath, format);
   } catch (const std::exception& e) {
     logMsg(host, 2, std::string("QR export failed: ") + e.what());
   }
@@ -197,6 +221,31 @@ void generateWithPrompt(const DodevHostAPI* host, Output fmt) {
                           &onOutputPath, const_cast<Output*>(marker)))
     logMsg(host, 2, "Unable to open QR image export prompt");
 }
+void generatePath(const DodevHostAPI* host, const char* path, void*) {
+  if (!path || !*path) return;
+  try {
+    auto text = envelope(host, dodevqr::packPath(fs::u8path(path)));
+    const auto fmt = lowercase(setting(host, "preferredFormat", "png")) == "svg"
+                         ? Output::Svg
+                         : Output::Png;
+    auto proposed = initialOutputPath(host, path, fmt).u8string();
+    renderPayload(host, text, proposed.c_str(), fmt);
+  } catch (const std::exception& e) {
+    logMsg(host, 2, std::string("QR bundle export failed: ") + e.what());
+  }
+}
+void selectSource(const DodevHostAPI* host, bool directory) {
+  if (!DODEV_HOST_HAS(host, select_path)) {
+    logMsg(host, 2, "File/directory selection requires DoDevEditor 5.2.4");
+    return;
+  }
+  host->select_path(
+      host->context,
+      directory ? "Select directory to bundle" : "Select file to encode",
+      directory ? 1 : 0, &generatePath, nullptr);
+}
+void onFile(const DodevHostAPI* h, void*) { selectSource(h, false); }
+void onFolder(const DodevHostAPI* h, void*) { selectSource(h, true); }
 void onPng(const DodevHostAPI* host, void*) {
   generateWithPrompt(host, Output::Png);
 }
@@ -277,6 +326,8 @@ void panel(const DodevHostAPI*, const DodevUiBuilder* ui, void*) {
   ui->label(ui->context,
             "Encodes the entire active document into one offline QR code.");
   ui->button(ui->context, "Generate QR Code...", "qrcode.generate");
+  ui->button(ui->context, "Capture file...", "qrcode.file");
+  ui->button(ui->context, "Capture directory...", "qrcode.folder");
   ui->button(ui->context, "Save PNG...", "qrcode.png");
   ui->button(ui->context, "Save SVG...", "qrcode.svg");
   ui->button(ui->context, "Open last generated image", "qrcode.open_last");
@@ -305,27 +356,48 @@ extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,
     return 0;
   plugin->api_version = DODEV_PLUGIN_API_VERSION;
   plugin->shutdown = nullptr;
-  if (!host->register_setting(host->context, "preferredFormat", "png",
-                              "QR output format: png or svg"))
+  if (!dodev::sdk::setting(host, "preferredFormat", "png",
+                           "QR output format: png or svg",
+                           R"({"type":"choice","choices":["png","svg"]})"))
     return 0;
-  if (!host->register_setting(
-          host->context, "errorCorrection", "medium",
-          "Error correction: low, medium, quartile or high"))
+  if (!dodev::sdk::setting(
+          host, "errorCorrection", "medium",
+          "Error correction: low, medium, quartile or high",
+          R"({"type":"choice","choices":["low","medium","quartile","high"]})"))
     return 0;
-  if (!host->register_setting(host->context, "pixelsPerModule", "8",
-                              "PNG scale from 2 to 32 pixels per module"))
+  if (!dodev::sdk::setting(host, "pixelsPerModule", "8",
+                           "PNG scale from 2 to 32 pixels per module",
+                           R"({"type":"int","min":2,"max":32})"))
     return 0;
-  if (!host->register_setting(host->context, "quietZone", "4",
-                              "White border: 4 to 16 QR modules"))
+  if (!dodev::sdk::setting(host, "quietZone", "4",
+                           "White border: 4 to 16 QR modules",
+                           R"({"type":"int","min":4,"max":16})"))
     return 0;
   if (!host->register_setting(
           host->context, "outputDirectory", "",
           "Optional default export directory; empty uses document folder"))
     return 0;
-  if (!host->register_setting(
-          host->context, "overwriteExisting", "false",
-          "Allow replacing existing QR image files (true/false)"))
+  if (!dodev::sdk::setting(
+          host, "overwriteExisting", "false",
+          "Allow replacing existing QR image files (true/false)",
+          R"({"type":"bool"})"))
     return 0;
+  if (!dodev::sdk::setting(
+          host, "encryption", "off",
+          "AES-256-GCM with per-export password; OpenSSL required, password "
+          "never persisted",
+          R"({"type":"choice","choices":["off","aes256gcm"]})"))
+    return 0;
+  if (DODEV_HOST_HAS(host, select_path)) {
+    host->register_command(host->context, "qrcode.file",
+                           "QR Code: Capture File...", &onFile, nullptr);
+    host->register_command(host->context, "qrcode.folder",
+                           "QR Code: Capture Directory...", &onFolder, nullptr);
+    host->register_menu(host->context, "Tools", "QR Code: Capture File...",
+                        "qrcode.file");
+    host->register_menu(host->context, "Tools", "QR Code: Capture Directory...",
+                        "qrcode.folder");
+  }
   if (!host->register_command(host->context, "qrcode.generate",
                               "QR Code: Generate from Active Editor...",
                               &onPreferred, nullptr))

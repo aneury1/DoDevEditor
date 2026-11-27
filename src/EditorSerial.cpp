@@ -140,8 +140,8 @@ void EditorApp::refreshSerialPortChoices() {
   Rcombo_box_set_selected(combo, 0);
   label(serialWindow_, "serial_detected",
         std::to_string(ports.size()) +
-            " serial device(s) found. You can type a path or select a detected "
-            "device.");
+            " serial device(s) found. You can type "
+            "a path or select a detected device.");
 }
 void EditorApp::serialPortSelected(Rid, int index, void* ctx) {
   auto& app = *static_cast<EditorApp*>(ctx);

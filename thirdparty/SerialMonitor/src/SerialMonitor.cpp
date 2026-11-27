@@ -333,6 +333,15 @@ void CaptureSession::clear() {
 }
 bool CaptureSession::start(const PortOptions& options, std::string* error) {
   if (!validateOptions(options, error)) return false;
+#ifdef _WIN32
+  if (options.captureAsAdministrator) {
+    if (error)
+      *error =
+          "Per-session administrator capture requires Linux Polkit; on "
+          "Windows use an authorized serial device";
+    return false;
+  }
+#endif
   if (thread_.joinable()) stop();
   requestedStop_ = false;
   running_ = true;
@@ -426,6 +435,10 @@ void CaptureSession::readDirect(const PortOptions& options) {
 }
 #else
 void CaptureSession::readDirect(const PortOptions& options) {
+  if (options.captureAsAdministrator) {
+    readViaPolkit(options);
+    return;
+  }
   PortFd h;
   std::string error;
   const int fd = openPort(options, h, &error);
@@ -437,8 +450,8 @@ void CaptureSession::readDirect(const PortOptions& options) {
     }
     if (errno == EACCES)
       error +=
-          ". Enable Polkit authorization or request membership in the device's "
-          "serial group (often dialout)";
+          ". Enable Polkit authorization or request membership in the "
+          "device's serial group (often dialout)";
     setStatus(error);
     return;
   }
@@ -488,8 +501,8 @@ void CaptureSession::readViaPolkit(const PortOptions& options) {
   if (options.privilegedHelper.empty() ||
       !fs::is_regular_file(fs::u8path(options.privilegedHelper))) {
     setStatus(
-        "Polkit helper missing; install dodev-serial-reader-helper next to "
-        "DoDevEditor");
+        "Polkit helper missing; install dodev-serial-reader-helper next "
+        "to DoDevEditor");
     return;
   }
   int pipes[2], inputPipes[2];

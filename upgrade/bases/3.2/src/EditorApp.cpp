@@ -188,8 +188,8 @@ void EditorApp::initUi() {
   Rdock_area_set_close_hides(dock_, R_TRUE);
   Rdock_area_set_panel_closable(dock_, explorer_, R_FALSE);
   setStatus(
-      "DoDevEditor Raven 3.2 · Configurable Keybindings · JSON Settings · "
-      "Themes · Templates · Plugins");
+      "DoDevEditor Raven 3.2 · Configurable Keybindings · JSON Settings "
+      "· Themes · Templates · Plugins");
 }
 void EditorApp::bindActions() {
   static constexpr const char* actions[] = {"file.new",

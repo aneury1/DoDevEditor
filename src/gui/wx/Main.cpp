@@ -19,6 +19,7 @@
 #include <wx/textdlg.h>
 #include <wx/treectrl.h>
 #include <wx/utils.h>
+#include <wx/weakref.h>
 #include <wx/wx.h>
 
 #include <algorithm>
@@ -36,6 +37,7 @@
 #include <thread>
 
 #include "../../../resources/EmbeddedUi.h"
+#include "../../../thirdparty/SerialMonitor/src/wx/SerialCapturePanel.h"
 #include "AiProfiles.h"
 #include "CallHierarchy.h"
 #include "EditorData.h"
@@ -47,6 +49,7 @@
 #include "TerminalScreen.h"
 #include "TerminalSession.h"
 #include "WxExplorerModel.h"
+#include "WxJournal.h"
 #include "WxSyntaxSettings.h"
 #include "WxTerminal.h"
 #include "WxTheme.h"
@@ -58,6 +61,7 @@
 #include "dodev/launch/ProcessLaunch.h"
 #include "dodev/plugins/PluginManager.h"
 #include "dodev/plugins/PluginPaths.h"
+#include "dodev/sdk/WorkspaceProfiles.h"
 #include "dodev/search/WorkspaceSearch.h"
 #include "dodev/terminal/TaskCatalog.h"
 #include "dodev/terminal/TerminalTasks.h"
@@ -89,7 +93,7 @@ class Frame : public wxFrame {
   wxAuiNotebook *editors, *side, *bottom;
   wxTreeCtrl *tree, *calls;
   wxListCtrl *symbolList, *matches;
-  wxTextCtrl *query, *filter, *git, *replacementText, *includePatterns,
+  wxTextCtrl *query, *filter, *replacementText, *includePatterns,
       *excludePatterns, *callQuery;
   wxCheckBox *searchRegex, *searchCase, *searchWord, *allSymbols;
   wxSpinCtrl* callDepth;
@@ -258,6 +262,7 @@ class Frame : public wxFrame {
   }
 #include "WxExplorer.inc"
   void workspace(fs::path p) {
+    if (!confirmWorkspaceProfileEdits()) return;
     for (auto* t : allTerminals()) {
       t->taskQueue.clear();
       if (t->session.running()) t->session.stop();
@@ -265,6 +270,7 @@ class Frame : public wxFrame {
     }
     root = fs::absolute(p).lexically_normal();
     dir = root;
+    resetWorkspacePluginTabs();
     refreshTaskPicker(true);
     settings.set("general.lastFolder", root.u8string());
     refreshTree(false);
@@ -297,6 +303,8 @@ class Frame : public wxFrame {
       options.mode = symbols::ParserMode::ClangOnly;
     options.clangExecutable =
         plugins.pluginSetting("com.dodev.sourcesymbols", "clangExecutable");
+    options.captureKinds =
+        plugins.pluginSetting("com.dodev.sourcesymbols", "captureKinds");
     try {
       options.timeoutMs =
           std::clamp(std::stoi(plugins.pluginSetting("com.dodev.sourcesymbols",
@@ -314,8 +322,13 @@ class Frame : public wxFrame {
     visible.clear();
     selected = static_cast<size_t>(-1);
     auto needle = S(filter->GetValue().Lower());
+    const bool showIncludes = plugins.pluginSetting("com.dodev.sourcesymbols",
+                                                    "showIncludes") != "false";
     for (size_t i = 0; i < index.rows.size(); ++i) {
       auto& r = index.rows[i];
+      if (!showIncludes && (r.kind == "include" || r.kind == "macro" ||
+                            r.kind == "Include" || r.kind == "Macro"))
+        continue;
       if (!allSymbols->GetValue() &&
           (!active() || index.paths[i] != docs.at(active()).path))
         continue;
@@ -351,7 +364,7 @@ class Frame : public wxFrame {
       stack.push_back(id);
     }
     if (calls->GetRootItem().IsOk()) calls->Expand(calls->GetRootItem());
-    side->SetSelection(4);
+    side->SetSelection(3);
   }
   void searchNow() {
     auto o = searchOptions();
@@ -447,8 +460,8 @@ class Frame : public wxFrame {
   void run() {
     if (debug->session.running()) {
       debug->session.sendLine(
-          "python gdb.execute('continue' if gdb.selected_inferior().pid else "
-          "'run')");
+          "python gdb.execute('continue' if "
+          "gdb.selected_inferior().pid else 'run')");
       return;
     }
     auto name = chooseLaunchConfig();
@@ -697,7 +710,7 @@ class Frame : public wxFrame {
 #include "WxTools.inc"
  public:
   Frame()
-      : wxFrame(nullptr, wxID_ANY, "DoDevEditor wx 5.1.5", wxDefaultPosition,
+      : wxFrame(nullptr, wxID_ANY, "DoDevEditor wx 5.2.7", wxDefaultPosition,
                 wxSize(1250, 850)),
         aui(this),
         timer(this) {
@@ -706,7 +719,9 @@ class Frame : public wxFrame {
         this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
         wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ACTIVE_TAB);
     side = new wxAuiNotebook(this, wxID_ANY);
-    bottom = new wxAuiNotebook(this, wxID_ANY);
+    bottom = new wxAuiNotebook(
+        this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+        wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ACTIVE_TAB);
     aui.AddPane(editors, wxAuiPaneInfo().CenterPane().Name("editors"));
     aui.AddPane(side, wxAuiPaneInfo()
                           .Left()
@@ -815,16 +830,6 @@ class Frame : public wxFrame {
         error(ex);
       }
     });
-    p = page(side, "Git", s);
-    git = new wxTextCtrl(p, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
-                         wxTE_MULTILINE | wxTE_READONLY);
-    button(p, s, "Git history", [this] { refreshGitView(); });
-    button(p, s, "Git status (terminal)", [this] {
-      if (!shell->session.running()) startShell();
-      shell->session.sendLine("git status --short --branch");
-      bottom->SetSelection(0);
-    });
-    s->Add(git, 1, wxEXPAND);
     p = page(side, "Symbols", s);
     filter = new wxTextCtrl(p, wxID_ANY);
     s->Add(filter, 0, wxEXPAND);
@@ -908,7 +913,7 @@ class Frame : public wxFrame {
       return true;
     };
     hooks.openSourceSymbols = [this] {
-      showSide(3);
+      showSide(2);
       return true;
     };
     hooks.openAiAssistant = [this] { return aiPanel(); };
@@ -972,6 +977,80 @@ class Frame : public wxFrame {
       cb(S(d.GetValue()));
       return true;
     };
+    hooks.openWorkspaceConfig = [this](const std::string& owner,
+                                       const std::string& initial) {
+      auto path = sdk::workspaceProfilePath(root, owner);
+      if (!fs::exists(path)) {
+        Json value;
+        if (!Json::parse(initial, value) || !value.isObject()) return false;
+        if (wxMessageBox("Create workspace plugin configuration?\n" + P(path),
+                         "Workspace settings", wxYES_NO | wxICON_QUESTION,
+                         this) != wxYES)
+          return false;
+        fs::create_directories(path.parent_path());
+        writeText(path, value.dump(2));
+        refreshTree();
+      }
+      open(path);
+      return true;
+    };
+    hooks.promptSecret = [this](const std::string& title,
+                                const std::string& label,
+                                std::function<void(const std::string&)> cb) {
+      wxPasswordEntryDialog d(this, W(label), W(title));
+      if (showModal(d) != wxID_OK) return false;
+      auto value = S(d.GetValue());
+      d.SetValue("");
+      try {
+        cb(value);
+      } catch (...) {
+        std::fill(value.begin(), value.end(), '\0');
+        throw;
+      }
+      std::fill(value.begin(), value.end(), '\0');
+      return true;
+    };
+    hooks.selectPath = [this](const std::string& title, bool directory,
+                              std::function<void(const std::string&)> cb) {
+      if (directory) {
+        wxDirDialog d(this, W(title), P(root));
+        if (showModal(d) != wxID_OK) return false;
+        cb(S(d.GetPath()));
+      } else {
+        wxFileDialog d(this, W(title), P(root), "", "All files|*",
+                       wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (showModal(d) != wxID_OK) return false;
+        cb(S(d.GetPath()));
+      }
+      return true;
+    };
+    hooks.showTextView = [this](const std::string& id, const std::string& title,
+                                const std::string& where,
+                                const std::string& text) {
+      auto* book = where == "Editor"      ? editors
+                   : where == "Workspace" ? side
+                                          : bottom;
+      auto name = W("dodev.plugin.view:" + id);
+      wxTextCtrl* view = nullptr;
+      for (size_t i = 0; i < book->GetPageCount(); ++i)
+        if (book->GetPage(i)->GetName() == name) {
+          view = dynamic_cast<wxTextCtrl*>(book->GetPage(i));
+          book->SetSelection(i);
+          break;
+        }
+      if (!view) {
+        view = new wxTextCtrl(book, wxID_ANY, "", wxDefaultPosition,
+                              wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY);
+        view->SetName(name);
+        book->AddPage(view, W(title), true);
+        palette.apply(view);
+      }
+      view->ChangeValue(W(text));
+      view->SetInsertionPoint(0);
+      if (book != editors) aui.GetPane(book).Show();
+      aui.Update();
+      return true;
+    };
     plugins.setHostHooks(std::move(hooks));
     auto customPlugins = settings.getString("plugins.directory");
     plugins.discoverAndLoad(std::vector<fs::path>{
@@ -996,13 +1075,36 @@ class Frame : public wxFrame {
     buildMenus();
     buildToolbar();
     Bind(wxEVT_CHAR_HOOK, &Frame::keyHook, this);
-    bottom->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,
-                 [](wxAuiNotebookEvent& e) { e.Veto(); });
+    bottom->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, [this](wxAuiNotebookEvent& e) {
+      auto i = e.GetSelection();
+      if (i >= 0 && static_cast<size_t>(i) < bottom->GetPageCount()) {
+        if (isPluginPage(bottom->GetPage(i))) {
+          e.Skip();
+          return;
+        }
+        if (auto* p = dynamic_cast<wxui::JournalPanel*>(bottom->GetPage(i))) {
+          p->shutdown();
+          e.Skip();
+          return;
+        }
+      }
+      e.Veto();
+    });
     side->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE,
                [](wxAuiNotebookEvent& e) { e.Veto(); });
+    side->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, [this](wxAuiNotebookEvent& e) {
+      loadSelectedWorkspacePlugin();
+      e.Skip();
+    });
     editors->Bind(
         wxEVT_AUINOTEBOOK_TAB_RIGHT_DOWN, [this](wxAuiNotebookEvent& e) {
           if (e.GetSelection() >= 0) editors->SetSelection(e.GetSelection());
+          if (dynamic_cast<wxui::JournalPanel*>(editors->GetCurrentPage())) {
+            contextMenu(editors, {{"Close", "file.close"},
+                                  {"Close others", "tab.close_others"},
+                                  {"Close to the right", "tab.close_right"}});
+            return;
+          }
           contextMenu(editors, {{"Save", "file.save"},
                                 {"Close", "file.close"},
                                 {"Close others", "tab.close_others"},
@@ -1016,14 +1118,34 @@ class Frame : public wxFrame {
                     e.Skip();
                   });
     editors->Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, [this](wxAuiNotebookEvent& e) {
-      auto a =
-          dynamic_cast<wxStyledTextCtrl*>(editors->GetPage(e.GetSelection()));
+      auto i = e.GetSelection();
+      if (i < 0 || static_cast<size_t>(i) >= editors->GetPageCount()) {
+        e.Veto();
+        return;
+      }
+      auto* page = editors->GetPage(i);
+      if (isPluginPage(page)) {
+        e.Skip();
+        return;
+      }
+      if (auto* j = dynamic_cast<wxui::JournalPanel*>(page)) {
+        j->shutdown();
+        e.Skip();
+        return;
+      }
+      auto a = dynamic_cast<wxStyledTextCtrl*>(page);
       if (!confirm(a))
         e.Veto();
-      else
+      else {
         docs.erase(a);
+        e.Skip();
+      }
     });
     Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& e) {
+      if (e.CanVeto() && !confirmWorkspaceProfileEdits()) {
+        e.Veto();
+        return;
+      }
       for (auto& d : docs)
         if (!confirm(d.first) && e.CanVeto()) {
           e.Veto();
@@ -1050,6 +1172,13 @@ class Frame : public wxFrame {
   }
   ~Frame() {
     timer.Stop();
+    for (auto* n : {editors, bottom, side})
+      for (size_t i = 0; i < n->GetPageCount(); ++i)
+        if (auto* p = dynamic_cast<wxui::JournalPanel*>(n->GetPage(i)))
+          p->shutdown();
+    for (auto* n : {editors, bottom, side})
+      for (size_t i = n->GetPageCount(); i > 0; --i)
+        if (isPluginPage(n->GetPage(i - 1))) n->DeletePage(i - 1);
     plugins.shutdown();
     aui.UnInit();
   }

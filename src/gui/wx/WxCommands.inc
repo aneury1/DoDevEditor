@@ -91,8 +91,8 @@ void explorerAction(const std::string& a) {
     auto parent = fs::is_directory(p, ec) ? p : p.parent_path();
     if (!wxui::explorer::canExpand(parent, root))
       throw std::runtime_error(
-          "Cannot create entries outside the workspace or through recursive "
-          "directory links");
+          "Cannot create entries outside the workspace or "
+          "through recursive directory links");
     auto r = explorer::createEntry(parent, S(name), folder);
     if (!r.ok) throw std::runtime_error(r.error);
     refreshTree();
@@ -140,25 +140,26 @@ void explorerAction(const std::string& a) {
   schedule();
 }
 void tabAction(const std::string& a) {
-  auto e = active();
-  if (!e) return;
+  auto* page = editors->GetCurrentPage();
+  if (!page) return;
   if (a == "tab.copy_path") {
-    copyPath(docs.at(e).path);
+    if (auto* e = active()) copyPath(docs.at(e).path);
     return;
   }
-  std::vector<wxStyledTextCtrl*> victims;
+  std::vector<wxWindow*> victims;
   int i = editors->GetSelection();
   for (size_t k = 0; k < editors->GetPageCount(); ++k) {
-    auto other = dynamic_cast<wxStyledTextCtrl*>(editors->GetPage(k));
-    if (other && other != e && (a == "tab.close_others" || int(k) > i))
+    auto* other = editors->GetPage(k);
+    if (other != page && (a == "tab.close_others" || int(k) > i))
       victims.push_back(other);
   }
   for (auto* v : victims)
-    if (!confirm(v)) return;
+    if (auto* e = dynamic_cast<wxStyledTextCtrl*>(v); e && !confirm(e)) return;
   for (auto* v : victims) {
     int k = editors->GetPageIndex(v);
-    docs.erase(v);
-    editors->DeletePage(k);
+    if (auto* j = dynamic_cast<wxui::JournalPanel*>(v)) j->shutdown();
+    if (auto* e = dynamic_cast<wxStyledTextCtrl*>(v)) docs.erase(e);
+    if (k != wxNOT_FOUND) editors->DeletePage(k);
   }
 }
 std::vector<std::string> menuActions;
@@ -616,6 +617,64 @@ void runWorkspaceTask(bool build, const std::string& requestedLabel = {}) {
   }
 }
 void terminalAction(const std::string& a) {
+  if (isPluginPage(bottom->GetCurrentPage())) {
+    if (a == "terminal.close") {
+      bottom->DeletePage(bottom->GetSelection());
+      return;
+    }
+    if (a == "terminal.focus") {
+      bottom->GetCurrentPage()->SetFocus();
+      return;
+    }
+    if (a == "terminal.copy") {
+      auto* t = dynamic_cast<wxTextCtrl*>(wxWindow::FindFocus());
+      wxWindow* ancestor = t;
+      while (ancestor && ancestor != bottom->GetCurrentPage())
+        ancestor = ancestor->GetParent();
+      if (t && ancestor)
+        t->Copy();
+      else
+        SetStatusText("Select text in the plugin output to copy");
+      return;
+    }
+    if (a == "terminal.restart" || a == "terminal.paste" ||
+        a == "terminal.rename" || a == "terminal.clear" ||
+        a == "terminal.interrupt" || a == "terminal.export") {
+      SetStatusText("Select a terminal tab for this action");
+      return;
+    }
+  }
+  if (auto* j = dynamic_cast<wxui::JournalPanel*>(bottom->GetCurrentPage())) {
+    if (a == "terminal.close") {
+      j->requestClose();
+      return;
+    }
+    if (a == "terminal.copy") {
+      j->copySelected();
+      return;
+    }
+    if (a == "terminal.clear") {
+      j->clear();
+      return;
+    }
+    if (a == "terminal.export") {
+      j->exportLogs();
+      return;
+    }
+    if (a == "terminal.focus") {
+      j->focusTable();
+      return;
+    }
+    if (a == "terminal.interrupt") {
+      j->stop();
+      return;
+    }
+    if (a == "terminal.restart" || a == "terminal.paste" ||
+        a == "terminal.rename") {
+      SetStatusText("Select a terminal tab for this action");
+      return;
+    }
+  }
   auto t = currentTerminal();
   if (a == "terminal.new" || a == "terminal.split") {
     addTerminal(a == "terminal.split");
@@ -627,7 +686,10 @@ void terminalAction(const std::string& a) {
       bottom->SetSelection(
           (bottom->GetSelection() + n + (a == "terminal.next" ? 1 : n - 1)) %
           n);
-      showTerminal(currentTerminal());
+      if (auto* j = dynamic_cast<wxui::JournalPanel*>(bottom->GetCurrentPage()))
+        j->focusTable();
+      else if (!isPluginPage(bottom->GetCurrentPage()))
+        showTerminal(currentTerminal());
     }
     return;
   }
@@ -849,6 +911,15 @@ void findInEditor(const std::string& a) {
   e->SetFocus();
 }
 void editorAction(const std::string& a) {
+  for (auto* n : {editors, bottom})
+    if (auto* j = dynamic_cast<wxui::JournalPanel*>(n->GetCurrentPage());
+        j && j->tableHasFocus()) {
+      if (a == "edit.copy")
+        j->copySelected();
+      else if (a == "selection.all")
+        j->selectAllRows();
+      return;
+    }
   auto e = active();
   auto* input = dynamic_cast<wxTextCtrl*>(wxWindow::FindFocus());
   auto* term = dynamic_cast<WxTerminal*>(wxWindow::FindFocus());
@@ -926,20 +997,11 @@ void editorAction(const std::string& a) {
   e->SetSelection(r.selectBegin, r.selectEnd);
   e->EnsureCaretVisible();
 }
-void refreshGitView() {
-  std::string err;
-  auto history = gitHistory(root, &err);
-  std::string text;
-  for (auto& c : history)
-    text += c.sha + "  " + c.subject + "\n" + c.author + "  " + c.date + "\n\n";
-  git->SetValue(W(text.empty() ? err : text));
-  showSide(2);
-}
 void openTool(const std::string& a) {
   if (a == "tool.data_server") {
     wxMessageBox(
-        "Data Server is experimental in Raven too; no network controller is "
-        "implemented.",
+        "Data Server is experimental in Raven too; no network "
+        "controller is implemented.",
         "Data Server", wxOK | wxICON_INFORMATION, this);
     return;
   }
@@ -983,60 +1045,193 @@ void openTool(const std::string& a) {
   palette.apply(&view);
   showModal(view);
 }
-void pluginView(const std::string& id) {
-  for (auto& v : plugins.views())
-    if (v.id == id) {
-      if (id == "docker.dashboard") {
-        dockerPanel();
-        return;
-      }
-      auto p = new wxScrolledWindow(side, wxID_ANY);
+// Generic plugin views are identified by their registered ID, not their title.
+bool isPluginPage(wxWindow* page) const {
+  return page && (page->GetName().StartsWith("dodev.plugin.view:") ||
+                  page->GetName().StartsWith("dodev.plugin.pending:"));
+}
+// Workspace views are registered by plugins, and loaded only when selected.
+// This avoids running Git queries or other plugin work during project startup.
+void resetWorkspacePluginTabs() {
+  side->SetSelection(0);
+  for (size_t i = side->GetPageCount(); i > 0; --i)
+    if (isPluginPage(side->GetPage(i - 1))) side->DeletePage(i - 1);
+  for (const auto& v : plugins.views())
+    if (isWorkspacePluginView(v)) {
+      auto* p = new wxScrolledWindow(side, wxID_ANY);
+      p->SetName(W("dodev.plugin.pending:" + v.id));
       p->SetScrollRate(0, 12);
-      auto s = new wxBoxSizer(wxVERTICAL);
+      auto* s = new wxBoxSizer(wxVERTICAL);
       p->SetSizer(s);
-      struct Ctx {
-        Frame* f;
-        wxWindow* p;
-        wxSizer* s;
-      };
-      Ctx c{this, p, s};
-      DodevUiBuilder b{};
-      b.struct_size = sizeof(b);
-      b.context = &c;
-      b.label = [](void* x, const char* text) {
-        auto& c = *static_cast<Ctx*>(x);
-        auto l = new wxStaticText(c.p, wxID_ANY, W(text ? text : ""));
-        l->Wrap(350);
-        c.s->Add(l, 0, wxALL | wxEXPAND, 6);
-      };
-      b.button = [](void* x, const char* text, const char* cmd) {
-        auto& c = *static_cast<Ctx*>(x);
-        auto f = c.f;
-        f->button(
-            c.p, c.s, W(text ? text : ""),
-            [f, key = std::string(cmd ? cmd : "")] {
-              if (key == "gdb.start" || key == "gdb.select" ||
-                  key == "gdb.configure")
-                f->dispatch(key);
-              else if (!f->plugins.execute(key))
-                throw std::runtime_error("Plugin command unavailable: " + key);
-            });
-      };
-      b.read_only_text = [](void* x, const char* text) {
-        auto& c = *static_cast<Ctx*>(x);
-        auto t = new wxTextCtrl(c.p, wxID_ANY, W(text ? text : ""),
-                                wxDefaultPosition, wxSize(-1, 120),
-                                wxTE_MULTILINE | wxTE_READONLY);
-        c.s->Add(t, 1, wxEXPAND | wxALL, 5);
-      };
-      plugins.buildView(v, b);
-      side->AddPage(p, W(v.title), true);
-      p->FitInside();
+      s->Add(new wxStaticText(p, wxID_ANY,
+                              "Select this tab to load its plugin view."),
+             0, wxALL | wxEXPAND, 6);
+      side->AddPage(p, W(v.title), false);
       palette.apply(p);
-      aui.GetPane(side).Show();
-      aui.Update();
+    }
+}
+void loadSelectedWorkspacePlugin() {
+  auto* p = side->GetCurrentPage();
+  if (!p || !p->GetName().StartsWith("dodev.plugin.pending:")) return;
+  const wxString prefix = "dodev.plugin.pending:";
+  auto id = S(p->GetName().Mid(prefix.length()));
+  // A project switch or close may destroy the pending page before this event
+  // runs.
+  CallAfter([this, id, weak = wxWeakRef<wxWindow>(p)] {
+    auto* page = weak.get();
+    if (!page || side->GetCurrentPage() != page ||
+        !page->GetName().StartsWith("dodev.plugin.pending:"))
+      return;
+    try {
+      pluginView(id);
+    } catch (const std::exception& e) {
+      error(e);
+    }
+  });
+}
+#include "WxWorkspaceProfiles.inc"
+void pluginView(const std::string& id, bool reload = false) {
+  for (const auto& v : plugins.views()) {
+    if (v.id != id) continue;
+    // Existing legacy Docker graphical adapter; generic SDK views below.
+    if (id == "docker.dashboard") {
+      dockerPanel();
       return;
     }
+    const auto placement = pluginViewLocation(v);
+    auto* book = placement == PluginViewLocation::Editor   ? editors
+                 : placement == PluginViewLocation::Output ? bottom
+                                                           : side;
+    const auto name = W("dodev.plugin.view:" + id);
+    auto reveal = [&] {
+      if (book != editors) aui.GetPane(book).Show();
+      aui.Update();
+    };
+    // Populate lazy pages in place, keeping tab order and the Workspace
+    // selection stable.
+    wxScrolledWindow* p = nullptr;
+    const auto pending = W("dodev.plugin.pending:" + id);
+    for (size_t i = 0; i < book->GetPageCount(); ++i) {
+      auto* old = book->GetPage(i);
+      if (old->GetName() != name && old->GetName() != pending) continue;
+      if (!reload && old->GetName() == name) {
+        book->SetSelection(i);
+        reveal();
+        return;
+      }
+      p = dynamic_cast<wxScrolledWindow*>(old);
+      if (p) break;
+    }
+    const bool existing = p != nullptr;
+    if (!p) {
+      p = new wxScrolledWindow(book, wxID_ANY);
+      p->SetScrollRate(0, 12);
+      p->SetSizer(new wxBoxSizer(wxVERTICAL));
+    }
+    p->SetName(name);
+    auto* s = p->GetSizer();
+    s->Clear(true);
+    // The builder is a short-lived adapter. Widgets and copied strings are
+    // owned by wx.
+    struct Ctx {
+      Frame* f;
+      wxWindow* p;
+      wxSizer* s;
+      std::string owner;
+      bool sidebar;
+    };
+    Ctx c{this, p, s, v.owner, book == side};
+    DodevUiBuilder b{};
+    b.struct_size = sizeof(b);
+    b.context = &c;
+    b.label = [](void* x, const char* text) {
+      auto& c = *static_cast<Ctx*>(x);
+      auto* label = new wxStaticText(c.p, wxID_ANY, W(text ? text : ""));
+      label->Wrap(c.sidebar ? 240 : 550);
+      c.s->Add(label, 0, wxALL | wxEXPAND, 6);
+    };
+    b.button = [](void* x, const char* text, const char* cmd) {
+      auto& c = *static_cast<Ctx*>(x);
+      auto* f = c.f;
+      f->button(c.p, c.s, W(text ? text : ""),
+                [f, key = std::string(cmd ? cmd : "")] { f->dispatch(key); });
+    };
+    b.read_only_text = [](void* x, const char* text) {
+      auto& c = *static_cast<Ctx*>(x);
+      auto* t =
+          new wxTextCtrl(c.p, wxID_ANY, W(text ? text : ""), wxDefaultPosition,
+                         wxSize(-1, 100), wxTE_MULTILINE | wxTE_READONLY);
+      c.s->Add(t, 1, wxEXPAND | wxALL, 5);
+    };
+    b.table = [](void* x, const char* const* cols, size_t nc,
+                 const char* const* cells, const char* const* ids, size_t nr,
+                 const DodevHostAPI* host, DodevRowFn fn, void* data) {
+      auto& c = *static_cast<Ctx*>(x);
+      auto* list =
+          new wxListCtrl(c.p, wxID_ANY, wxDefaultPosition, wxSize(-1, 240),
+                         wxLC_REPORT | wxLC_SINGLE_SEL);
+      for (size_t k = 0; k < nc; ++k)
+        list->InsertColumn(static_cast<long>(k), W(cols[k]), wxLIST_FORMAT_LEFT,
+                           k == 0 ? 250 : 180);
+      auto keys = std::make_shared<std::vector<std::string>>();
+      for (size_t i = 0; i < nr; ++i) {
+        auto row = list->InsertItem(static_cast<long>(i), W(cells[i * nc]));
+        for (size_t k = 1; k < nc; ++k)
+          list->SetItem(row, static_cast<int>(k), W(cells[i * nc + k]));
+        keys->emplace_back(ids[i]);
+      }
+      c.s->Add(list, 1, wxEXPAND | wxALL, 4);
+      auto* frame = c.f;
+      list->Bind(wxEVT_LIST_ITEM_SELECTED,
+                 [frame, host, fn, data, keys](wxListEvent& e) {
+                   try {
+                     if (fn && e.GetIndex() >= 0 &&
+                         static_cast<size_t>(e.GetIndex()) < keys->size())
+                       fn(host, keys->at(e.GetIndex()).c_str(), data);
+                   } catch (const std::exception& ex) {
+                     frame->error(ex);
+                   }
+                 });
+    };
+    b.workspace_profiles = [](void* x, const char* defaults) {
+      auto& c = *static_cast<Ctx*>(x);
+      try {
+        c.f->workspaceProfilesEditor(c.p, c.s, c.owner,
+                                     defaults ? defaults : "{}");
+      } catch (const std::exception& ex) {
+        auto* label = new wxStaticText(c.p, wxID_ANY, W(ex.what()));
+        label->Wrap(240);
+        c.s->Add(label, 0, wxEXPAND | wxALL, 4);
+      }
+    };
+    plugins.buildView(v, b);
+    // Legacy native Journal view adapter; filter UI and behavior live in the
+    // plugin.
+    if (id == "remotejournal.filters") {
+      const auto directory = root;
+      auto* filters =
+          new wxui::JournalWorkspaceFilters(p, directory, [this, directory] {
+            std::vector<wxui::JournalPanel*> result;
+            for (size_t i = 0; i < editors->GetPageCount(); ++i)
+              if (auto* capture =
+                      dynamic_cast<wxui::JournalPanel*>(editors->GetPage(i));
+                  capture && capture->workspaceDirectory() == directory)
+                result.push_back(capture);
+            return result;
+          });
+      filters->SetName("journal.workspace.filters");
+      s->Add(filters, 0, wxEXPAND | wxALL, 2);
+    }
+    if (existing)
+      book->SetSelection(book->GetPageIndex(p));
+    else
+      book->AddPage(p, W(v.title), true);
+    p->Layout();
+    p->FitInside();
+    palette.apply(p);
+    reveal();
+    return;
+  }
   throw std::runtime_error("Plugin view unavailable: " + id +
                            ". Enable its plugin in Settings and restart.");
 }
@@ -1139,6 +1334,17 @@ void commandPalette() {
   if (showModal(d) == wxID_OK) dispatch(actions.at(d.GetSelection()));
 }
 void dispatch(const std::string& a) {
+  if (a.rfind("plugin.reload.", 0) == 0) {
+    auto id = a.substr(14);
+    CallAfter([this, id] {
+      try {
+        pluginView(id, true);
+      } catch (const std::exception& e) {
+        error(e);
+      }
+    });
+    return;
+  }
   if (a.rfind("launch.", 0) == 0) {
     launchAction(a);
     return;
@@ -1171,6 +1377,15 @@ void dispatch(const std::string& a) {
   } else if (a == "file.save" || a == "file.save_as")
     save(active(), a == "file.save_as");
   else if (a == "file.close") {
+    if (isPluginPage(editors->GetCurrentPage())) {
+      editors->DeletePage(editors->GetSelection());
+      return;
+    }
+    if (auto* j =
+            dynamic_cast<wxui::JournalPanel*>(editors->GetCurrentPage())) {
+      j->requestClose();
+      return;
+    }
     auto e = active();
     if (e && confirm(e)) {
       docs.erase(e);
@@ -1181,23 +1396,28 @@ void dispatch(const std::string& a) {
   else if (a == "app.exit")
     Close();
   else if (a == "app.about")
-    wxMessageBox("DoDevEditor wxWidgets 5.1.6\nC++17 · wxAUI · Scintilla",
+    wxMessageBox("DoDevEditor wxWidgets 5.2.7\nC++17 · wxAUI · Scintilla",
                  "About", wxOK, this);
   else if (a == "panel.explorer")
     showSide(0);
   else if (a == "panel.search" || a == "edit.find_workspace") {
     showSide(1);
     query->SetFocus();
-  } else if (a == "panel.git")
+  } else if (a == "panel.git") {
+    pluginView("git.history");
+  } else if (a == "panel.symbols")
     showSide(2);
-  else if (a == "panel.symbols")
-    showSide(3);
   else if (a == "calls.open") {
-    showSide(4);
+    showSide(3);
     hierarchy();
-  } else if (a == "panel.output")
-    showTerminal(currentTerminal());
-  else if (a == "explorer.reveal")
+  } else if (a == "panel.output") {
+    aui.GetPane(bottom).Show();
+    aui.Update();
+    if (auto* j = dynamic_cast<wxui::JournalPanel*>(bottom->GetCurrentPage()))
+      j->focusTable();
+    else if (!isPluginPage(bottom->GetCurrentPage()))
+      showTerminal(currentTerminal());
+  } else if (a == "explorer.reveal")
     reveal();
   else if (a.rfind("explorer.", 0) == 0)
     explorerAction(a);
@@ -1206,9 +1426,9 @@ void dispatch(const std::string& a) {
   else if (a == "editor.format") {
     if (!plugins.execute("clangformat.apply"))
       throw std::runtime_error("Enable ClangFormat in Settings and restart.");
-  } else if (a == "git.refresh" || a == "git.details")
-    refreshGitView();
-  else if (a == "navigation.quick_open")
+  } else if (a == "git.refresh" || a == "git.details") {
+    pluginView("git.history", true);
+  } else if (a == "navigation.quick_open")
     quickOpen();
   else if (a == "navigation.go_to_line") {
     auto e = active();

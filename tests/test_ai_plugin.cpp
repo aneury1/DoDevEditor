@@ -35,6 +35,8 @@ int main() {
     if (item.owner == "com.dodev.aiassistant" && item.key == "model")
       foundSettings = true;
   REQUIRE(foundMenu && foundSettings);
+  REQUIRE(manager.settingsActions().size() == 1);
+  REQUIRE(manager.settingsActions()[0].command == "ai.open");
   manager.shutdown();
   fs::remove_all(root);
   return 0;

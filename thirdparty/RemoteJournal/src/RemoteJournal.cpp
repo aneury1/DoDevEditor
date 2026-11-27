@@ -82,8 +82,13 @@ std::vector<std::string> Session::sshArguments(const Options& o) {
   // command is a fixed journalctl invocation, never arbitrary input.
   const auto target = o.user + "@" + o.host;
   std::string remote = (o.sudoNonInteractive ? "sudo -n " : "");
-  remote +=
-      "journalctl --no-pager --output=short-iso -n " + std::to_string(o.lines);
+  remote += "journalctl --no-pager ";
+  remote += o.structured ? "--output=json "
+                           "--output-fields=MESSAGE,PRIORITY,_HOSTNAME,_"
+                           "SYSTEMD_UNIT,_SYSTEMD_USER_UNIT,SYSLOG_IDENTIFIER,_"
+                           "COMM,_PID,SYSLOG_PID,APP_ID,APPLICATION_ID "
+                         : "--output=short-iso ";
+  remote += "-n " + std::to_string(o.lines);
   if (!o.unit.empty()) remote += " --unit='" + o.unit + "'";
   if (o.follow) remote += " --follow";
   std::vector<std::string> args = {
@@ -104,21 +109,51 @@ void Session::setStatus(std::string status) {
   std::lock_guard<std::mutex> guard(mutex_);
   status_ = std::move(status);
 }
+void Session::finishLine() {
+  if (truncated_) fragment_ += " [record truncated by DoDevEditor]";
+  constexpr std::size_t maxBytes = 16 * 1024 * 1024;
+  while (!lines_.empty() && (lines_.size() >= kMaxLines ||
+                             bufferBytes_ + fragment_.size() > maxBytes)) {
+    bufferBytes_ -= lines_.front().size();
+    lines_.pop_front();
+    ++dropped_;
+  }
+  bufferBytes_ += fragment_.size();
+  lines_.push_back(std::move(fragment_));
+  fragment_.clear();
+  truncated_ = false;
+  ++received_;
+}
 void Session::append(std::string text) {
   std::lock_guard<std::mutex> guard(mutex_);
   for (char c : text) {
     if (c == '\r') continue;
-    if (c == '\n') {
-      if (lines_.size() >= kMaxLines) {
-        lines_.pop_front();
-        ++dropped_;
-      }
-      lines_.push_back(fragment_);
-      fragment_.clear();
-      ++received_;
-    } else if (fragment_.size() < 8192)
+    if (c == '\n')
+      finishLine();
+    else if (fragment_.size() < 32768)
       fragment_ += c;
+    else
+      truncated_ = true;
   }
+}
+void Session::flushFragment() {
+  std::lock_guard<std::mutex> guard(mutex_);
+  if (!fragment_.empty() || truncated_) finishLine();
+}
+RowBatch Session::rowsAfter(std::size_t cursor, bool includeRows) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  RowBatch b;
+  b.status = status_;
+  b.received = received_;
+  b.dropped = dropped_;
+  b.running = running_.load();
+  const auto oldest = received_ - lines_.size() + 1;
+  if (cursor > received_) cursor = 0;
+  b.firstId = std::max(oldest, cursor + 1);
+  if (includeRows)
+    for (auto id = b.firstId; id <= received_; ++id)
+      b.lines.push_back(lines_[id - oldest]);
+  return b;
 }
 bool Session::setFilter(Filter filter, std::string pattern, bool sensitive,
                         std::string* error) {
@@ -184,7 +219,8 @@ void Session::clear() {
   std::lock_guard<std::mutex> lock(mutex_);
   lines_.clear();
   fragment_.clear();
-  received_ = dropped_ = 0;
+  received_ = dropped_ = bufferBytes_ = 0;
+  truncated_ = false;
 }
 bool Session::start(const Options& options, std::string* error) {
   if (options.passwordAuthentication) {
@@ -361,6 +397,7 @@ void Session::worker(Options options, std::string password) {
     }
   }
   close(pipes[0]);
+  flushFragment();
   int code = 0;
   pid_t waited = 0;
   if (stopping_) {
@@ -395,8 +432,8 @@ void Session::worker(Options options, std::string password) {
   (void)options;
   eraseSecret(password);
   setStatus(
-      "Remote journal transport currently requires POSIX/OpenSSH; Windows host "
-      "support is not yet available");
+      "Remote journal transport currently requires POSIX/OpenSSH; "
+      "Windows host support is not yet available");
 #endif
   running_ = false;
 }

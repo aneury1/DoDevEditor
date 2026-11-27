@@ -1,0 +1,12 @@
+{
+  "id": "com.dodev.simplemodule",
+  "name": "Simple Module",
+  "version": "1.0.0",
+  "description": "Minimal native SDK example: Options menu, settings, editor tab and Output view",
+  "apiVersion": 1,
+  "entry": {
+    "linux": "libsimplemodule_plugin.so",
+    "windows": "simplemodule_plugin.dll",
+    "macos": "libsimplemodule_plugin.dylib"
+  }
+}

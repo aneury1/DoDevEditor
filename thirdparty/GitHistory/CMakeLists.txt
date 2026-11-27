@@ -1,0 +1,12 @@
+# Git history is a native plugin; the editor does not own its settings or views.
+add_library(dodev_git_history_core STATIC src/GitHistory.cpp)
+target_include_directories(dodev_git_history_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(dodev_git_history_core PUBLIC dodev_terminal)
+add_library(dodev_git_history_plugin MODULE src/GitPlugin.cpp)
+target_link_libraries(dodev_git_history_plugin PRIVATE dodev_git_history_core)
+set(dir "${PROJECT_BINARY_DIR}/plugins/git-history")
+dodev_runtime_directory(dodev_git_history_plugin "${dir}")
+dodev_plugin_filename(dodev_git_history_plugin)
+configure_file(plugin.json "${dir}/plugin.json" COPYONLY)
+install(TARGETS dodev_git_history_plugin LIBRARY DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins/git-history" RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins/git-history")
+install(FILES plugin.json DESTINATION "${CMAKE_INSTALL_BINDIR}/plugins/git-history")

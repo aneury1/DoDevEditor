@@ -22,6 +22,7 @@ int main() {
     assert(settings.load());
     assert(settings.getInt("editor.fontSize") == 14);
     assert(!fs::exists(settings.file()));
+    assert(!settings.get("remoteJournal").isObject());
     Json src;
     std::string err;
     assert(Json::parse(

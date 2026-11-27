@@ -652,8 +652,8 @@ void EditorApp::handleAction(const std::string& name) {
           "QR Code: choose a PNG/SVG output path for the active document");
     } else {
       std::string state =
-          "Not discovered (verify make install or executable plugins "
-          "directory)";
+          "Not discovered (verify make install or executable "
+          "plugins directory)";
       for (const auto& item : pluginManager_.records()) {
         if (item.manifest.id == "com.dodev.qrcode") {
           state = item.status;

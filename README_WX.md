@@ -1,4 +1,12 @@
-# DoDevEditor wxWidgets 5.1.9 — GUI compilation hotfix
+# DoDevEditor wxWidgets 5.2.6 — Workspace plugin views
+
+See [Plugin settings SDK](docs/PLUGIN_SETTINGS_SDK.md) for the dynamic settings pages, migration, compatibility and remaining native UI adapter boundary.
+
+New: dedicated payload/service filters, inclusive UTC time ranges with microsecond precision, and Settings > Remote Journal > Output panel or Editor tabs. See [the update guide](docs/WX_5_2_1_JOURNAL_FILTERS.md).
+
+# DoDevEditor wxWidgets 5.2.0 — Persistent Remote Journal output tabs
+
+Remote Journal now opens a persistent tab in the Output panel with structured rows, filtering, copying and export. See [the journal guide](docs/WX_5_2_0_JOURNAL.md).
 
 See [build hotfix notes](docs/WX_5_1_9_BUILD_FIX.md).
 
@@ -71,3 +79,20 @@ Enable **Docker Manager** in Settings > Plugins, restart, then open Plugins > Do
 ## 5.1.7: Syntax Highlighting
 
 Open **Settings > Syntax Highlighting** to configure theme-wide and language-specific token styles or individual keywords. Inheritance, preview, reset and persistent settings are described in [Syntax Highlighting](docs/WX_5_1_7_SYNTAX.md).
+
+See `plugins/examples/SimpleModule/README.md` for the independently buildable plugin tutorial.
+
+## 5.2.4 migration status
+
+See [workspace profiles and plugin boundaries](docs/WX_5_2_4_PLUGIN_BOUNDARIES.md). The standalone plugin export is limited to Git History, QR Code and Simple Module; full GUI decoupling of legacy plugins remains pending.
+
+## 5.2.5 Journal filter rules
+
+See [Journal filter rules](docs/WX_5_2_5_JOURNAL_RULES.md).
+
+## 5.2.6 Workspace plugin views
+
+Enable Git History and Remote Journal in Settings > Plugins and restart. Workspace panels are created automatically when a project opens and loaded on selection. Git history is a table, and selecting a commit replaces the named Output view with full metadata and changed files (diff enabled by default for new settings). Journal Logs contains the inline workspace profile editor; SSH captures always open as editor tabs. See `docs/WX_5_2_6_WORKSPACE_VIEWS.md`.
+
+### 5.2.7
+Journal filters are managed in Workspace; captures export TXT, CSV or SQLite snapshots. See [Journal workspace and export](docs/WX_5_2_7_JOURNAL_WORKSPACE_EXPORT.md).

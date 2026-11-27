@@ -32,7 +32,8 @@ WorkspaceIndex indexWorkspace(const fs::path& root, const Options& options) {
   const auto cache = root / ".dodev" / "symbols-cache.json";
   const auto key = std::to_string(static_cast<int>(options.mode)) + ":" +
                    options.clangExecutable + ":" +
-                   std::to_string(options.timeoutMs);
+                   std::to_string(options.timeoutMs) + ":" +
+                   options.captureKinds;
   Json old;
   if (!Json::parse(read(cache), old) || old["version"].integer() != 2 ||
       old["options"].string() != key)

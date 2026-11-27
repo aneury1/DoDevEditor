@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "enabled": true,
+  "rules": [
+    {"name":"Payment transactions", "type":"positive", "enabled":true, "application":"PAYMENT", "payload":"transaction"},
+    {"name":"Network failures", "type":"positive", "enabled":true, "payload":"timeout|connection refused", "regex":true},
+    {"name":"Hide health checks", "type":"negative", "enabled":true, "payload":"healthcheck"},
+    {"name":"Errors in red", "type":"marker", "enabled":true, "minPriority":0, "maxPriority":3, "foreground":"#FFFFFF", "background":"#802020"},
+    {"name":"Warnings in amber", "type":"marker", "enabled":true, "minPriority":4, "maxPriority":4, "foreground":"#FFFFFF", "background":"#815000"}
+  ]
+}
