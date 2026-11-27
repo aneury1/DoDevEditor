@@ -432,8 +432,8 @@ void Session::worker(Options options, std::string password) {
   (void)options;
   eraseSecret(password);
   setStatus(
-      "Remote journal transport currently requires POSIX/OpenSSH; "
-      "Windows host support is not yet available");
+      "Remote journal transport currently requires POSIX/OpenSSH; Windows host "
+      "support is not yet available");
 #endif
   running_ = false;
 }

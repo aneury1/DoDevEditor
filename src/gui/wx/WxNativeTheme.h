@@ -55,8 +55,8 @@ inline void applyNativeTheme(const wxColour& window, const wxColour& panel,
   rule("notebook > header tab:checked", i, t);
   rule(
       "menuitem:hover, button:hover, notebook > header tab:hover, "
-      "treeview:selected, treeview:selected:focus, list row:selected, "
-      "textview text selection, entry selection",
+      "treeview:selected, treeview:selected:focus, list row:selected, textview "
+      "text selection, entry selection",
       a, sel);
   rule("scrollbar, scrollbar trough, separator, paned separator", p, t);
   rule("scrollbar slider", c, t);

@@ -1,6 +1,6 @@
 # DoDevEditor 5.1.8 — Build system
 
-This release reorganizes CMake, not editor behavior. wxWidgets is the desktop frontend; Raven reference/upgrade files are retained but not built. No third-party source downloads are required by the root build. CMake 3.21+ and a C++17 compiler are required.
+This release reorganizes CMake, not editor behavior. wxWidgets is the desktop frontend; Raven reference/upgrade files are retained but not built. Windows builds can fetch wxWidgets when no installed package is detected; Linux/macOS still prefer system packages. See [Windows build guide](WX_5_2_9_WINDOWS_BUILD.md). CMake 3.21+ and a C++17 compiler are required.
 
 ## Build file map
 
@@ -39,7 +39,7 @@ sudo apt install build-essential cmake ninja-build libwxgtk3.2-dev libgtk-3-dev 
 
 GTK3 CSS, curl HTTP and Python script tests are optional. Runtime tools such as `gdb`, `clang`, `git`, `ssh`, `sshpass`, `docker` and `graphviz` are feature-specific and do not all have to be installed to compile. On older distributions, verify that CMake >= 3.21 and wxWidgets >= 3.2 are available. Use a matching compiler/architecture for a custom wxWidgets build.
 
-Windows: use a wxWidgets 3.2+ build matching the selected MSVC/MinGW compiler, architecture and Debug/Release runtime; configure with `-DwxWidgets_ROOT_DIR=...` and, if needed, `-DwxWidgets_LIB_DIR=...`. Dynamic wx DLLs must be on PATH or beside the installed executable. Windows and macOS GUI builds are not validated by this release. The current POSIX terminal includes `<pty.h>`; platforms lacking that header need a source-level terminal port, not just another library path.
+Windows: wxWidgets 3.2.6 is automatically fetched and built statically if no installed compatible package is detected. To use an existing wxWidgets 3.2+ build, match the selected MSVC/MinGW compiler, architecture and Debug/Release runtime; configure with `-DwxWidgets_ROOT_DIR=...` and, if needed, `-DwxWidgets_LIB_DIR=...`. Dynamic wx DLLs must be on PATH or beside the installed executable. Windows and macOS GUI builds are not validated by this release. The current POSIX terminal includes `<pty.h>`; platforms lacking that header need a source-level terminal port, not just another library path.
 
 ## Recommended build (Ninja)
 

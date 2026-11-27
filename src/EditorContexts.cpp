@@ -352,8 +352,8 @@ void EditorApp::explorerAction(const std::string& action) {
         return;
       }
     const std::string msg =
-        "Eliminar permanentemente el elemento y, si es "
-        "carpeta, todo su contenido?\n\n" +
+        "Eliminar permanentemente el elemento y, si es carpeta, todo su "
+        "contenido?\n\n" +
         selected.string();
     if (Rmessage_box(window_, "Confirmar eliminacion", msg.c_str(),
                      R_MESSAGE_YES_NO) != R_MESSAGE_RESULT_YES)

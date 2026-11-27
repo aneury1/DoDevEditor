@@ -159,9 +159,8 @@ static Response WriteContentToFile(std::string filePath, std::string content) {
 
 static std::vector<uint8_t> ReadBinaryFile(const std::string& filename) {
   std::ifstream file(
-      filename,
-      std::ios::binary |
-          std::ios::ate);  // Open in binary mode, move to the end
+      filename, std::ios::binary |
+                    std::ios::ate);  // Open in binary mode, move to the end
 
   if (!file) {
     return {};

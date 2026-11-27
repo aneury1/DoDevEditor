@@ -11,8 +11,8 @@ void panel(const DodevHostAPI*, const DodevUiBuilder* ui, void*) {
       "AI Assistant: chat with an OpenAI-compatible provider or local Ollama.");
   ui->button(ui->context, "Open AI Assistant", "ai.open");
   ui->label(ui->context,
-            "The active file is sent only when you explicitly "
-            "choose an action that includes it.");
+            "The active file is sent only when you explicitly choose an action "
+            "that includes it.");
 }
 }  // namespace
 extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,

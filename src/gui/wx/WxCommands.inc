@@ -91,8 +91,8 @@ void explorerAction(const std::string& a) {
     auto parent = fs::is_directory(p, ec) ? p : p.parent_path();
     if (!wxui::explorer::canExpand(parent, root))
       throw std::runtime_error(
-          "Cannot create entries outside the workspace or "
-          "through recursive directory links");
+          "Cannot create entries outside the workspace or through recursive "
+          "directory links");
     auto r = explorer::createEntry(parent, S(name), folder);
     if (!r.ok) throw std::runtime_error(r.error);
     refreshTree();
@@ -1000,8 +1000,8 @@ void editorAction(const std::string& a) {
 void openTool(const std::string& a) {
   if (a == "tool.data_server") {
     wxMessageBox(
-        "Data Server is experimental in Raven too; no network "
-        "controller is implemented.",
+        "Data Server is experimental in Raven too; no network controller is "
+        "implemented.",
         "Data Server", wxOK | wxICON_INFORMATION, this);
     return;
   }
@@ -1204,6 +1204,39 @@ void pluginView(const std::string& id, bool reload = false) {
         c.s->Add(label, 0, wxEXPAND | wxALL, 4);
       }
     };
+    b.form = [](void* x, const DodevFormField* fields, size_t count,
+                const char* submit, const DodevHostAPI* host, DodevFormFn fn,
+                void* data) {
+      auto& c = *static_cast<Ctx*>(x);
+      if (!fields || !fn || count == 0 || count > 64) return;
+      auto inputs = std::make_shared<std::vector<wxTextCtrl*>>();
+      for (size_t i = 0; i < count; ++i) {
+        c.s->Add(new wxStaticText(c.p, wxID_ANY,
+                                  W(fields[i].label ? fields[i].label : "")),
+                 0, wxLEFT | wxTOP, 5);
+        auto* t = new wxTextCtrl(
+            c.p, wxID_ANY, W(fields[i].initial ? fields[i].initial : ""),
+            wxDefaultPosition,
+            fields[i].multiline ? wxSize(-1, 95) : wxDefaultSize,
+            fields[i].multiline ? wxTE_MULTILINE : 0);
+        inputs->push_back(t);
+        c.s->Add(t, 0, wxEXPAND | wxALL, 5);
+      }
+      auto* frame = c.f;
+      frame->button(c.p, c.s, W(submit ? submit : "Submit"),
+                    [frame, host, fn, data, inputs] {
+                      try {
+                        std::vector<std::string> values;
+                        std::vector<const char*> args;
+                        for (auto* t : *inputs)
+                          values.push_back(S(t->GetValue()));
+                        for (auto& v : values) args.push_back(v.c_str());
+                        fn(host, args.data(), args.size(), data);
+                      } catch (const std::exception& e) {
+                        frame->error(e);
+                      }
+                    });
+    };
     plugins.buildView(v, b);
     // Legacy native Journal view adapter; filter UI and behavior live in the
     // plugin.
@@ -1396,7 +1429,7 @@ void dispatch(const std::string& a) {
   else if (a == "app.exit")
     Close();
   else if (a == "app.about")
-    wxMessageBox("DoDevEditor wxWidgets 5.2.7\nC++17 · wxAUI · Scintilla",
+    wxMessageBox("DoDevEditor wxWidgets 5.2.9\nC++17 · wxAUI · Scintilla",
                  "About", wxOK, this);
   else if (a == "panel.explorer")
     showSide(0);

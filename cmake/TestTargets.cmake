@@ -167,3 +167,16 @@ target_compile_definitions(dodev_workspace_plugin_extensions_tests PRIVATE DODEV
 add_dependencies(dodev_workspace_plugin_extensions_tests dodev_serial_monitor_plugin dodev_remote_journal_plugin dodev_source_symbols_plugin dodev_git_history_plugin)
 dodev_test_assertions(dodev_workspace_plugin_extensions_tests)
 add_test(NAME workspace_plugin_extensions COMMAND dodev_workspace_plugin_extensions_tests)
+
+# HTTP client is optional and its integration test uses the real native loader.
+if(TARGET dodev_http_client_plugin)
+    add_executable(dodev_http_plugin_tests tests/test_http_plugin.cpp)
+    target_link_libraries(dodev_http_plugin_tests PRIVATE dodev_services)
+    target_compile_definitions(dodev_http_plugin_tests PRIVATE HTTP_PLUGIN_DIR="${PROJECT_BINARY_DIR}/plugins/http-client")
+    add_dependencies(dodev_http_plugin_tests dodev_http_client_plugin)
+    add_test(NAME http_client_sdk COMMAND dodev_http_plugin_tests)
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND AND TARGET http_client_tests)
+        add_test(NAME http_client_local COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/thirdparty/HttpClient/tests/local_server.py" "$<TARGET_FILE:http_client_tests>")
+    endif()
+endif()

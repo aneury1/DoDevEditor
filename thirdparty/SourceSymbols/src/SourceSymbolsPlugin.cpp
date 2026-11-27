@@ -9,12 +9,12 @@ void open(const DodevHostAPI* host, void*) {
 void help(const DodevHostAPI*, const DodevUiBuilder* ui, void*) {
   if (!ui) return;
   ui->label(ui->context,
-            "Clang-first AST symbols with automatic regex "
-            "fallback; works with unsaved edits.");
+            "Clang-first AST symbols with automatic regex fallback; works with "
+            "unsaved edits.");
   ui->button(ui->context, "Extract symbols from editor", "sourcesymbols.open");
   ui->label(ui->context,
-            "Results appear in Tasks · Symbols, with search, "
-            "navigation and CSV export.");
+            "Results appear in Tasks · Symbols, with search, navigation and "
+            "CSV export.");
 }
 }  // namespace
 extern "C" DODEV_PLUGIN_EXPORT int dodev_plugin_init(const DodevHostAPI* host,

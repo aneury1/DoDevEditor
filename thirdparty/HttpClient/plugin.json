@@ -1,0 +1,1 @@
+{"id":"com.dodev.httpclient","name":"HTTP Client","version":"1.0.0","description":"Workspace HTTP request builder, editor response tabs and request history","apiVersion":1,"entry":{"linux":"libdodev_http_client_plugin.so","windows":"dodev_http_client_plugin.dll","macos":"libdodev_http_client_plugin.dylib"}}

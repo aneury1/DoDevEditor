@@ -31,8 +31,8 @@ void selected(const DodevHostAPI* h, const char* id, void*) {
 }
 void view(const DodevHostAPI* h, const DodevUiBuilder* ui, void*) {
   ui->label(ui->context,
-            "Git history — select a commit to inspect its "
-            "complete metadata and changed files in Output.");
+            "Git history — select a commit to inspect its complete metadata "
+            "and changed files in Output.");
   ui->button(ui->context, "Refresh history", "plugin.reload.git.history");
   if (ui->struct_size < offsetof(DodevUiBuilder, table) + sizeof(ui->table) ||
       !ui->table) {

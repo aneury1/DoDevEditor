@@ -81,8 +81,8 @@ std::vector<terminal::TaskLaunch> planWithoutDebug(
   if (text(j, "type") != "cppdbg" || text(j, "MIMode", "gdb") != "gdb" ||
       text(j, "request") != "launch")
     throw std::runtime_error(
-        "Run Without Debugging requires a local "
-        "cppdbg/GDB launch profile (not attach)");
+        "Run Without Debugging requires a local cppdbg/GDB launch profile (not "
+        "attach)");
   if (!text(j, "miDebuggerServerAddress").empty() ||
       j["externalConsole"].boolean() || j.find("pipeTransport") ||
       j.find("debugServerPath") || j.find("coreDumpPath") ||

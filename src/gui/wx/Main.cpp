@@ -460,8 +460,8 @@ class Frame : public wxFrame {
   void run() {
     if (debug->session.running()) {
       debug->session.sendLine(
-          "python gdb.execute('continue' if "
-          "gdb.selected_inferior().pid else 'run')");
+          "python gdb.execute('continue' if gdb.selected_inferior().pid else "
+          "'run')");
       return;
     }
     auto name = chooseLaunchConfig();
@@ -710,7 +710,7 @@ class Frame : public wxFrame {
 #include "WxTools.inc"
  public:
   Frame()
-      : wxFrame(nullptr, wxID_ANY, "DoDevEditor wx 5.2.7", wxDefaultPosition,
+      : wxFrame(nullptr, wxID_ANY, "DoDevEditor wx 5.2.9", wxDefaultPosition,
                 wxSize(1250, 850)),
         aui(this),
         timer(this) {
@@ -1023,6 +1023,18 @@ class Frame : public wxFrame {
         cb(S(d.GetPath()));
       }
       return true;
+    };
+    hooks.runJob = [this](const std::string& title, DodevWorkFn work,
+                          void* data) {
+      return networkJob(W(title), [work, data](std::atomic<bool>* cancel) {
+        work(
+            data,
+            [](void* p) -> int {
+              return static_cast<std::atomic<bool>*>(p)->load() ? 1 : 0;
+            },
+            cancel);
+        return true;
+      });
     };
     hooks.showTextView = [this](const std::string& id, const std::string& title,
                                 const std::string& where,

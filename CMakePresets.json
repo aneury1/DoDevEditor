@@ -1,53 +1,170 @@
 {
   "version": 3,
-  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "base",
       "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-${presetName}",
-      "cacheVariables": { "DODEV_BUILD_TESTS": "ON", "CMAKE_EXPORT_COMPILE_COMMANDS": "ON" }
+      "cacheVariables": {
+        "DODEV_BUILD_TESTS": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
     },
     {
       "name": "desktop-release",
       "displayName": "Desktop Release (wxWidgets)",
       "inherits": "base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "DODEV_BUILD_GUI": "ON" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "DODEV_BUILD_GUI": "ON"
+      }
     },
     {
       "name": "desktop-debug",
       "displayName": "Desktop Debug (wxWidgets)",
       "inherits": "base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "DODEV_BUILD_GUI": "ON" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "DODEV_BUILD_GUI": "ON"
+      }
     },
     {
       "name": "headless-debug",
       "displayName": "Backend and plugin tests (no wxWidgets)",
       "inherits": "base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "DODEV_BUILD_GUI": "OFF" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "DODEV_BUILD_GUI": "OFF"
+      }
     },
     {
       "name": "headless-minimal",
       "displayName": "Backend tests without optional HTTP, QR and example plugins",
       "inherits": "base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release", "DODEV_BUILD_GUI": "OFF",
-        "DODEV_ENABLE_AI_HTTP": "OFF", "DODEV_BUILD_QRCODE_PLUGIN": "OFF",
+        "CMAKE_BUILD_TYPE": "Release",
+        "DODEV_BUILD_GUI": "OFF",
+        "DODEV_ENABLE_AI_HTTP": "OFF",
+        "DODEV_BUILD_QRCODE_PLUGIN": "OFF",
         "DODEV_BUILD_PLUGIN_EXAMPLES": "OFF"
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Windows x64 / Visual Studio 2022 (auto wxWidgets)",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "DODEV_BUILD_GUI": "ON",
+        "DODEV_FETCH_WXWIDGETS": "ON",
+        "DODEV_WX_FETCH_PROGRESS": "ON"
+      },
+      "architecture": "x64"
+    },
+    {
+      "name": "windows-mingw-release",
+      "displayName": "Windows MinGW-w64 / Ninja (auto wxWidgets)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "DODEV_BUILD_GUI": "ON",
+        "DODEV_FETCH_WXWIDGETS": "ON",
+        "DODEV_WX_FETCH_PROGRESS": "ON",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
       }
     }
   ],
   "buildPresets": [
-    { "name": "desktop-release", "configurePreset": "desktop-release" },
-    { "name": "desktop-debug", "configurePreset": "desktop-debug" },
-    { "name": "headless-debug", "configurePreset": "headless-debug" },
-    { "name": "headless-minimal", "configurePreset": "headless-minimal" }
+    {
+      "name": "desktop-release",
+      "configurePreset": "desktop-release"
+    },
+    {
+      "name": "desktop-debug",
+      "configurePreset": "desktop-debug"
+    },
+    {
+      "name": "headless-debug",
+      "configurePreset": "headless-debug"
+    },
+    {
+      "name": "headless-minimal",
+      "configurePreset": "headless-minimal"
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-mingw-release",
+      "configurePreset": "windows-mingw-release",
+      "configuration": "Release"
+    }
   ],
   "testPresets": [
-    { "name": "desktop-release", "configurePreset": "desktop-release", "output": { "outputOnFailure": true } },
-    { "name": "desktop-debug", "configurePreset": "desktop-debug", "output": { "outputOnFailure": true } },
-    { "name": "headless-debug", "configurePreset": "headless-debug", "output": { "outputOnFailure": true } },
-    { "name": "headless-minimal", "configurePreset": "headless-minimal", "output": { "outputOnFailure": true } }
+    {
+      "name": "desktop-release",
+      "configurePreset": "desktop-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "desktop-debug",
+      "configurePreset": "desktop-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "headless-debug",
+      "configurePreset": "headless-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "headless-minimal",
+      "configurePreset": "headless-minimal",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc-release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-mingw-release",
+      "configurePreset": "windows-mingw-release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
   ]
 }

@@ -18,30 +18,6 @@ int main(){int fd; return forkpty(&fd, nullptr, nullptr, nullptr);}" DODEV_HAVE_
 endif()
 
 if(DODEV_BUILD_GUI)
-    # Use CMake's FindwxWidgets module for wx-config and Windows installations.
-    # Override wxWidgets_CONFIG_EXECUTABLE or wxWidgets_ROOT_DIR if needed.
-    find_package(wxWidgets 3.2 QUIET MODULE COMPONENTS core base aui stc adv)
-    if(NOT wxWidgets_FOUND)
-        message(FATAL_ERROR
-            "wxWidgets 3.2+ with core, base, aui, stc and adv is required.\n"
-            "Arch/CachyOS: install wxwidgets-gtk3; Debian/Ubuntu: libwxgtk3.2-dev.\n"
-            "Custom Unix install: -DwxWidgets_CONFIG_EXECUTABLE=/path/to/wx-config\n"
-            "Windows: -DwxWidgets_ROOT_DIR=C:/path/to/wxWidgets and, if needed, -DwxWidgets_LIB_DIR=...\n"
-            "Use a fresh build directory when switching compilers or wxWidgets installations.\n"
-            "For a backend-only build: -DDODEV_BUILD_GUI=OFF")
-    endif()
-    # Use a target instead of UsewxWidgets.cmake (which changes directory-wide
-    # compiler flags). Works with CMake 3.21 as well as newer releases.
-    add_library(dodev_wx_dependencies INTERFACE)
-    target_include_directories(dodev_wx_dependencies SYSTEM INTERFACE ${wxWidgets_INCLUDE_DIRS})
-    target_compile_definitions(dodev_wx_dependencies INTERFACE ${wxWidgets_DEFINITIONS})
-    foreach(definition IN LISTS wxWidgets_DEFINITIONS_DEBUG)
-        target_compile_definitions(dodev_wx_dependencies INTERFACE "$<$<CONFIG:Debug>:${definition}>")
-    endforeach()
-    target_compile_options(dodev_wx_dependencies INTERFACE ${wxWidgets_CXX_FLAGS})
-    if(wxWidgets_LIBRARY_DIRS)
-        target_link_directories(dodev_wx_dependencies INTERFACE ${wxWidgets_LIBRARY_DIRS})
-    endif()
-    target_link_libraries(dodev_wx_dependencies INTERFACE ${wxWidgets_LIBRARIES})
+    include("${CMAKE_CURRENT_LIST_DIR}/WxDependency.cmake")
     include("${CMAKE_CURRENT_LIST_DIR}/WxRuntimePath.cmake")
 endif()

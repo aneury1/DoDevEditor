@@ -365,8 +365,8 @@ bool KeybindingManager::save(std::string* error) const {
   if (malformed_) {
     if (error)
       *error =
-          "Refusing to overwrite invalid keybindings.json; repair or "
-          "rename the file";
+          "Refusing to overwrite invalid keybindings.json; repair or rename "
+          "the file";
     return false;
   }
   Json::Array changes;

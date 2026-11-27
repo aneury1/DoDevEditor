@@ -1,5 +1,7 @@
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(NAME wx_dependency_fetch COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_wx_fetch.py" "${CMAKE_COMMAND}")
+    set_tests_properties(wx_dependency_fetch PROPERTIES TIMEOUT 240)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         add_test(NAME wx_install_runtime_path COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_wx_runtime_path.py")
     endif()

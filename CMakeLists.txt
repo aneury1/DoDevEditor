@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(DoDevEditor VERSION 5.2.7 LANGUAGES C CXX)
+project(DoDevEditor VERSION 5.2.9 LANGUAGES C CXX)
 
 # All paths in these modules are relative to the project root. Modules
 # deliberately use include() so existing target names and paths are preserved.

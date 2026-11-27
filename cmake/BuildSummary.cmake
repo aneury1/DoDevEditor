@@ -11,6 +11,7 @@ message(STATUS "  GUI / tests           : ${DODEV_BUILD_GUI} / ${DODEV_BUILD_TES
 message(STATUS "  QR / example plugins  : ${DODEV_BUILD_QRCODE_PLUGIN} / ${DODEV_BUILD_PLUGIN_EXAMPLES}")
 message(STATUS "  AI HTTP available     : ${ai_http_enabled}")
 if(DODEV_BUILD_GUI)
+    message(STATUS "  wxWidgets provider    : ${DODEV_WX_PROVIDER}")
     message(STATUS "  wxWidgets version     : ${wxWidgets_VERSION_STRING}")
     message(STATUS "  wx-config             : ${wxWidgets_CONFIG_EXECUTABLE}")
     message(STATUS "  wxWidgets libraries   : ${wxWidgets_LIBRARIES}")

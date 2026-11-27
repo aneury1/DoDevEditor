@@ -10,9 +10,9 @@ void configureWorkspace(const DodevHostAPI* host, void*) {
 }
 void workspaceView(const DodevHostAPI*, const DodevUiBuilder* ui, void*) {
   ui->label(ui->context,
-            "Journal Logs — workspace SSH profiles. Save changes, "
-            "then connect. Each capture opens in its own editor "
-            "tab. Never store passwords in profiles.");
+            "Journal Logs — workspace SSH profiles. Save changes, then "
+            "connect. Each capture opens in its own editor tab. Never store "
+            "passwords in profiles.");
   if (ui->struct_size >= offsetof(DodevUiBuilder, workspace_profiles) +
                              sizeof(ui->workspace_profiles) &&
       ui->workspace_profiles)

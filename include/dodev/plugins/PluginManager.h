@@ -61,6 +61,7 @@ struct PluginSettingsAction {
 class PluginManager {
  public:
   struct HostHooks {
+    std::function<bool(const std::string&, DodevWorkFn, void*)> runJob;
     std::function<bool(std::string& path, std::string& contents)>
         activeDocument;
     std::function<bool(const std::string& contents)> replaceDocument;
@@ -179,6 +180,7 @@ class PluginManager {
                               void*);
   static int hostShowTextView(void*, const char*, const char*, const char*,
                               const char*);
+  static int hostRunJob(void*, const char*, DodevWorkFn, void*);
   static int hostSelectPath(void*, const char*, int, DodevPromptFn, void*);
   static int hostOpenSerialMonitor(void*);
   static int hostOpenSourceSymbols(void*);

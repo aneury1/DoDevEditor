@@ -52,8 +52,8 @@ bool exportSqlite(const Table& table, bool filtered,
   try {
     if (path.empty() || std::filesystem::exists(path))
       throw std::runtime_error(
-          "Choose a new SQLite database filename "
-          "(existing files are not overwritten)");
+          "Choose a new SQLite database filename (existing files are not "
+          "overwritten)");
     auto base = path.parent_path();
     if (base.empty()) base = std::filesystem::current_path();
     const auto stamp =

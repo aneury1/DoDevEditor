@@ -1,5 +1,9 @@
 # wxWidgets frontend. All wx-specific flags stay on its dependency target.
 add_executable(DoDevEditor src/gui/wx/Main.cpp)
+# Source files contain UTF-8 menu labels and symbols.
+if(MSVC)
+    target_compile_options(DoDevEditor PRIVATE /utf-8)
+endif()
 target_link_libraries(DoDevEditor PRIVATE
     dodev_wx_dependencies
     dodev_core

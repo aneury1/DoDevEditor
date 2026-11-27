@@ -96,3 +96,10 @@ Enable Git History and Remote Journal in Settings > Plugins and restart. Workspa
 
 ### 5.2.7
 Journal filters are managed in Workspace; captures export TXT, CSV or SQLite snapshots. See [Journal workspace and export](docs/WX_5_2_7_JOURNAL_WORKSPACE_EXPORT.md).
+
+### 5.2.8
+HTTP Client plugin: Workspace request form and history, one independent Editor tab per request (request and response), SQLite history and generic form/job SDK. See [HTTP Client](thirdparty/HttpClient/README.md).
+
+### 5.2.9 — Windows dependency fallback
+
+Windows builds automatically fetch pinned wxWidgets 3.2.6 when no installed package is detected. Download/verification/extraction logs are visible, and the PowerShell build script saves configure/build/test logs. See [Windows build guide](docs/WX_5_2_9_WINDOWS_BUILD.md).

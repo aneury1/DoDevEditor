@@ -26,6 +26,18 @@ typedef void (*DodevRowFn)(const DodevHostAPI* host, const char* row_id,
 typedef void (*DodevPromptFn)(const DodevHostAPI* host, const char* text,
                               void* user_data);
 
+/* Generic form submission and cancellable worker. All form strings are borrowed
+   during the callback; a worker must never invoke UI or host APIs. */
+typedef struct DodevFormField {
+  const char* label;
+  const char* initial;
+  int multiline;
+} DodevFormField;
+typedef void (*DodevFormFn)(const DodevHostAPI*, const char* const*, size_t,
+                            void*);
+typedef int (*DodevCancelledFn)(void*);
+typedef void (*DodevWorkFn)(void*, DodevCancelledFn, void*);
+
 /* The builder is short lived. Plugins must not store it or its context. */
 struct DodevUiBuilder {
   uint32_t struct_size;
@@ -43,6 +55,9 @@ struct DodevUiBuilder {
      Uses the registered view owner and current workspace, not a global setting.
    */
   void (*workspace_profiles)(void* context, const char* default_json);
+  /* Host copies fields. Callback executes on the UI thread on submit. */
+  void (*form)(void*, const DodevFormField*, size_t, const char*,
+               const DodevHostAPI*, DodevFormFn, void*);
 };
 struct DodevHostAPI {
   uint32_t struct_size;
@@ -118,6 +133,10 @@ struct DodevHostAPI {
                         const char* side, const char* text);
   int (*select_path)(void* context, const char* title, int directory,
                      DodevPromptFn callback, void* user_data);
+  /* Runs worker off the UI thread; waits with cancellation UI. No plugin code
+     remains running when this call returns. Worker may only use cancel
+     callback. */
+  int (*run_job)(void*, const char*, DodevWorkFn, void*);
 };
 /* Test optional host function availability before use; older binaries may not
  * expose it. */

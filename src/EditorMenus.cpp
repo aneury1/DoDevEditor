@@ -126,8 +126,7 @@ bool EditorApp::dispatchEditSelection(const std::string& action) {
   if (edit.changed) {
     selectOffsets(id, text, edit.replaceBegin, edit.replaceEnd);
     Rtext_editor_insert_text(
-        id,
-        edit.replacement.c_str());  // preserve undo history
+        id, edit.replacement.c_str());  // preserve undo history
     const auto after = data(id);
     selectOffsets(id, after, edit.selectBegin, edit.selectEnd);
   } else

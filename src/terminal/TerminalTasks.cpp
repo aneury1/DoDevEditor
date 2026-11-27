@@ -326,8 +326,8 @@ class Resolver {
       else {
 #ifdef _WIN32
         throw std::runtime_error(
-            "Use args or a process task for variables in "
-            "Windows shell commands");
+            "Use args or a process task for variables in Windows shell "
+            "commands");
 #else
         if (escaped)
           throw std::runtime_error(

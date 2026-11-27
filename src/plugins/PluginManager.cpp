@@ -302,7 +302,8 @@ bool PluginManager::activate(PluginManifest manifest, std::string* error) {
                  &hostWorkspaceConfig,
                  &hostPromptSecret,
                  &hostShowTextView,
-                 &hostSelectPath};
+                 &hostSelectPath,
+                 &hostRunJob};
   entry->plugin = {sizeof(DodevPluginAPI), DODEV_PLUGIN_API_VERSION, nullptr};
   const size_t commandsBefore = commands_.size(), menusBefore = menus_.size(),
                viewsBefore = views_.size(),
@@ -573,6 +574,14 @@ int PluginManager::hostShowTextView(void* ctx, const char* id,
   auto& hook = p->owner->hooks_.showTextView;
   return id && simpleId(id) && title && side && text && hook &&
                  hook(p->manifest.id + ":" + id, title, side, text)
+             ? 1
+             : 0;
+}
+int PluginManager::hostRunJob(void* ctx, const char* title, DodevWorkFn work,
+                              void* data) {
+  auto* p = instance(ctx);
+  auto& hook = p->owner->hooks_.runJob;
+  return work && hook && hook(title ? title : "Plugin operation", work, data)
              ? 1
              : 0;
 }

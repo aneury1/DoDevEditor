@@ -11,6 +11,9 @@ add_subdirectory(thirdparty/RemoteJournal)
 add_subdirectory(thirdparty/AIAssistant)
 add_subdirectory(thirdparty/GdbDebugger)
 add_subdirectory(thirdparty/GitHistory)
+if(DODEV_BUILD_HTTP_CLIENT_PLUGIN)
+    add_subdirectory(thirdparty/HttpClient)
+endif()
 
 # Keep manifest paths stable for custom multi-config configurations as well.
 function(dodev_bundled_layout target directory)
